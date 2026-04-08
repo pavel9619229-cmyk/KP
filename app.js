@@ -29,7 +29,7 @@ function render(data) {
   countLabel.textContent = `Показано: ${data.length} из ${rows.length}${synced}`;
 
   if (!data.length) {
-    tableBody.innerHTML = '<tr><td colspan="4">Нет данных по текущему фильтру.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="5">Нет данных по текущему фильтру.</td></tr>';
     return;
   }
 
@@ -37,6 +37,7 @@ function render(data) {
     <tr>
       <td>${escapeHtml(r.number || '')}</td>
       <td>${escapeHtml(r.createdAt || '')}</td>
+      <td>${escapeHtml(r.customerName || '')}</td>
       <td><span class="tag">${escapeHtml(r.status || '')}</span></td>
       <td>${escapeHtml(r.additionalInfoFirstLine || '')}</td>
     </tr>
@@ -49,7 +50,7 @@ function applyFilters() {
 
   const filtered = rows.filter((r) => {
     const byStatus = !status || (r.status || '') === status;
-    const text = `${r.number || ''} ${r.status || ''} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
+    const text = `${r.number || ''} ${r.customerName || ''} ${r.status || ''} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
     const byText = !q || text.includes(q);
     return byStatus && byText;
   });
@@ -107,7 +108,7 @@ async function refreshData(initial = false) {
   } catch (err) {
     if (initial) {
       countLabel.textContent = 'Ошибка загрузки данных';
-      tableBody.innerHTML = `<tr><td colspan="4">Не удалось загрузить данные: ${escapeHtml(err.message)}</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5">Не удалось загрузить данные: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 }

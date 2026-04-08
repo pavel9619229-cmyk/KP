@@ -54,6 +54,7 @@ SELECT_FIELDS = [
 _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
+_customer_name_cache = {}
 
 
 def _build_headers() -> dict:
@@ -89,30 +90,112 @@ def rows_fingerprint(rows: list) -> str:
     return json.dumps(rows, ensure_ascii=False, sort_keys=True)
 
 
+def score_customer_candidate(nav_obj: dict) -> int:
+    description = str(nav_obj.get("Description") or "").strip()
+    if not description:
+        return 0
+
+    score = 1
+    upper = description.upper()
+    if any(token in upper for token in ["ООО", "ИП", "АО", "ПАО", "ЗАО"]):
+        score += 4
+
+    digit_like = 0
+    for value in nav_obj.values():
+        if isinstance(value, str):
+            only_digits = "".join(ch for ch in value if ch.isdigit())
+            if len(only_digits) in (9, 10, 12):
+                digit_like += 1
+    if digit_like >= 2:
+        score += 3
+
+    if len(description) > 4:
+        score += 1
+    return score
+
+
+def resolve_customer_name_for_ref(ref_key: str, headers: dict) -> str:
+    if not ref_key:
+        return ""
+    if ref_key in _customer_name_cache:
+        return _customer_name_cache[ref_key]
+
+    try:
+        doc_resp = requests.get(
+            f"{BASE}/{ENTITY}(guid'{ref_key}')",
+            headers=headers,
+            timeout=60,
+            verify=False,
+        )
+        if doc_resp.status_code != 200:
+            _customer_name_cache[ref_key] = ""
+            return ""
+
+        row = doc_resp.json()
+        nav_links = [v for k, v in row.items() if k.endswith("@navigationLinkUrl")]
+
+        best_description = ""
+        best_score = 0
+
+        for rel in nav_links:
+            try:
+                nav_resp = requests.get(
+                    f"{BASE}/{rel}",
+                    headers=headers,
+                    timeout=60,
+                    verify=False,
+                )
+                if nav_resp.status_code != 200:
+                    continue
+                nav_obj = nav_resp.json()
+                if not isinstance(nav_obj, dict):
+                    continue
+
+                candidate_score = score_customer_candidate(nav_obj)
+                if candidate_score > best_score:
+                    best_score = candidate_score
+                    best_description = str(nav_obj.get("Description") or "").strip()
+            except Exception:
+                continue
+
+        _customer_name_cache[ref_key] = best_description
+        return best_description
+    except Exception:
+        _customer_name_cache[ref_key] = ""
+        return ""
+
+
 def load_rows_from_file() -> list:
     path = Path(DATA_FILE)
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
+    for row in data:
+        if "customerName" not in row:
+            row["customerName"] = ""
     data.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return data
 
 
 def save_rows(rows: list) -> None:
+    for row in rows:
+        if "customerName" not in row:
+            row["customerName"] = ""
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
 
 def fetch_rows_from_odata() -> list:
     headers = _build_headers()
+
     rows = []
     skip = 0
     page_size = 500
 
     while True:
         params = {
-            "$select": ",".join(SELECT_FIELDS),
+            "$select": "Ref_Key," + ",".join(SELECT_FIELDS),
             "$top": str(page_size),
             "$skip": str(skip),
         }
@@ -138,8 +221,10 @@ def fetch_rows_from_odata() -> list:
             break
 
         for item in batch:
+            ref_key = item.get("Ref_Key") or ""
             values = [item.get(f) or "" for f in SELECT_FIELDS]
             number, dt_raw, status, info_text, comment = values[0], values[1], values[2], values[3], values[4]
+            customer_name = resolve_customer_name_for_ref(str(ref_key), headers)
             try:
                 dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
             except Exception:
@@ -150,6 +235,7 @@ def fetch_rows_from_odata() -> list:
                     {
                         "number": number,
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                        "customerName": customer_name,
                         "status": status,
                         "additionalInfoFirstLine": first_line(info_text, comment),
                     }
@@ -189,7 +275,10 @@ async def refresh_loop() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    await asyncio.to_thread(refresh_cache_and_file)
+    global _cached_rows, _cached_fp, _last_refresh
+    _cached_rows = load_rows_from_file()
+    _cached_fp = rows_fingerprint(_cached_rows)
+    _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
