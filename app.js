@@ -154,7 +154,7 @@ function connectWebSocket() {
       const payload = JSON.parse(event.data);
       if (payload.type === 'rows' && Array.isArray(payload.rows)) {
         const sorted = payload.rows.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setRows(sorted, payload.updatedAt ? new Date(payload.updatedAt) : new Date());
+        setRows(sorted, new Date());
       }
     } catch {
       // Ignore malformed WS frames.
