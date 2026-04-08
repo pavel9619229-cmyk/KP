@@ -75,9 +75,29 @@ function fillStatuses(data) {
 }
 
 async function loadRows() {
-  const response = await fetch('kp_2026_march_april.json', { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+  const sources = [
+    '/api/kp/all',
+    'https://onec-kp-realtime.onrender.com/api/kp/all',
+    'kp_2026_march_april.json',
+  ];
+
+  let response = null;
+  let lastError = null;
+  for (const src of sources) {
+    try {
+      const r = await fetch(src, { cache: 'no-store' });
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
+      }
+      response = r;
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error('Нет доступного источника данных');
   }
 
   const data = await response.json();
@@ -118,8 +138,10 @@ function connectWebSocket() {
     return;
   }
 
-  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${scheme}://${window.location.host}/ws/kp`;
+  const isLocalStatic = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const url = isLocalStatic
+    ? 'wss://onec-kp-realtime.onrender.com/ws/kp'
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/kp`;
 
   ws = new WebSocket(url);
 
