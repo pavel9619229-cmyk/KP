@@ -148,12 +148,29 @@ def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None 
         _customer_name_cache[ref_key] = ""
         return ""
 
-    nav_links = [v for k, v in row.items() if k.endswith("@navigationLinkUrl")]
+    # Collect nav links: prefer "Контрагент", skip "Организация" (seller's own org)
+    SELLER_KEYS = {"организация", "organisation", "organization"}
+    CUSTOMER_KEYS = {"контрагент", "клиент", "покупатель"}
+
+    priority_links = []
+    fallback_links = []
+    for k, v in row.items():
+        if not k.endswith("@navigationLinkUrl"):
+            continue
+        field = k[: k.index("@")].lower()
+        if any(s in field for s in SELLER_KEYS):
+            continue  # skip seller's org link
+        if any(c in field for c in CUSTOMER_KEYS):
+            priority_links.append(v)
+        else:
+            fallback_links.append(v)
+
+    nav_links = (priority_links + fallback_links)[:NAV_LINK_LIMIT]
 
     best_description = ""
     best_score = 0
 
-    for rel in nav_links[:NAV_LINK_LIMIT]:
+    for rel in nav_links:
         try:
             nav_resp = requests.get(
                 f"{BASE}/{rel}",
@@ -166,6 +183,14 @@ def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None 
             nav_obj = nav_resp.json()
             if not isinstance(nav_obj, dict):
                 continue
+
+            # If this is a priority (customer) link, use it immediately
+            rel_url_lower = rel.lower()
+            if any(c in rel_url_lower for c in CUSTOMER_KEYS):
+                description = str(nav_obj.get("Description") or "").strip()
+                if description:
+                    best_description = description
+                    break
 
             candidate_score = score_customer_candidate(nav_obj)
             if candidate_score > best_score:
