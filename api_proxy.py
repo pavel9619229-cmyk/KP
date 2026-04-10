@@ -471,9 +471,19 @@ async def healthz():
     }
 
 
+def format_row_for_client(row: dict) -> dict:
+    """Format row for API response: remove ПСУТ- prefix and time from date."""
+    formatted = row.copy()
+    if "number" in formatted:
+        formatted["number"] = formatted["number"].replace("ПСУТ-", "")
+    if "createdAt" in formatted:
+        formatted["createdAt"] = formatted["createdAt"].split(" ")[0]
+    return formatted
+
+
 @app.get("/api/kp/all")
 async def get_all_kp():
-    return _cached_rows
+    return [format_row_for_client(row) for row in _cached_rows]
 
 
 @app.websocket("/ws/kp")
@@ -490,7 +500,7 @@ async def ws_kp(websocket: WebSocket):
                     {
                         "type": "rows",
                         "updatedAt": _last_refresh,
-                        "rows": _cached_rows,
+                        "rows": [format_row_for_client(row) for row in _cached_rows],
                     }
                 )
             await asyncio.sleep(2)
