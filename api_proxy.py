@@ -39,9 +39,9 @@ PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "60"))
-ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "8"))
-DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "2.0"))
-NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "1.2"))
+ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "6"))
+DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
+NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
@@ -346,8 +346,6 @@ def fetch_rows_from_odata() -> list:
 
         skip = max(0, skip - page_size)
 
-    rows.sort(key=lambda x: x["createdAt"], reverse=True)
-
     enriched = 0
     for row in rows:
         if enriched >= ENRICH_PER_REFRESH:
@@ -381,6 +379,7 @@ def fetch_rows_from_odata() -> list:
     for row in rows:
         row.pop("refKey", None)
 
+    rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
 
 
