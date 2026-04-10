@@ -43,18 +43,20 @@ REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "60"))
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
 
-SELECT_FIELDS = [
+LIGHT_SELECT_FIELDS = [
     "Number",
     "Date",
     "Статус",
-    "ПрочаяДополнительнаяИнформацияТекст",
-    "Комментарий",
 ]
 
 _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
 _customer_name_cache = {}
+
+
+def log(message: str) -> None:
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
 
 
 def _build_headers() -> dict:
@@ -186,31 +188,60 @@ def save_rows(rows: list) -> None:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
 
+def build_known_rows_lookup() -> dict:
+    known = {}
+    for source_row in load_rows_from_file() + list(_cached_rows):
+        number = source_row.get("number")
+        if number and number not in known:
+            known[number] = source_row
+    return known
+
+
+def get_total_count(headers: dict) -> int:
+    resp = requests.get(
+        f"{BASE}/{ENTITY}/$count",
+        headers=headers,
+        timeout=30,
+        verify=False,
+    )
+    resp.raise_for_status()
+    return int(resp.text.strip())
+
+
 def fetch_rows_from_odata() -> list:
     headers = _build_headers()
+    known_rows = build_known_rows_lookup()
 
     rows = []
-    skip = 0
-    page_size = 500
+    page_size = 50
+
+    total_count = get_total_count(headers)
+    if total_count <= 0:
+        return []
+
+    skip = ((total_count - 1) // page_size) * page_size
 
     while True:
         params = {
-            "$select": "Ref_Key," + ",".join(SELECT_FIELDS),
+            "$select": "Ref_Key," + ",".join(LIGHT_SELECT_FIELDS),
             "$top": str(page_size),
             "$skip": str(skip),
         }
 
         resp = None
         for _ in range(3):
-            resp = requests.get(
-                f"{BASE}/{ENTITY}",
-                headers=headers,
-                params=params,
-                timeout=90,
-                verify=False,
-            )
-            if resp.status_code == 200:
-                break
+            try:
+                resp = requests.get(
+                    f"{BASE}/{ENTITY}",
+                    headers=headers,
+                    params=params,
+                    timeout=45,
+                    verify=False,
+                )
+                if resp.status_code == 200:
+                    break
+            except requests.RequestException:
+                resp = None
             time.sleep(1)
 
         if resp is None or resp.status_code != 200:
@@ -220,28 +251,37 @@ def fetch_rows_from_odata() -> list:
         if not batch:
             break
 
+        batch_dates = []
+
         for item in batch:
-            ref_key = item.get("Ref_Key") or ""
-            values = [item.get(f) or "" for f in SELECT_FIELDS]
-            number, dt_raw, status, info_text, comment = values[0], values[1], values[2], values[3], values[4]
-            customer_name = resolve_customer_name_for_ref(str(ref_key), headers)
+            values = [item.get(f) or "" for f in LIGHT_SELECT_FIELDS]
+            number, dt_raw, status = values[0], values[1], values[2]
             try:
                 dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
             except Exception:
                 continue
 
+            batch_dates.append(dt)
+
             if TARGET_START <= dt <= TARGET_END:
+                known_row = known_rows.get(number, {})
                 rows.append(
                     {
                         "number": number,
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                        "customerName": customer_name,
+                        "customerName": known_row.get("customerName", ""),
                         "status": status,
-                        "additionalInfoFirstLine": first_line(info_text, comment),
+                        "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
                     }
                 )
 
-        skip += page_size
+        if batch_dates and max(batch_dates) < TARGET_START:
+            break
+
+        if skip == 0:
+            break
+
+        skip = max(0, skip - page_size)
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
@@ -250,13 +290,19 @@ def fetch_rows_from_odata() -> list:
 def refresh_cache_and_file() -> None:
     global _cached_rows, _cached_fp, _last_refresh
 
-    fetched = fetch_rows_from_odata()
-    if fetched:
-        save_rows(fetched)
-        _cached_rows = fetched
-        _cached_fp = rows_fingerprint(fetched)
-        _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return
+    try:
+        fetched = fetch_rows_from_odata()
+        if fetched:
+            save_rows(fetched)
+            _cached_rows = fetched
+            _cached_fp = rows_fingerprint(fetched)
+            _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log(f"refresh success: {len(fetched)} rows")
+            return
+
+        log("refresh returned 0 rows, using file fallback")
+    except Exception as exc:
+        log(f"refresh failed: {exc}")
 
     fallback = load_rows_from_file()
     _cached_rows = fallback
@@ -279,6 +325,7 @@ async def on_startup() -> None:
     _cached_rows = load_rows_from_file()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log(f"startup cache loaded: {len(_cached_rows)} rows")
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
