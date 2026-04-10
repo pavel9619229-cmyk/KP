@@ -1,913 +1,1142 @@
 [
   {
-    "number": "ПСУТ-000322",
-    "createdAt": "2026-04-08 18:07:00",
+    "number": "ПСУТ-000336",
+    "createdAt": "2026-04-10 20:01:07",
+    "customerName": "",
     "status": "Действует",
-    "additionalInfoFirstLine": "Прошу указать в колонка Комментарий (внутренний) - цена на эти позиции от НОРМ."
+    "additionalInfoFirstLine": ""
+  },
+  {
+    "number": "ПСУТ-000337",
+    "createdAt": "2026-04-10 15:54:45",
+    "customerName": "",
+    "status": "Черновик",
+    "additionalInfoFirstLine": ""
+  },
+  {
+    "number": "ПСУТ-000334",
+    "createdAt": "2026-04-10 14:09:28",
+    "customerName": "БЫСТРЫЕ РЕШЕНИЯ дил (г.Новосибирск)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "Прошу постараться заодно и наши Цельнолитая шина 7.00-12 (5.00) KATOCHI YY109  NM - 10 шт.  отгрузить."
+  },
+  {
+    "number": "ПСУТ-000335",
+    "createdAt": "2026-04-10 12:18:31",
+    "customerName": "НИРКОМ парт (г.Набережные Челны)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "ОЖИДАЕМ ОТВЕТ КЛИЕНТА ПО АРТИКУЛУ ВЕНТИЛЯ."
+  },
+  {
+    "number": "ПСУТ-000329",
+    "createdAt": "2026-04-09 19:25:18",
+    "customerName": "АО НП Подольсккабель (МО, г.Подольск)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "Елена, добрый день!"
+  },
+  {
+    "number": "ПСУТ-000333",
+    "createdAt": "2026-04-09 16:27:02",
+    "customerName": "ЕМГ СЕВЕРО-ЗАПАД (г.Санкт-Петербург)",
+    "status": "Черновик",
+    "additionalInfoFirstLine": "Цельнолитая шина 4.00-8 (3.00) ROLLTAH G102\t\t14,000\t2,000\t16,000"
+  },
+  {
+    "number": "ПСУТ-000332",
+    "createdAt": "2026-04-09 12:34:27",
+    "customerName": "СШОР ПО БИАТЛОНУ (СПОРТ. ШКОЛА ОЛИМПИЙСКОГО РЕЗЕРВА ПО БИАТЛОНУ ИМЕНИ В.Ф.МАМАТОВА)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "Запрос срока поставки на Пневм. шина 560*140-12 TRELLEBORG Т528 100А4 TT;"
+  },
+  {
+    "number": "ПСУТ-000331",
+    "createdAt": "2026-04-09 12:17:18",
+    "customerName": "Алексеев Сергей Юрьевич ИП (дилер)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "2026-04-09 - татьяна должна отправить счет клиенту и добиться отгрузки"
+  },
+  {
+    "number": "ПСУТ-000330",
+    "createdAt": "2026-04-09 11:15:50",
+    "customerName": "ОТК-33 дил (г.Владимир)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "Пневм. шина 405/70R18 (15.5/70R18) BKT MULTIMAX MP 525 153A2/146J TL:"
+  },
+  {
+    "number": "ПСУТ-000328",
+    "createdAt": "2026-04-08 18:35:09",
+    "customerName": "Восточная Торговая Компания (ВТК) парт (г.Краснодар)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "Ободная лента (флоп) 23.5-25"
+  },
+  {
+    "number": "ПСУТ-000327",
+    "createdAt": "2026-04-08 18:33:32",
+    "customerName": "АКРОН ХОЛДИНГ скидк (г.Тольятти)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "АГРОМАСТ - всего 3 шт."
+  },
+  {
+    "number": "ПСУТ-000322",
+    "createdAt": "2026-04-08 18:25:02",
+    "customerName": "СЕРВИС ПОГРУЗЧИКОВ парт (г.Лосино-Петровский)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "павел - 2026-04-09 - счет отправлен татьяне бирюковой"
   },
   {
     "number": "ПСУТ-000326",
     "createdAt": "2026-04-08 17:55:51",
-    "status": "Черновик",
-    "additionalInfoFirstLine": "ООО\"Тайерс Авто\""
+    "customerName": "СТРОЙПРОЕКТСЕРВИС дил (Ленинградская обл.)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "ЖЭЛДОРЭКСПЕДИЦИЯ"
   },
   {
     "number": "ПСУТ-000325",
     "createdAt": "2026-04-08 17:49:44",
+    "customerName": "РСТ ГРУПП парт (г.Нижний Новгород)",
     "status": "Действует",
     "additionalInfoFirstLine": "Ждем ответ ЕМГ"
   },
   {
     "number": "ПСУТ-000324",
     "createdAt": "2026-04-08 17:42:39",
-    "status": "Черновик",
-    "additionalInfoFirstLine": "павел - Цельнолитая шина 7.00-12 (5.00) KATOCHI YY109  NM ?"
+    "customerName": "РК ТЕХ дил (г.Москва)",
+    "status": "Действует",
+    "additionalInfoFirstLine": "павел - им только атлас нужен, тк.до комплекта не хватает"
   },
   {
     "number": "ПСУТ-000323",
     "createdAt": "2026-04-08 15:54:00",
+    "customerName": "ПРОМАКТИВ ООО (Смоленск) конечник",
     "status": "Действует",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000318",
     "createdAt": "2026-04-08 13:07:46",
+    "customerName": "ПМЗ (Петербургский машиностроительный завод) (ГК ИнвестТехМаш )",
     "status": "Действует",
     "additionalInfoFirstLine": "26,5-25 НОРМ ободная лента"
   },
   {
     "number": "ПСУТ-000316",
     "createdAt": "2026-04-08 13:04:19",
+    "customerName": "АРМА ТАЙРС парт (г.Москва, г.Одинцово)",
     "status": "Действует",
     "additionalInfoFirstLine": "Камера 20.8-38   TR218A (КНР):"
   },
   {
     "number": "ПСУТ-000320",
     "createdAt": "2026-04-08 13:00:39",
+    "customerName": "Универсал-Коломна плюс  (Универсал Коломна)",
     "status": "Действует",
-    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+    "additionalInfoFirstLine": "павел - максим получил КП обещал дать обр связь 10-04-2026"
   },
   {
     "number": "ПСУТ-000319",
     "createdAt": "2026-04-08 12:49:08",
+    "customerName": "СПЕЦКАР СЕРВИС дил (г.Тула)",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте)"
   },
   {
     "number": "ПСУТ-000321",
     "createdAt": "2026-04-08 12:44:21",
+    "customerName": "ИМСС (ИНЖМОНТАЖСПЕЦСТРОЙ, г.Москва)",
     "status": "Действует",
     "additionalInfoFirstLine": "жду номер КП"
   },
   {
     "number": "ПСУТ-000317",
     "createdAt": "2026-04-08 10:27:06",
+    "customerName": "ЕС-СЕРВИС (г. Екатеринбург)",
     "status": "Действует",
     "additionalInfoFirstLine": "Владимир Климов (vk@e-skl.ru):"
   },
   {
     "number": "ПСУТ-000315",
     "createdAt": "2026-04-08 10:04:29",
+    "customerName": "ПКФ ВАЙЯ дил (г.Москва)",
     "status": "Черновик",
     "additionalInfoFirstLine": "07.04.2026, 20:33, Вадим Шабельник (4250457@mail.ru):"
   },
   {
     "number": "ПСУТ-000314",
     "createdAt": "2026-04-07 16:44:16",
+    "customerName": "МБВ (МБ ВОЛОГДА) дил (г. Вологда)",
     "status": "Действует",
     "additionalInfoFirstLine": "ТК ДЛ Ленинград-Вологда = 10 200/2 = 5 100, 5 дней"
   },
   {
     "number": "ПСУТ-000313",
     "createdAt": "2026-04-07 16:10:21",
+    "customerName": "ЧЛ Татьяна",
     "status": "Действует",
     "additionalInfoFirstLine": "ТОРГИ."
   },
   {
     "number": "ПСУТ-000309",
     "createdAt": "2026-04-07 14:02:49",
+    "customerName": "ПЗТП (ПЕНЗЕНСКИЙ ЗАВОД ТОЧНЫХ ПРИБОРОВ)",
     "status": "Действует",
     "additionalInfoFirstLine": "Елена, предлагайте наши"
   },
   {
     "number": "ПСУТ-000312",
     "createdAt": "2026-04-07 13:42:05",
+    "customerName": "ДОРХАН 21 ВЕК - НОВОСИБИРСК скидк",
     "status": "Действует",
     "additionalInfoFirstLine": "Татьяна, вы не были на связи, поэтому я сам ответил."
   },
   {
     "number": "ПСУТ-000311",
     "createdAt": "2026-04-07 12:45:55",
+    "customerName": "Прайдекс Констракшн  (Москва)",
     "status": "Действует",
     "additionalInfoFirstLine": "07.04.2026, 11:35, Борисов Михаил Александрович (mikhail.borisov@pridex.ru):"
   },
   {
     "number": "ПСУТ-000310",
     "createdAt": "2026-04-07 12:00:35",
+    "customerName": "АЭРОДОРСНАБ дил (г.Москва)",
     "status": "Черновик",
     "additionalInfoFirstLine": "предлагайте"
   },
   {
     "number": "ПСУТ-000308",
     "createdAt": "2026-04-06 16:55:54",
+    "customerName": "МОНТАЖ-ПРОЕКТ дил (Белоруссия)",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день,"
   },
   {
     "number": "ПСУТ-000307",
     "createdAt": "2026-04-06 11:16:01",
+    "customerName": "УК ВОЛМА ( г. Волгоград)",
     "status": "Черновик",
     "additionalInfoFirstLine": "06.04.2026, 09:36, nurkanov@volma.ru (nurkanov@volma.ru):"
   },
   {
     "number": "ПСУТ-000306",
     "createdAt": "2026-04-06 10:26:02",
+    "customerName": "АГРО МЕНЕДЖМЕНТ дил (г.Москва) bidzaar.com",
     "status": "Действует",
     "additionalInfoFirstLine": "Цельнолитое колесо, Типоразмер: 7.00-12, без бурта, 4 шт"
   },
   {
     "number": "ПСУТ-000305",
     "createdAt": "2026-04-03 10:52:34",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "ГРОМЧЕНКО"
   },
   {
     "number": "ПСУТ-000304",
     "createdAt": "2026-04-02 17:59:56",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "павел - 03-04 - михаил обещал перезвонить 06-04 в ответ на предложение сделать шины с дисками дешевле чем конкурент"
   },
   {
     "number": "ПСУТ-000303",
     "createdAt": "2026-04-02 15:49:07",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "сс13 867,28+5%= 14560,00"
   },
   {
     "number": "ПСУТ-000302",
     "createdAt": "2026-04-02 15:46:09",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "нужны ЧЕРНЫЕ С ГЛАДКИМ ПРОТЕКТОРОМ - 10 ШТ."
   },
   {
     "number": "ПСУТ-000301",
     "createdAt": "2026-04-02 14:22:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "РОСБЕРГ"
   },
   {
     "number": "ПСУТ-000300",
     "createdAt": "2026-04-02 12:53:25",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Куксгауз Шарлотта"
   },
   {
     "number": "ПСУТ-000299",
     "createdAt": "2026-04-02 12:34:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Доброе утро Елена!"
   },
   {
     "number": "ПСУТ-000298",
     "createdAt": "2026-04-02 12:02:46",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "ЕМГ - молчит"
   },
   {
     "number": "ПСУТ-000297",
     "createdAt": "2026-04-02 11:55:36",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "ЗАПРОСИЛА АГРОМАСТ"
   },
   {
     "number": "ПСУТ-000296",
     "createdAt": "2026-04-02 11:46:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "повтор по 4 шт"
   },
   {
     "number": "ПСУТ-000295",
     "createdAt": "2026-04-02 10:48:27",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Звонил Монтаж-Проект, выяснилось, что по февральской отгрузке колес 6.50-10,"
   },
   {
     "number": "ПСУТ-000294",
     "createdAt": "2026-04-01 14:51:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Ждем ответ дилера"
   },
   {
     "number": "ПСУТ-000293",
     "createdAt": "2026-04-01 14:43:47",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Колесо большегрузное с полиуретановой шинкой С-4102-DUS поворотное с тормозом гп 1100 кг EURO-LIFT, 8 шт"
   },
   {
     "number": "ПСУТ-000291",
     "createdAt": "2026-04-01 13:41:24",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 7.00-12 PR16 KENDA K610 KINETICS TTF (шинокомплект):"
   },
   {
     "number": "ПСУТ-000289",
     "createdAt": "2026-04-01 12:42:25",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "1."
   },
   {
     "number": "ПСУТ-000292",
     "createdAt": "2026-04-01 11:50:08",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Добрый день! найдем у вас шины 6.00-15?"
   },
   {
     "number": "ПСУТ-000290",
     "createdAt": "2026-04-01 11:08:47",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 8.25-15 PR14 KENDA K610 157A5/149 TR75A TTF (шинокомплект)"
   },
   {
     "number": "ПСУТ-000288",
     "createdAt": "2026-03-31 18:27:13",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Колесо - диск с цельнолитой шиной 10-16.5 (31*10-20 (7.50)) GALAXY Beefy Baby SDS"
   },
   {
     "number": "ПСУТ-000285",
     "createdAt": "2026-03-31 17:40:50",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "татьяна, укажите в КП что можем предложить из пневматической шины"
   },
   {
     "number": "ПСУТ-000283",
     "createdAt": "2026-03-31 15:36:51",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "павел - я уточнил - наши шины не подходят на МТЗ - только поливальные машины"
   },
   {
     "number": "ПСУТ-000286",
     "createdAt": "2026-03-31 13:56:50",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Шина 10-16.5-10PR K192 WESTLAKE TL, 114 шт."
   },
   {
     "number": "ПСУТ-000287",
     "createdAt": "2026-03-31 11:45:00",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "ROLLTA"
   },
   {
     "number": "ПСУТ-000284",
     "createdAt": "2026-03-31 10:08:49",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "1. Автошина для ричстакеров типаразмера 18.00-25 40PR, 32 шт."
   },
   {
     "number": "ПСУТ-000282",
     "createdAt": "2026-03-30 12:54:51",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "ПОЗВОНИЛА. ЖДЕМ ОТВЕТ КЛИЕНТА."
   },
   {
     "number": "ПСУТ-000281",
     "createdAt": "2026-03-27 17:52:54",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "компания мульти форклифт"
   },
   {
     "number": "ПСУТ-000279",
     "createdAt": "2026-03-27 15:25:10",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000280",
     "createdAt": "2026-03-27 15:11:01",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Татьяна, добрый день!"
   },
   {
     "number": "ПСУТ-000278",
     "createdAt": "2026-03-27 14:03:31",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "клиент - ООО МИР ТЕХ"
   },
   {
     "number": "ПСУТ-000277",
     "createdAt": "2026-03-26 17:42:09",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000273",
     "createdAt": "2026-03-25 18:20:15",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Здравствуйте, у нас есть предложение аналога с учетом доставки 69 тр за ед."
   },
   {
     "number": "ПСУТ-000275",
     "createdAt": "2026-03-25 18:11:26",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Ищет мин цены для работы."
   },
   {
     "number": "ПСУТ-000272",
     "createdAt": "2026-03-25 17:33:03",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "утилизация в МС    необходим акт утилизации с указанием марки и размера, а также причины утилизации (порезы, грыжи, истирание протектора и т.п.)"
   },
   {
     "number": "ПСУТ-000276",
     "createdAt": "2026-03-25 17:29:40",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000267",
     "createdAt": "2026-03-25 17:20:34",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "отправила клиенту разъяснение по поводу варианта колеса 6.50-10."
   },
   {
     "number": "ПСУТ-000274",
     "createdAt": "2026-03-25 15:11:38",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "тендер на 5 лет"
   },
   {
     "number": "ПСУТ-000269",
     "createdAt": "2026-03-25 14:47:37",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "сс8 117,65 10600"
   },
   {
     "number": "ПСУТ-000268",
     "createdAt": "2026-03-25 14:47:17",
-    "status": "Черновик",
+    "customerName": "",
+    "status": "Действует",
     "additionalInfoFirstLine": "Добрый день, прошу дать предложение, необходимы шины суперэластик 5,50-15 (4,50) - 4 шт."
   },
   {
     "number": "ПСУТ-000271",
     "createdAt": "2026-03-25 14:25:32",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "750/65р26"
   },
   {
     "number": "ПСУТ-000270",
     "createdAt": "2026-03-25 12:24:51",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "павел предложил из китая"
   },
   {
     "number": "ПСУТ-000266",
     "createdAt": "2026-03-24 22:12:06",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "RUB Z/343/140/203 (13 1/2x5 1/2x8) бандажное колесо SM (без протектора)"
   },
   {
     "number": "ПСУТ-000265",
     "createdAt": "2026-03-24 22:07:21",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Пневм. шина 10-16.5 PR12 ADVANCE L4A STEELBELT TL\t\t4,000\t4,000"
   },
   {
     "number": "ПСУТ-000262",
     "createdAt": "2026-03-24 21:42:34",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Здравствуйте. Если собрать диск и шину первую за 42000 рублей. То сколько выйдет по цене?"
   },
   {
     "number": "ПСУТ-000261",
     "createdAt": "2026-03-24 20:12:34",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Клиент купил шины нэксен в Белоруссии."
   },
   {
     "number": "ПСУТ-000257",
     "createdAt": "2026-03-24 19:51:51",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "25 км/ч"
   },
   {
     "number": "ПСУТ-000259",
     "createdAt": "2026-03-24 18:54:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день!"
   },
   {
     "number": "ПСУТ-000264",
     "createdAt": "2026-03-24 18:54:17",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000263",
     "createdAt": "2026-03-24 15:47:37",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Козлов Олег"
   },
   {
     "number": "ПСУТ-000260",
     "createdAt": "2026-03-24 12:51:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Андрей Скиба"
   },
   {
     "number": "ПСУТ-000258",
     "createdAt": "2026-03-24 11:35:22",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "24.03.2026, 08:15, Калинкин Виктор (v.kalinkin@stroylogistika.info):"
   },
   {
     "number": "ПСУТ-000254",
     "createdAt": "2026-03-23 19:30:14",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Цельнолитая шина 18*7-8 (4.33) KATOCHI YY109\t13,000\t9,000\t\t22,000"
   },
   {
     "number": "ПСУТ-000252",
     "createdAt": "2026-03-23 18:31:51",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Диск (обод) 6.50-15 PCD8/278 HUB220 сварной без колец, 4 шт"
   },
   {
     "number": "ПСУТ-000256",
     "createdAt": "2026-03-23 18:17:22",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Цельнолитая шина 15*4.5-8 (3.00) CST C8904 NM"
   },
   {
     "number": "ПСУТ-000255",
     "createdAt": "2026-03-23 17:53:32",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Шина 11.2-20 PR8 NORTEC F-35 114A6 TT (с камерой):"
   },
   {
     "number": "ПСУТ-000253",
     "createdAt": "2026-03-23 17:40:31",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "ИП Волкова"
   },
   {
     "number": "ПСУТ-000251",
     "createdAt": "2026-03-23 13:13:24",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 5.00-8 PR10 CST С352 TTF (шинокомплект)"
   },
   {
     "number": "ПСУТ-000250",
     "createdAt": "2026-03-20 15:10:06",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день Елена !"
   },
   {
     "number": "ПСУТ-000249",
     "createdAt": "2026-03-20 12:34:34",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день. Диски и шины в наличии."
   },
   {
     "number": "ПСУТ-000248",
     "createdAt": "2026-03-20 10:28:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "спасибо! хорошие цены на 5.50-15, на 6.00-9 TRACKSTAR дали по 8200."
   },
   {
     "number": "ПСУТ-000247",
     "createdAt": "2026-03-19 18:02:39",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Диск (обод) 7.00-15   сварной с кольцами"
   },
   {
     "number": "ПСУТ-000241",
     "createdAt": "2026-03-19 17:48:26",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "добрый день, прошу сделать скидку по счету"
   },
   {
     "number": "ПСУТ-000246",
     "createdAt": "2026-03-19 16:56:43",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Шина 5.00-8(усиленная) 4 шт"
   },
   {
     "number": "ПСУТ-000245",
     "createdAt": "2026-03-19 15:13:21",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Диск (обод) 5.00F-10 ET7 PCD5/145 HUB110  сварной с кольцами:"
   },
   {
     "number": "ПСУТ-000244",
     "createdAt": "2026-03-19 15:08:08",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 18*7-8 PR16 ADVANCE OB502 TTF (шинокомплект)\t\t2,000\t\t2,000"
   },
   {
     "number": "ПСУТ-000243",
     "createdAt": "2026-03-19 14:51:07",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "26/03/2026"
   },
   {
     "number": "ПСУТ-000242",
     "createdAt": "2026-03-19 14:50:04",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "павел - 19-03-2026 - нататья обещала уточнит по дикам и брендам и сообщить"
   },
   {
     "number": "ПСУТ-000240",
     "createdAt": "2026-03-19 12:39:39",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "18.00-25, 32 слоя камерная, 2 шт."
   },
   {
     "number": "ПСУТ-000239",
     "createdAt": "2026-03-19 11:16:19",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день! Просим выставить счет   с учетом доставки ( адрес Москва, ул. Верхние поля, 54с12)"
   },
   {
     "number": "ПСУТ-000234",
     "createdAt": "2026-03-18 19:44:01",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "26.02.2026, 17:26, raduga 5mkr (raduga.5mkr@yandex.ru):"
   },
   {
     "number": "ПСУТ-000235",
     "createdAt": "2026-03-18 19:22:30",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день!"
   },
   {
     "number": "ПСУТ-000238",
     "createdAt": "2026-03-18 18:08:51",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "В наличии диск 15x24 HYWG (24.15.006) Terex TLB-935 24163 RAL7024 цена 27 357 руб"
   },
   {
     "number": "ПСУТ-000237",
     "createdAt": "2026-03-18 15:54:08",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "24.03.2026"
   },
   {
     "number": "ПСУТ-000236",
     "createdAt": "2026-03-18 15:48:45",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "павел - 19-03-2026 - это посредник - сказали звонить не ранее апреля"
   },
   {
     "number": "ПСУТ-000229",
     "createdAt": "2026-03-18 15:06:38",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Цельнолитая шина 355/50-15 (9.75) CST C8904 EASIFIT"
   },
   {
     "number": "ПСУТ-000232",
     "createdAt": "2026-03-18 13:34:25",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "сс 6 468,45+3%= 6662,50 руб."
   },
   {
     "number": "ПСУТ-000233",
     "createdAt": "2026-03-18 13:15:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Бандажная шина 18*9-12 1/8 (457*229-308)  ROLLTAH SMOOTH\t6,000\t2,000\t4,000\t12,000"
   },
   {
     "number": "ПСУТ-000231",
     "createdAt": "2026-03-18 11:34:48",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000230",
     "createdAt": "2026-03-18 11:26:07",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Отлично! Тогда нам нужно сделать 4 колеса. Выставляйте счет. ИП Павлов Алексей Викторович"
   },
   {
     "number": "ПСУТ-000228",
     "createdAt": "2026-03-17 16:23:26",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "павел - 07-04 - клиент должен подтвердить вызом механика чтобы он снял размер"
   },
   {
     "number": "ПСУТ-000227",
     "createdAt": "2026-03-17 14:12:54",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Добрый день"
   },
   {
     "number": "ПСУТ-000226",
     "createdAt": "2026-03-17 13:51:39",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Кому: INFO@10-16-5.RU (info@10-16-5.ru);"
   },
   {
     "number": "ПСУТ-000225",
     "createdAt": "2026-03-17 12:24:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день, снова нужны:"
   },
   {
     "number": "ПСУТ-000224",
     "createdAt": "2026-03-17 11:41:22",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Добрый день Елена !"
   },
   {
     "number": "ПСУТ-000221",
     "createdAt": "2026-03-16 22:40:29",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "С уважением к Вам и Вашему делу"
   },
   {
     "number": "ПСУТ-000223",
     "createdAt": "2026-03-16 18:04:22",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Доброе утро, Татьяна"
   },
   {
     "number": "ПСУТ-000218",
     "createdAt": "2026-03-16 17:44:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Не отвечает на звонки после отправки КП."
   },
   {
     "number": "ПСУТ-000222",
     "createdAt": "2026-03-16 15:01:17",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Клиент  находится в Домодедово."
   },
   {
     "number": "ПСУТ-000220",
     "createdAt": "2026-03-16 13:48:24",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Диск (обод) 6.50-15 PCD8/278 HUB220 сварной без колец"
   },
   {
     "number": "ПСУТ-000219",
     "createdAt": "2026-03-16 13:09:00",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "ШИНА    10.00Х16.5 – 12 шт."
   },
   {
     "number": "ПСУТ-000217",
     "createdAt": "2026-03-16 09:36:05",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Ш/к 23*5-13 всесезонные с тракторным протектором ГОСТ Р 52889-2007, 8 шт."
   },
   {
     "number": "ПСУТ-000216",
     "createdAt": "2026-03-13 14:30:57",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Пневм. шина 11.00-20 (11.00R20) ADVANCE/SAMSON GLR07 STEEL TTF (шинокомплект) (КНР):"
   },
   {
     "number": "ПСУТ-000214",
     "createdAt": "2026-03-13 14:30:11",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Татьяна, добрый день!"
   },
   {
     "number": "ПСУТ-000215",
     "createdAt": "2026-03-13 14:15:48",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "23.5-25 leadway"
   },
   {
     "number": "ПСУТ-000213",
     "createdAt": "2026-03-12 19:54:41",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Вес, кг\t37.41 х 6 = 225"
   },
   {
     "number": "ПСУТ-000210",
     "createdAt": "2026-03-12 18:49:04",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "прошу сделать КП и сообщить"
   },
   {
     "number": "ПСУТ-000212",
     "createdAt": "2026-03-12 18:48:39",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "г. Москва, ул. Крылатская, д.18"
   },
   {
     "number": "ПСУТ-000211",
     "createdAt": "2026-03-12 17:56:38",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "ЖДЕМ СЧЕТ из ВИЛМЫ"
   },
   {
     "number": "ПСУТ-000207",
     "createdAt": "2026-03-12 17:49:31",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 11.2-24 PR8 ADVANCE R1 TTF (ободная лента не в комплекте), 2 шт."
   },
   {
     "number": "ПСУТ-000208",
     "createdAt": "2026-03-12 17:22:25",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "800-225, тележка, 10 шт. (800-225 шины на тележку модель 12А)"
   },
   {
     "number": "ПСУТ-000209",
     "createdAt": "2026-03-12 16:44:10",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "добрый день"
   },
   {
     "number": "ПСУТ-000206",
     "createdAt": "2026-03-11 16:50:10",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Диск 9х18 на 8 отв на экскаватор-погрузчик Terex TLB 815-RM, 2 шт."
   },
   {
     "number": "ПСУТ-000205",
     "createdAt": "2026-03-11 16:19:24",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "УЖЕ ПЕРЕОБУЛ."
   },
   {
     "number": "ПСУТ-000204",
     "createdAt": "2026-03-11 14:48:07",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Энергострой мск"
   },
   {
     "number": "ПСУТ-000203",
     "createdAt": "2026-03-11 14:26:18",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Интересует наличие и стоимость + доставка до г. Красноярск    2 шт:"
   },
   {
     "number": "ПСУТ-000202",
     "createdAt": "2026-03-10 20:08:36",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "00-00000674\tспарка 10.00-20/7.00 Achiever (2 шины, 2 диска, 1 проставка)\t1\t2\t157500.00"
   },
   {
     "number": "ПСУТ-000201",
     "createdAt": "2026-03-10 19:03:23",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Дмитрий"
   },
   {
     "number": "ПСУТ-000200",
     "createdAt": "2026-03-10 18:33:46",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "луч"
   },
   {
     "number": "ПСУТ-000199",
     "createdAt": "2026-03-10 15:19:48",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "89055178001"
   },
   {
     "number": "ПСУТ-000198",
     "createdAt": "2026-03-10 13:57:57",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Елена, Добрый день!"
   },
   {
     "number": "ПСУТ-000194",
     "createdAt": "2026-03-06 20:25:20",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "ООО КамТехКом (kamtehkom@mail.ru):"
   },
   {
     "number": "ПСУТ-000197",
     "createdAt": "2026-03-06 14:59:50",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Добрый день!"
   },
   {
     "number": "ПСУТ-000196",
     "createdAt": "2026-03-06 14:51:36",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Номер товара: 272757"
   },
   {
     "number": "ПСУТ-000195",
     "createdAt": "2026-03-06 14:43:12",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "06.03.2026, 10:05, Мещанкин Евгений (meo@tdbate.ru):"
   },
   {
     "number": "ПСУТ-000193",
     "createdAt": "2026-03-05 14:12:44",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "05.03.2026, 10:49, m.sholin@csvt.ru (m.sholin@csvt.ru):"
   },
   {
     "number": "ПСУТ-000191",
     "createdAt": "2026-03-05 13:51:39",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте) - в наличии 1 шт."
   },
   {
     "number": "ПСУТ-000192",
     "createdAt": "2026-03-05 13:48:58",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Пневм. шина 12-16.5 PR14 MAXAM MS907 TL:"
   },
   {
     "number": "ПСУТ-000190",
     "createdAt": "2026-03-04 17:11:46",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Цельнолитая шина 18*7-8 (4.33) ADVANCE OB503 EASIFIT NM (белая с бортом):"
   },
   {
     "number": "ПСУТ-000189",
     "createdAt": "2026-03-04 16:54:45",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   },
   {
     "number": "ПСУТ-000188",
     "createdAt": "2026-03-04 14:27:59",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "18*7-8, без борта, 4 шт."
   },
   {
     "number": "ПСУТ-000187",
     "createdAt": "2026-03-04 13:28:56",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "вилма:"
   },
   {
     "number": "ПСУТ-000185",
     "createdAt": "2026-03-04 11:39:40",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Пневм. шина 12-16.5 PR12 ADVANCE L2B TL:"
   },
   {
     "number": "ПСУТ-000186",
     "createdAt": "2026-03-04 11:05:37",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "04.03.2026, 06:33, Svetlana (svetlana.naumova@eastdelivery.com):"
   },
   {
     "number": "ПСУТ-000184",
     "createdAt": "2026-03-03 15:14:15",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": ""
   },
   {
     "number": "ПСУТ-000183",
     "createdAt": "2026-03-03 13:43:09",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "клиент перепутал"
   },
   {
     "number": "ПСУТ-000182",
     "createdAt": "2026-03-03 11:46:42",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Цельнолитая шина 7.00-12 (5.00) KATOCHI YY109 EASIFIT"
   },
   {
     "number": "ПСУТ-000181",
     "createdAt": "2026-03-03 09:15:18",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Добрый день!"
   },
   {
     "number": "ПСУТ-000180",
     "createdAt": "2026-03-02 21:01:05",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "не использовать !!!!!!!!!!!!!!!!!"
   },
   {
     "number": "ПСУТ-000179",
     "createdAt": "2026-03-02 18:47:27",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "великан"
   },
   {
     "number": "ПСУТ-000178",
     "createdAt": "2026-03-02 17:31:57",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "шины суперэластик 315/45-12 (23*12-12) continental у вас есть такие?"
   },
   {
     "number": "ПСУТ-000176",
     "createdAt": "2026-03-02 17:28:43",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "Добрый день."
   },
   {
     "number": "ПСУТ-000175",
     "createdAt": "2026-03-02 13:11:45",
+    "customerName": "",
     "status": "Действует",
     "additionalInfoFirstLine": "Россия, Воронежская обл, город Воронеж, ул Солдатское поле, д 285/5"
   },
   {
     "number": "ПСУТ-000177",
     "createdAt": "2026-03-02 11:45:01",
+    "customerName": "",
     "status": "Черновик",
     "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
   }
