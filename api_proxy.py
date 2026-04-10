@@ -39,6 +39,10 @@ PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "60"))
+ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "8"))
+DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "2.0"))
+NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "1.2"))
+NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
@@ -53,6 +57,7 @@ _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
 _customer_name_cache = {}
+_additional_info_cache = {}
 
 
 def log(message: str) -> None:
@@ -116,55 +121,111 @@ def score_customer_candidate(nav_obj: dict) -> int:
     return score
 
 
-def resolve_customer_name_for_ref(ref_key: str, headers: dict) -> str:
+def _fetch_doc_by_ref(ref_key: str, headers: dict, timeout: float = DOC_TIMEOUT_SECONDS) -> dict:
+    try:
+        doc_resp = requests.get(
+            f"{BASE}/{ENTITY}(guid'{ref_key}')",
+            headers=headers,
+            timeout=timeout,
+            verify=False,
+        )
+        if doc_resp.status_code != 200:
+            return {}
+        doc = doc_resp.json()
+        return doc if isinstance(doc, dict) else {}
+    except Exception:
+        return {}
+
+
+def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None = None) -> str:
     if not ref_key:
         return ""
     if ref_key in _customer_name_cache:
         return _customer_name_cache[ref_key]
 
-    try:
-        doc_resp = requests.get(
-            f"{BASE}/{ENTITY}(guid'{ref_key}')",
-            headers=headers,
-            timeout=60,
-            verify=False,
-        )
-        if doc_resp.status_code != 200:
-            _customer_name_cache[ref_key] = ""
-            return ""
-
-        row = doc_resp.json()
-        nav_links = [v for k, v in row.items() if k.endswith("@navigationLinkUrl")]
-
-        best_description = ""
-        best_score = 0
-
-        for rel in nav_links:
-            try:
-                nav_resp = requests.get(
-                    f"{BASE}/{rel}",
-                    headers=headers,
-                    timeout=60,
-                    verify=False,
-                )
-                if nav_resp.status_code != 200:
-                    continue
-                nav_obj = nav_resp.json()
-                if not isinstance(nav_obj, dict):
-                    continue
-
-                candidate_score = score_customer_candidate(nav_obj)
-                if candidate_score > best_score:
-                    best_score = candidate_score
-                    best_description = str(nav_obj.get("Description") or "").strip()
-            except Exception:
-                continue
-
-        _customer_name_cache[ref_key] = best_description
-        return best_description
-    except Exception:
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
         _customer_name_cache[ref_key] = ""
         return ""
+
+    nav_links = [v for k, v in row.items() if k.endswith("@navigationLinkUrl")]
+
+    best_description = ""
+    best_score = 0
+
+    for rel in nav_links[:NAV_LINK_LIMIT]:
+        try:
+            nav_resp = requests.get(
+                f"{BASE}/{rel}",
+                headers=headers,
+                timeout=NAV_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            if nav_resp.status_code != 200:
+                continue
+            nav_obj = nav_resp.json()
+            if not isinstance(nav_obj, dict):
+                continue
+
+            candidate_score = score_customer_candidate(nav_obj)
+            if candidate_score > best_score:
+                best_score = candidate_score
+                best_description = str(nav_obj.get("Description") or "").strip()
+        except Exception:
+            continue
+
+    _customer_name_cache[ref_key] = best_description
+    return best_description
+
+
+def resolve_additional_info_for_ref(ref_key: str, headers: dict, doc: dict | None = None) -> str:
+    if not ref_key:
+        return ""
+    if ref_key in _additional_info_cache:
+        return _additional_info_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        _additional_info_cache[ref_key] = ""
+        return ""
+
+    best_line = ""
+    best_score = -1
+
+    for key, value in row.items():
+        if not isinstance(value, str):
+            continue
+
+        line = first_line(value)
+        if not line:
+            continue
+
+        key_l = str(key).lower()
+        if key_l.endswith("@navigationlinkurl") or key_l.endswith("_key"):
+            continue
+        if line.startswith("http://") or line.startswith("https://"):
+            continue
+        if re.fullmatch(r"[0-9a-fA-F-]{36}", line):
+            continue
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}.*", line):
+            continue
+
+        score = 1
+        if len(line) >= 12:
+            score += 2
+        if any(ch.isalpha() for ch in line):
+            score += 2
+        if "@" in line or "-" in line or " " in line:
+            score += 1
+        if "{" in line or "}" in line:
+            score -= 2
+
+        if score > best_score:
+            best_score = score
+            best_line = line
+
+    _additional_info_cache[ref_key] = best_line
+    return best_line
 
 
 def load_rows_from_file() -> list:
@@ -254,6 +315,7 @@ def fetch_rows_from_odata() -> list:
         batch_dates = []
 
         for item in batch:
+            ref_key = item.get("Ref_Key") or ""
             values = [item.get(f) or "" for f in LIGHT_SELECT_FIELDS]
             number, dt_raw, status = values[0], values[1], values[2]
             try:
@@ -267,6 +329,7 @@ def fetch_rows_from_odata() -> list:
                 known_row = known_rows.get(number, {})
                 rows.append(
                     {
+                        "refKey": str(ref_key),
                         "number": number,
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
                         "customerName": known_row.get("customerName", ""),
@@ -284,6 +347,40 @@ def fetch_rows_from_odata() -> list:
         skip = max(0, skip - page_size)
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
+
+    enriched = 0
+    for row in rows:
+        if enriched >= ENRICH_PER_REFRESH:
+            break
+
+        ref_key = row.get("refKey", "")
+        if not ref_key:
+            continue
+
+        need_customer = not (row.get("customerName") or "").strip()
+        need_info = not (row.get("additionalInfoFirstLine") or "").strip()
+        if not need_customer and not need_info:
+            continue
+
+        doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+        if not doc:
+            continue
+
+        if need_info:
+            line = resolve_additional_info_for_ref(ref_key, headers, doc=doc)
+            if line:
+                row["additionalInfoFirstLine"] = line
+
+        if need_customer:
+            customer = resolve_customer_name_for_ref(ref_key, headers, doc=doc)
+            if customer:
+                row["customerName"] = customer
+
+        enriched += 1
+
+    for row in rows:
+        row.pop("refKey", None)
+
     return rows
 
 
