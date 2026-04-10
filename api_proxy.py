@@ -43,6 +43,10 @@ ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
+STATUS_KP_PROPERTY_KEY = os.getenv(
+    "STATUS_KP_PROPERTY_KEY",
+    "e1c7a0e4-4f8d-11f0-8d50-bc97e15eb091",
+)
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
@@ -51,6 +55,7 @@ LIGHT_SELECT_FIELDS = [
     "Number",
     "Date",
     "Статус",
+    "ДополнительныеРеквизиты",
 ]
 
 _cached_rows = []
@@ -58,6 +63,7 @@ _cached_fp = ""
 _last_refresh = None
 _customer_name_cache = {}
 _additional_info_cache = {}
+_status_kp_value_cache = {}
 
 
 def log(message: str) -> None:
@@ -253,6 +259,45 @@ def resolve_additional_info_for_ref(ref_key: str, headers: dict, doc: dict | Non
     return best_line
 
 
+def resolve_status_kp_from_requisites(requisites: list, headers: dict) -> str:
+    if not isinstance(requisites, list):
+        return ""
+
+    for req in requisites:
+        if not isinstance(req, dict):
+            continue
+        if str(req.get("Свойство_Key") or "").lower() != STATUS_KP_PROPERTY_KEY.lower():
+            continue
+
+        text_value = str(req.get("ТекстоваяСтрока") or "").strip()
+        if text_value:
+            return text_value
+
+        value_guid = str(req.get("Значение") or "").strip()
+        if not value_guid:
+            continue
+
+        if value_guid in _status_kp_value_cache:
+            return _status_kp_value_cache[value_guid]
+
+        try:
+            value_resp = requests.get(
+                f"{BASE}/Catalog_ЗначенияСвойствОбъектов(guid'{value_guid}')",
+                headers=headers,
+                timeout=NAV_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            if value_resp.status_code == 200:
+                value_obj = value_resp.json()
+                description = str(value_obj.get("Description") or "").strip()
+                _status_kp_value_cache[value_guid] = description
+                return description
+        except Exception:
+            continue
+
+    return ""
+
+
 def load_rows_from_file() -> list:
     path = Path(DATA_FILE)
     if not path.exists():
@@ -262,6 +307,8 @@ def load_rows_from_file() -> list:
     for row in data:
         if "customerName" not in row:
             row["customerName"] = ""
+        if "statusKp" not in row:
+            row["statusKp"] = ""
     data.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return data
 
@@ -270,6 +317,8 @@ def save_rows(rows: list) -> None:
     for row in rows:
         if "customerName" not in row:
             row["customerName"] = ""
+        if "statusKp" not in row:
+            row["statusKp"] = ""
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
@@ -342,7 +391,7 @@ def fetch_rows_from_odata() -> list:
         for item in batch:
             ref_key = item.get("Ref_Key") or ""
             values = [item.get(f) or "" for f in LIGHT_SELECT_FIELDS]
-            number, dt_raw, status = values[0], values[1], values[2]
+            number, dt_raw, status, requisites = values[0], values[1], values[2], values[3]
             try:
                 dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
             except Exception:
@@ -352,6 +401,9 @@ def fetch_rows_from_odata() -> list:
 
             if TARGET_START <= dt <= TARGET_END:
                 known_row = known_rows.get(number, {})
+                status_kp = known_row.get("statusKp", "")
+                if not status_kp:
+                    status_kp = resolve_status_kp_from_requisites(requisites, headers)
                 rows.append(
                     {
                         "refKey": str(ref_key),
@@ -359,6 +411,7 @@ def fetch_rows_from_odata() -> list:
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
                         "customerName": known_row.get("customerName", ""),
                         "status": status,
+                        "statusKp": status_kp,
                         "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
                     }
                 )

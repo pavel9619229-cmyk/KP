@@ -29,7 +29,7 @@ function render(data) {
   countLabel.textContent = `Показано: ${data.length} из ${rows.length}${synced}`;
 
   if (!data.length) {
-    tableBody.innerHTML = '<tr><td colspan="5">Нет данных по текущему фильтру.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6">Нет данных по текущему фильтру.</td></tr>';
     return;
   }
 
@@ -39,6 +39,7 @@ function render(data) {
       <td>${escapeHtml(r.createdAt || '')}</td>
       <td>${escapeHtml(r.customerName || '')}</td>
       <td><span class="tag">${escapeHtml(r.status || '')}</span></td>
+      <td><span class="tag">${escapeHtml(r.statusKp || '')}</span></td>
       <td>${escapeHtml(r.additionalInfoFirstLine || '')}</td>
     </tr>
   `).join('');
@@ -50,7 +51,7 @@ function applyFilters() {
 
   const filtered = rows.filter((r) => {
     const byStatus = !status || (r.status || '') === status;
-    const text = `${r.number || ''} ${r.customerName || ''} ${r.status || ''} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
+    const text = `${r.number || ''} ${r.customerName || ''} ${r.status || ''} ${r.statusKp || ''} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
     const byText = !q || text.includes(q);
     return byStatus && byText;
   });
