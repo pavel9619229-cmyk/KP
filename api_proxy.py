@@ -6,6 +6,7 @@ import base64
 import json
 import os
 import re
+import threading
 import time
 from datetime import datetime
 from html import unescape
@@ -38,7 +39,8 @@ USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
-REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "60"))
+REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
+STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
@@ -64,6 +66,7 @@ _last_refresh = None
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
+_refresh_lock = threading.Lock()
 
 
 def log(message: str) -> None:
@@ -464,24 +467,45 @@ def fetch_rows_from_odata() -> list:
 def refresh_cache_and_file() -> None:
     global _cached_rows, _cached_fp, _last_refresh
 
+    with _refresh_lock:
+        try:
+            fetched = fetch_rows_from_odata()
+            if fetched:
+                save_rows(fetched)
+                _cached_rows = fetched
+                _cached_fp = rows_fingerprint(fetched)
+                _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log(f"refresh success: {len(fetched)} rows")
+                return
+
+            log("refresh returned 0 rows, using file fallback")
+        except Exception as exc:
+            log(f"refresh failed: {exc}")
+
+        fallback = load_rows_from_file()
+        _cached_rows = fallback
+        _cached_fp = rows_fingerprint(fallback)
+        _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def cache_is_stale() -> bool:
+    if not _last_refresh:
+        return True
     try:
-        fetched = fetch_rows_from_odata()
-        if fetched:
-            save_rows(fetched)
-            _cached_rows = fetched
-            _cached_fp = rows_fingerprint(fetched)
-            _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log(f"refresh success: {len(fetched)} rows")
-            return
+        last = datetime.strptime(_last_refresh, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return True
+    age = (datetime.now() - last).total_seconds()
+    return age >= STALE_REFRESH_AFTER_SECONDS
 
-        log("refresh returned 0 rows, using file fallback")
-    except Exception as exc:
-        log(f"refresh failed: {exc}")
 
-    fallback = load_rows_from_file()
-    _cached_rows = fallback
-    _cached_fp = rows_fingerprint(fallback)
-    _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+async def trigger_refresh_if_stale() -> None:
+    if not cache_is_stale():
+        return
+    task = getattr(app.state, "on_demand_refresh_task", None)
+    if task and not task.done():
+        return
+    app.state.on_demand_refresh_task = asyncio.create_task(asyncio.to_thread(refresh_cache_and_file))
 
 
 async def refresh_loop() -> None:
@@ -536,6 +560,7 @@ def format_row_for_client(row: dict) -> dict:
 
 @app.get("/api/kp/all")
 async def get_all_kp():
+    await trigger_refresh_if_stale()
     return [format_row_for_client(row) for row in _cached_rows]
 
 
