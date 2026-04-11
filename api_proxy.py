@@ -42,6 +42,7 @@ DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
+FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -131,19 +132,22 @@ def score_customer_candidate(nav_obj: dict) -> int:
 
 
 def _fetch_doc_by_ref(ref_key: str, headers: dict, timeout: float = DOC_TIMEOUT_SECONDS) -> dict:
-    try:
-        doc_resp = requests.get(
-            f"{BASE}/{ENTITY}(guid'{ref_key}')",
-            headers=headers,
-            timeout=timeout,
-            verify=False,
-        )
-        if doc_resp.status_code != 200:
-            return {}
-        doc = doc_resp.json()
-        return doc if isinstance(doc, dict) else {}
-    except Exception:
-        return {}
+    for attempt in range(3):
+        try:
+            doc_resp = requests.get(
+                f"{BASE}/{ENTITY}(guid'{ref_key}')",
+                headers=headers,
+                timeout=timeout,
+                verify=False,
+            )
+            if doc_resp.status_code != 200:
+                time.sleep(0.4 * (attempt + 1))
+                continue
+            doc = doc_resp.json()
+            return doc if isinstance(doc, dict) else {}
+        except Exception:
+            time.sleep(0.4 * (attempt + 1))
+    return {}
 
 
 def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None = None) -> str:
@@ -212,16 +216,26 @@ def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None 
     return best_description
 
 
-def resolve_additional_info_for_ref(ref_key: str, headers: dict, doc: dict | None = None) -> str:
+def resolve_additional_info_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> str:
     if not ref_key:
         return ""
-    if ref_key in _additional_info_cache:
+    if use_cache and ref_key in _additional_info_cache:
         return _additional_info_cache[ref_key]
 
     row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
     if not row:
         _additional_info_cache[ref_key] = ""
         return ""
+
+    comment_line = first_line(row.get("Комментарий") or "")
+    if comment_line:
+        _additional_info_cache[ref_key] = comment_line
+        return comment_line
 
     best_line = ""
     best_score = -1
@@ -245,6 +259,12 @@ def resolve_additional_info_for_ref(ref_key: str, headers: dict, doc: dict | Non
             continue
 
         score = 1
+        if key_l == "комментарий":
+            score += 10
+        elif key_l == "прочаядополнительнаяинформациятекст":
+            score += 6
+        elif key_l == "дополнительнаяинформацияклиентуhtml":
+            score += 4
         if len(line) >= 12:
             score += 2
         if any(ch.isalpha() for ch in line):
@@ -427,8 +447,10 @@ def fetch_rows_from_odata() -> list:
 
         skip = max(0, skip - page_size)
 
+    rows.sort(key=lambda x: x["createdAt"], reverse=True)
+
     enriched = 0
-    for row in rows:
+    for index, row in enumerate(rows):
         if enriched >= ENRICH_PER_REFRESH:
             break
 
@@ -436,8 +458,9 @@ def fetch_rows_from_odata() -> list:
         if not ref_key:
             continue
 
+        should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
         need_customer = not (row.get("customerName") or "").strip()
-        need_info = not (row.get("additionalInfoFirstLine") or "").strip()
+        need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         if not need_customer and not need_info:
             continue
 
@@ -446,9 +469,13 @@ def fetch_rows_from_odata() -> list:
             continue
 
         if need_info:
-            line = resolve_additional_info_for_ref(ref_key, headers, doc=doc)
-            if line:
-                row["additionalInfoFirstLine"] = line
+            line = resolve_additional_info_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=not should_refresh_info,
+            )
+            row["additionalInfoFirstLine"] = line
 
         if need_customer:
             customer = resolve_customer_name_for_ref(ref_key, headers, doc=doc)
