@@ -45,6 +45,7 @@ ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
+GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 STATUS_KP_PROPERTY_KEY = os.getenv(
     "STATUS_KP_PROPERTY_KEY",
@@ -67,6 +68,7 @@ _last_refresh = None
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
+_group_doc_flags_cache = {}
 _refresh_lock = threading.Lock()
 
 
@@ -148,6 +150,279 @@ def _fetch_doc_by_ref(ref_key: str, headers: dict, timeout: float = DOC_TIMEOUT_
         except Exception:
             time.sleep(0.4 * (attempt + 1))
     return {}
+
+
+def _get_json_with_retry(
+    url: str,
+    headers: dict,
+    *,
+    params: dict | None = None,
+    timeout: float = 20,
+    retries: int = 4,
+) -> tuple[dict | None, str | None]:
+    last_error = None
+    for attempt in range(retries):
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=timeout,
+                verify=False,
+            )
+            if response.status_code >= 500:
+                last_error = f"HTTP {response.status_code}: {response.text[:300]}"
+                time.sleep(0.4 * (attempt + 1))
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            if isinstance(payload, dict):
+                return payload, None
+            return {}, None
+        except Exception as exc:
+            last_error = str(exc)
+            time.sleep(0.4 * (attempt + 1))
+    return None, last_error
+
+
+def _parse_odata_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+def _iterate_tail_pages(entity_name: str, headers: dict, select_fields: list[str], page_size: int = 200):
+    raw_count = ""
+    try:
+        response = requests.get(
+            f"{BASE}/{entity_name}/$count",
+            headers=headers,
+            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            verify=False,
+        )
+        if response.status_code != 200:
+            return
+        raw_count = response.text.strip()
+        total_count = int(raw_count)
+    except Exception:
+        return
+
+    if total_count <= 0:
+        return
+
+    skip = ((total_count - 1) // page_size) * page_size
+    select_expr = ",".join(select_fields)
+
+    while True:
+        payload, error = _get_json_with_retry(
+            f"{BASE}/{entity_name}",
+            headers,
+            params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
+            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            return
+
+        batch = payload.get("value", [])
+        if not batch:
+            return
+
+        yield batch
+
+        batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch]
+        batch_dates = [d for d in batch_dates if d is not None]
+        if batch_dates and max(batch_dates) < TARGET_START:
+            return
+
+        if skip == 0:
+            return
+        skip = max(0, skip - page_size)
+
+
+def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
+    target_refs = [str(r.get("refKey") or "") for r in rows]
+    target_refs = [r for r in target_refs if r]
+    if not target_refs:
+        return
+
+    unresolved_refs = {
+        r.get("refKey")
+        for r in rows
+        if r.get("refKey") and (r.get("invoiceCreated") is None or r.get("paymentReceived") is None)
+    }
+    if not unresolved_refs:
+        return
+
+    kp_ref_set = set(unresolved_refs)
+
+    kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
+    order_to_kp: dict[str, str] = {}
+
+    for batch in _iterate_tail_pages(
+        "Document_ЗаказКлиента",
+        headers,
+        ["Ref_Key", "Date", "ДокументОснование", "ДокументОснование_Type"],
+    ) or []:
+        for item in batch:
+            base_type = str(item.get("ДокументОснование_Type") or "")
+            base_ref = str(item.get("ДокументОснование") or "")
+            order_ref = str(item.get("Ref_Key") or "")
+            if (
+                order_ref
+                and base_type == "StandardODATA.Document_КоммерческоеПредложениеКлиенту"
+                and base_ref in kp_ref_set
+            ):
+                kp_to_orders[base_ref].add(order_ref)
+                order_to_kp[order_ref] = base_ref
+
+    target_order_refs = set(order_to_kp.keys())
+    if not target_order_refs:
+        for row in rows:
+            if row.get("refKey") in kp_ref_set:
+                row["invoiceCreated"] = False
+                row["paymentReceived"] = False
+        return
+
+    invoice_order_refs: set[str] = set()
+    for batch in _iterate_tail_pages(
+        "Document_РеализацияТоваровУслуг",
+        headers,
+        ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
+    ) or []:
+        for item in batch:
+            order_type = str(item.get("ЗаказКлиента_Type") or "")
+            order_ref = str(item.get("ЗаказКлиента") or "")
+            if order_type == "StandardODATA.Document_ЗаказКлиента" and order_ref in target_order_refs:
+                invoice_order_refs.add(order_ref)
+
+    payment_order_refs: set[str] = set()
+    for batch in _iterate_tail_pages(
+        "Document_ПоступлениеБезналичныхДенежныхСредств",
+        headers,
+        ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type"],
+    ) or []:
+        for item in batch:
+            settlement_order = str(item.get("ОбъектРасчетов_Key") or "")
+            if settlement_order in target_order_refs:
+                payment_order_refs.add(settlement_order)
+                continue
+
+            base_type = str(item.get("ДокументОснование_Type") or "")
+            base_ref = str(item.get("ДокументОснование") or "")
+            if base_type == "StandardODATA.Document_ЗаказКлиента" and base_ref in target_order_refs:
+                payment_order_refs.add(base_ref)
+
+    kp_invoice_map = {kp: False for kp in kp_ref_set}
+    kp_payment_map = {kp: False for kp in kp_ref_set}
+
+    for order_ref in invoice_order_refs:
+        kp_ref = order_to_kp.get(order_ref)
+        if kp_ref:
+            kp_invoice_map[kp_ref] = True
+
+    for order_ref in payment_order_refs:
+        kp_ref = order_to_kp.get(order_ref)
+        if kp_ref:
+            kp_payment_map[kp_ref] = True
+
+    for row in rows:
+        kp_ref = row.get("refKey")
+        if kp_ref in kp_ref_set:
+            row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
+            row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+
+
+def _fetch_kp_group_flags(ref_key: str, headers: dict) -> dict:
+    if not ref_key:
+        return {"invoiceCreated": None, "paymentReceived": None}
+
+    if ref_key in _group_doc_flags_cache:
+        return _group_doc_flags_cache[ref_key]
+
+    order_filter = (
+        "ДокументОснование_Type eq 'StandardODATA.Document_КоммерческоеПредложениеКлиенту' "
+        f"and ДокументОснование eq guid'{ref_key}'"
+    )
+    orders_payload, orders_error = _get_json_with_retry(
+        f"{BASE}/Document_ЗаказКлиента",
+        headers,
+        params={"$select": "Ref_Key", "$filter": order_filter, "$top": "200"},
+        timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+        retries=2,
+    )
+    if orders_error:
+        result = {"invoiceCreated": None, "paymentReceived": None}
+        _group_doc_flags_cache[ref_key] = result
+        return result
+
+    orders = orders_payload.get("value", []) if isinstance(orders_payload, dict) else []
+    if not orders:
+        result = {"invoiceCreated": False, "paymentReceived": False}
+        _group_doc_flags_cache[ref_key] = result
+        return result
+
+    has_invoice = False
+    has_payment = False
+
+    for order in orders:
+        order_ref = str(order.get("Ref_Key") or "").strip()
+        if not order_ref:
+            continue
+
+        if not has_invoice:
+            real_filter = (
+                "ЗаказКлиента_Type eq 'StandardODATA.Document_ЗаказКлиента' "
+                f"and ЗаказКлиента eq guid'{order_ref}'"
+            )
+            real_payload, real_error = _get_json_with_retry(
+                f"{BASE}/Document_РеализацияТоваровУслуг",
+                headers,
+                params={"$select": "Ref_Key", "$filter": real_filter, "$top": "1"},
+                timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+                retries=2,
+            )
+            if real_error:
+                result = {"invoiceCreated": None, "paymentReceived": None}
+                _group_doc_flags_cache[ref_key] = result
+                return result
+            has_invoice = bool((real_payload or {}).get("value"))
+
+        if not has_payment:
+            pay_filters = [
+                f"ОбъектРасчетов_Key eq guid'{order_ref}'",
+                (
+                    "ДокументОснование_Type eq 'StandardODATA.Document_ЗаказКлиента' "
+                    f"and ДокументОснование eq guid'{order_ref}'"
+                ),
+            ]
+            for pay_filter in pay_filters:
+                pay_payload, pay_error = _get_json_with_retry(
+                    f"{BASE}/Document_ПоступлениеБезналичныхДенежныхСредств",
+                    headers,
+                    params={"$select": "Ref_Key", "$filter": pay_filter, "$top": "1"},
+                    timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+                    retries=2,
+                )
+                if pay_error:
+                    result = {"invoiceCreated": None, "paymentReceived": None}
+                    _group_doc_flags_cache[ref_key] = result
+                    return result
+                if bool((pay_payload or {}).get("value")):
+                    has_payment = True
+                    break
+
+        if has_invoice and has_payment:
+            break
+
+    result = {"invoiceCreated": has_invoice, "paymentReceived": has_payment}
+    _group_doc_flags_cache[ref_key] = result
+    return result
+
+
 def resolve_customer_name_for_ref(
     ref_key: str,
     headers: dict,
@@ -335,6 +610,10 @@ def load_rows_from_file() -> list:
             row["customerName"] = ""
         if "statusKp" not in row:
             row["statusKp"] = ""
+        if "invoiceCreated" not in row:
+            row["invoiceCreated"] = None
+        if "paymentReceived" not in row:
+            row["paymentReceived"] = None
     data.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return data
 
@@ -345,6 +624,10 @@ def save_rows(rows: list) -> None:
             row["customerName"] = ""
         if "statusKp" not in row:
             row["statusKp"] = ""
+        if "invoiceCreated" not in row:
+            row["invoiceCreated"] = None
+        if "paymentReceived" not in row:
+            row["paymentReceived"] = None
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
@@ -439,6 +722,8 @@ def fetch_rows_from_odata() -> list:
                         "status": status,
                         "statusKp": status_kp,
                         "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
+                        "invoiceCreated": known_row.get("invoiceCreated"),
+                        "paymentReceived": known_row.get("paymentReceived"),
                     }
                 )
 
@@ -452,11 +737,10 @@ def fetch_rows_from_odata() -> list:
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
 
+    _enrich_group_flags_bulk(rows, headers)
+
     enriched = 0
     for index, row in enumerate(rows):
-        if enriched >= ENRICH_PER_REFRESH:
-            break
-
         ref_key = row.get("refKey", "")
         if not ref_key:
             continue
@@ -465,12 +749,16 @@ def fetch_rows_from_odata() -> list:
         should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
+        if enriched >= ENRICH_PER_REFRESH:
+            break
         if not need_customer and not need_info:
             continue
 
-        doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-        if not doc:
-            continue
+        doc = {}
+        if need_customer or need_info:
+            doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+            if not doc and (need_customer or need_info):
+                continue
 
         if need_info:
             line = resolve_additional_info_for_ref(
