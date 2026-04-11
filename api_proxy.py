@@ -148,12 +148,15 @@ def _fetch_doc_by_ref(ref_key: str, headers: dict, timeout: float = DOC_TIMEOUT_
         except Exception:
             time.sleep(0.4 * (attempt + 1))
     return {}
-
-
-def resolve_customer_name_for_ref(ref_key: str, headers: dict, doc: dict | None = None) -> str:
+def resolve_customer_name_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> str:
     if not ref_key:
         return ""
-    if ref_key in _customer_name_cache:
+    if use_cache and ref_key in _customer_name_cache:
         return _customer_name_cache[ref_key]
 
     row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
@@ -459,7 +462,8 @@ def fetch_rows_from_odata() -> list:
             continue
 
         should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
-        need_customer = not (row.get("customerName") or "").strip()
+        should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
+        need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         if not need_customer and not need_info:
             continue
@@ -478,7 +482,12 @@ def fetch_rows_from_odata() -> list:
             row["additionalInfoFirstLine"] = line
 
         if need_customer:
-            customer = resolve_customer_name_for_ref(ref_key, headers, doc=doc)
+            customer = resolve_customer_name_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=not should_refresh_customer,
+            )
             if customer:
                 row["customerName"] = customer
 
