@@ -579,7 +579,8 @@ def format_row_for_client(row: dict) -> dict:
     """Format row for API response: remove ПСУТ- prefix and time from date."""
     formatted = row.copy()
     if "number" in formatted:
-        formatted["number"] = formatted["number"].replace("ПСУТ-", "")
+        number = str(formatted["number"]).replace("ПСУТ-", "")
+        formatted["number"] = number.lstrip("0") or "0"
     if "createdAt" in formatted:
         formatted["createdAt"] = formatted["createdAt"].split(" ")[0]
     return formatted
