@@ -12,6 +12,7 @@ let lastFingerprint = '';
 let lastSyncAt = null;
 let ws = null;
 let wsActive = false;
+const TABLE_COLUMN_COUNT = 15;
 
 function escapeHtml(text) {
   return String(text)
@@ -22,6 +23,50 @@ function escapeHtml(text) {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeFlag(value) {
+  if (value === true || value === false) {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (!v) return null;
+    if (['true', '1', 'yes', 'y', 'да', 'заполнен'].includes(v)) return true;
+    if (['false', '0', 'no', 'n', 'нет', 'не заполнен'].includes(v)) return false;
+  }
+
+  return null;
+}
+
+function getFlag(row, keys, fallback = null) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, key)) {
+      const flag = normalizeFlag(row[key]);
+      if (flag !== null) {
+        return flag;
+      }
+    }
+  }
+
+  if (typeof fallback === 'function') {
+    return fallback(row);
+  }
+
+  return null;
+}
+
+function formatFlag(flag) {
+  if (flag === true) return 'Да';
+  if (flag === false) return 'Нет';
+  return '—';
+}
+
 function render(data) {
   const synced = lastSyncAt
     ? ` · обновлено ${lastSyncAt.toLocaleTimeString('ru-RU')}`
@@ -29,7 +74,7 @@ function render(data) {
   countLabel.textContent = `Показано: ${data.length} из ${rows.length}${synced}`;
 
   if (!data.length) {
-    tableBody.innerHTML = '<tr><td colspan="5">Нет данных по текущему фильтру.</td></tr>';
+    tableBody.innerHTML = `<tr><td colspan="${TABLE_COLUMN_COUNT}">Нет данных по текущему фильтру.</td></tr>`;
     return;
   }
 
@@ -38,6 +83,19 @@ function render(data) {
       <td>${escapeHtml(r.number || '')}</td>
       <td>${escapeHtml(r.createdAt || '')}</td>
       <td>${escapeHtml(r.customerName || '')}</td>
+      <td>${formatFlag(getFlag(r, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (row) => {
+        const name = String(row.customerName || '').trim();
+        return name ? true : false;
+      }))}</td>
+      <td>${formatFlag(getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен']))}</td>
+      <td>${formatFlag(getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']))}</td>
+      <td>${formatFlag(getFlag(r, ['kpSent', 'isKpSent', 'кпОтправлено']))}</td>
+      <td>${formatFlag(getFlag(r, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']))}</td>
+      <td>${formatFlag(getFlag(r, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']))}</td>
+      <td>${formatFlag(getFlag(r, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']))}</td>
+      <td>${formatFlag(getFlag(r, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']))}</td>
+      <td>${formatFlag(getFlag(r, ['rejected', 'isRejected', 'отказ']))}</td>
+      <td>${formatFlag(getFlag(r, ['problem', 'hasProblem', 'проблема']))}</td>
       <td><span class="tag">${escapeHtml(r.statusKp || '')}</span></td>
       <td>${escapeHtml(r.additionalInfoFirstLine || '')}</td>
     </tr>
@@ -128,7 +186,7 @@ async function refreshData(initial = false) {
   } catch (err) {
     if (initial) {
       countLabel.textContent = 'Ошибка загрузки данных';
-      tableBody.innerHTML = `<tr><td colspan="5">Не удалось загрузить данные: ${escapeHtml(err.message)}</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="${TABLE_COLUMN_COUNT}">Не удалось загрузить данные: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 }
