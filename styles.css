@@ -135,7 +135,8 @@ button:hover {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1700px;
+  min-width: 1500px;
+  table-layout: fixed;
 }
 
 th,
@@ -163,8 +164,8 @@ td {
 /* Keep core identifiers visible while horizontally scrolling. */
 th:nth-child(1),
 td:nth-child(1) {
-  min-width: 120px;
-  width: 120px;
+  min-width: 110px;
+  width: 110px;
   position: sticky;
   left: 0;
   z-index: 3;
@@ -173,20 +174,20 @@ td:nth-child(1) {
 
 th:nth-child(2),
 td:nth-child(2) {
-  min-width: 150px;
-  width: 150px;
+  min-width: 140px;
+  width: 140px;
   position: sticky;
-  left: 120px;
+  left: 110px;
   z-index: 3;
   background: #f7faf9;
 }
 
 th:nth-child(3),
 td:nth-child(3) {
-  min-width: 260px;
-  width: 260px;
+  min-width: 220px;
+  width: 220px;
   position: sticky;
-  left: 270px;
+  left: 250px;
   z-index: 3;
   background: #f7faf9;
   box-shadow: 2px 0 0 rgba(27, 33, 31, 0.08);
@@ -194,20 +195,20 @@ td:nth-child(3) {
 
 th:nth-child(n + 4):nth-child(-n + 13),
 td:nth-child(n + 4):nth-child(-n + 13) {
-  min-width: 120px;
-  width: 120px;
+  min-width: 102px;
+  width: 102px;
   text-align: center;
 }
 
 th:nth-child(14),
 td:nth-child(14) {
-  min-width: 180px;
-  width: 180px;
+  min-width: 150px;
+  width: 150px;
 }
 
 th:nth-child(15),
 td:nth-child(15) {
-  min-width: 360px;
+  min-width: 280px;
 }
 
 thead th:nth-child(1),
@@ -217,6 +218,43 @@ thead th:nth-child(3) {
 }
 
 tbody tr:hover {
+
+@media (max-width: 1680px) {
+  table {
+    min-width: 1280px;
+  }
+
+  th:nth-child(15),
+  td:nth-child(15) {
+    display: none;
+  }
+}
+
+@media (max-width: 1440px) {
+  table {
+    min-width: 1120px;
+  }
+
+  th:nth-child(12),
+  td:nth-child(12),
+  th:nth-child(13),
+  td:nth-child(13) {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  table {
+    min-width: 980px;
+  }
+
+  th:nth-child(10),
+  td:nth-child(10),
+  th:nth-child(11),
+  td:nth-child(11) {
+    display: none;
+  }
+}
   background: rgba(14, 139, 114, 0.07);
 }
 
@@ -240,9 +278,13 @@ tbody tr:hover {
   }
 
   table {
-    min-width: 1120px;
+    min-width: 860px;
   }
 
+  th:nth-child(8),
+  td:nth-child(8),
+  th:nth-child(9),
+  td:nth-child(9),
   th:nth-child(11),
   td:nth-child(11),
   th:nth-child(12),
@@ -254,7 +296,7 @@ tbody tr:hover {
 
   th:nth-child(3),
   td:nth-child(3) {
-    min-width: 210px;
-    width: 210px;
+    min-width: 180px;
+    width: 180px;
   }
 }
