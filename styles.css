@@ -129,12 +129,13 @@ button:hover {
 
 .table-wrap {
   overflow: auto;
+  max-width: 100%;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 2000px;
+  min-width: 1700px;
 }
 
 th,
@@ -143,6 +144,8 @@ td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
 }
 
 th {
@@ -157,15 +160,60 @@ td {
   font-size: 0.9rem;
 }
 
-th,
-td {
-  white-space: nowrap;
+/* Keep core identifiers visible while horizontally scrolling. */
+th:nth-child(1),
+td:nth-child(1) {
+  min-width: 120px;
+  width: 120px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f7faf9;
 }
 
-th:last-child,
-td:last-child {
-  white-space: normal;
+th:nth-child(2),
+td:nth-child(2) {
+  min-width: 150px;
+  width: 150px;
+  position: sticky;
+  left: 120px;
+  z-index: 3;
+  background: #f7faf9;
+}
+
+th:nth-child(3),
+td:nth-child(3) {
+  min-width: 260px;
+  width: 260px;
+  position: sticky;
+  left: 270px;
+  z-index: 3;
+  background: #f7faf9;
+  box-shadow: 2px 0 0 rgba(27, 33, 31, 0.08);
+}
+
+th:nth-child(n + 4):nth-child(-n + 13),
+td:nth-child(n + 4):nth-child(-n + 13) {
+  min-width: 120px;
+  width: 120px;
+  text-align: center;
+}
+
+th:nth-child(14),
+td:nth-child(14) {
+  min-width: 180px;
+  width: 180px;
+}
+
+th:nth-child(15),
+td:nth-child(15) {
   min-width: 360px;
+}
+
+thead th:nth-child(1),
+thead th:nth-child(2),
+thead th:nth-child(3) {
+  z-index: 5;
 }
 
 tbody tr:hover {
@@ -189,5 +237,24 @@ tbody tr:hover {
   button {
     width: auto;
     justify-self: start;
+  }
+
+  table {
+    min-width: 1120px;
+  }
+
+  th:nth-child(11),
+  td:nth-child(11),
+  th:nth-child(12),
+  td:nth-child(12),
+  th:nth-child(13),
+  td:nth-child(13) {
+    display: none;
+  }
+
+  th:nth-child(3),
+  td:nth-child(3) {
+    min-width: 210px;
+    width: 210px;
   }
 }
