@@ -261,11 +261,32 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
+    order_tokens: dict[str, set[str]] = {}
+
+    def build_order_tokens(order_number: str) -> set[str]:
+        raw = str(order_number or "").strip().lower()
+        if not raw:
+            return set()
+
+        compact = re.sub(r"[^0-9a-zа-я]", "", raw)
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        digits_trim = digits.lstrip("0")
+
+        tokens = {raw, compact}
+        if digits:
+            tokens.add(digits)
+        if digits_trim:
+            tokens.add(digits_trim)
+            # Common short form in payment purpose: ут-219 for УТ-000219.
+            tokens.add(f"ут-{digits_trim}")
+            tokens.add(f"ут{digits_trim}")
+
+        return {t for t in tokens if len(t) >= 3}
 
     for batch in _iterate_tail_pages(
         "Document_ЗаказКлиента",
         headers,
-        ["Ref_Key", "Date", "ДокументОснование", "ДокументОснование_Type"],
+        ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
     ) or []:
         for item in batch:
             base_type = str(item.get("ДокументОснование_Type") or "")
@@ -278,6 +299,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             ):
                 kp_to_orders[base_ref].add(order_ref)
                 order_to_kp[order_ref] = base_ref
+                order_tokens[order_ref] = build_order_tokens(str(item.get("Number") or ""))
 
     target_order_refs = set(order_to_kp.keys())
     if not target_order_refs:
@@ -303,7 +325,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     for batch in _iterate_tail_pages(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
-        ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type"],
+        ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
     ) or []:
         for item in batch:
             settlement_order = str(item.get("ОбъектРасчетов_Key") or "")
@@ -315,6 +337,16 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             base_ref = str(item.get("ДокументОснование") or "")
             if base_type == "StandardODATA.Document_ЗаказКлиента" and base_ref in target_order_refs:
                 payment_order_refs.add(base_ref)
+                continue
+
+            # Fallback: if explicit links are absent, detect order number in payment purpose.
+            purpose = str(item.get("НазначениеПлатежа") or "").lower()
+            if purpose:
+                for order_ref, tokens in order_tokens.items():
+                    if order_ref in payment_order_refs:
+                        continue
+                    if any(token and token in purpose for token in tokens):
+                        payment_order_refs.add(order_ref)
 
     kp_invoice_map = {kp: False for kp in kp_ref_set}
     kp_payment_map = {kp: False for kp in kp_ref_set}
