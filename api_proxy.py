@@ -44,6 +44,7 @@ REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
+GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
@@ -66,6 +67,7 @@ LIGHT_SELECT_FIELDS = [
 _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
+_last_group_enrich = None
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
@@ -790,7 +792,20 @@ def fetch_rows_from_odata() -> list:
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
 
-    _enrich_group_flags_bulk(rows, headers)
+    global _last_group_enrich
+    now = datetime.now()
+    group_age = (now - _last_group_enrich).total_seconds() if _last_group_enrich else None
+    if group_age is None or group_age >= GROUP_ENRICH_INTERVAL_SECONDS:
+        _enrich_group_flags_bulk(rows, headers)
+        _last_group_enrich = now
+    else:
+        # Re-use cached invoiceCreated/paymentReceived from known_rows
+        for row in rows:
+            known = known_rows.get(row.get("number", ""), {})
+            if row.get("invoiceCreated") is None:
+                row["invoiceCreated"] = known.get("invoiceCreated")
+            if row.get("paymentReceived") is None:
+                row["paymentReceived"] = known.get("paymentReceived")
 
     enriched = 0
     for index, row in enumerate(rows):
