@@ -5,6 +5,7 @@ import base64
 import json
 from datetime import datetime
 from html import unescape
+from pathlib import Path
 import re
 import time
 
@@ -124,7 +125,8 @@ for i, r in enumerate(result[:30], start=1):
     print(f"{i:>3}. {r['number']:<20} | {r['createdAt']:<19} | {r['status']:<30} | {r['additionalInfoFirstLine']}")
 
 # Сохранение в файл
-with open("kp_2026_march_april.json", "w", encoding="utf-8") as f:
+output_path = Path(__file__).resolve().parent.parent / "data" / "kp_2026_march_april.json"
+with output_path.open("w", encoding="utf-8") as f:
     json.dump(result, f, ensure_ascii=False, indent=2)
 
-print("Сохранено: kp_2026_march_april.json")
+print(f"Сохранено: {output_path}")

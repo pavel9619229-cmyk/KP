@@ -204,7 +204,6 @@ async function loadRows() {
   const sources = [
     '/api/kp/all',
     'https://onec-kp-realtime.onrender.com/api/kp/all',
-    'kp_2026_march_april.json',
   ];
 
   let response = null;
