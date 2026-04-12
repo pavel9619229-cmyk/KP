@@ -93,9 +93,109 @@ body {
   color: var(--accent-2);
 }
 
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.hero-top .eyebrow {
+  margin: 0;
+}
+
+/* Render service status badge */
+.render-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  backdrop-filter: blur(4px);
+  cursor: default;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+body.dark .render-status {
+  background: rgba(22, 32, 28, 0.7);
+}
+
+.render-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.render-status[data-status="live"] .render-status-dot       { background: #22c55e; }
+.render-status[data-status="live"]                          { color: #166534; border-color: rgba(34, 197, 94, 0.35); }
+body.dark .render-status[data-status="live"]                { color: #86efac; }
+
+.render-status[data-status="suspended"] .render-status-dot,
+.render-status[data-status="suspended_by_admin"] .render-status-dot,
+.render-status[data-status="deactivated"] .render-status-dot { background: #f97316; }
+
+.render-status[data-status="deploy_failed"] .render-status-dot,
+.render-status[data-status="error"] .render-status-dot      { background: #ef4444; }
+
+.render-status[data-status="build_in_progress"] .render-status-dot,
+.render-status[data-status="deploy_in_progress"] .render-status-dot,
+.render-status[data-status="update_in_progress"] .render-status-dot,
+.render-status[data-status="pre_deploy_in_progress"] .render-status-dot { background: #eab308; }
+
 .subtitle {
   margin-top: 8px;
   color: var(--muted);
+}
+
+.status-window {
+  margin-top: 14px;
+  max-width: 520px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(6px);
+  padding: 12px 14px;
+}
+
+body.dark .status-window {
+  background: rgba(22, 32, 28, 0.75);
+}
+
+.status-window-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.status-window-grid {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 10px;
+}
+
+.status-window-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.status-window-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86rem;
+  font-weight: 700;
+  word-break: break-all;
 }
 
 .controls {

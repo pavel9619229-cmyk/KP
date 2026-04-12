@@ -53,6 +53,9 @@ STATUS_KP_PROPERTY_KEY = os.getenv(
     "STATUS_KP_PROPERTY_KEY",
     "e1c7a0e4-4f8d-11f0-8d50-bc97e15eb091",
 )
+RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
+RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
+RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
@@ -76,6 +79,8 @@ _manager_filled_cache = {}
 _product_specified_cache = {}
 _kp_sent_cache = {}
 _refresh_lock = threading.Lock()
+_render_status_cache: dict = {"status": None, "updatedAt": None}
+_render_status_lock = threading.Lock()
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
 
@@ -1128,6 +1133,57 @@ async def healthz():
         "rows": len(_cached_rows),
         "lastRefresh": _last_refresh,
     }
+
+
+@app.get("/render-status")
+async def render_status():
+    with _render_status_lock:
+        cached_at = _render_status_cache.get("updatedAt")
+        if cached_at and (time.time() - cached_at) < RENDER_STATUS_TTL:
+            return {
+                "status": _render_status_cache["status"],
+                "updatedAt": _render_status_cache["updatedAt_iso"],
+            }
+
+    if not RENDER_API_KEY:
+        return {"status": "unknown", "updatedAt": None, "error": "RENDER_API_KEY not set"}
+
+    try:
+        resp = requests.get(
+            "https://api.render.com/v1/services",
+            params={"name": RENDER_SERVICE_NAME, "limit": "1"},
+            headers={"Authorization": f"Bearer {RENDER_API_KEY}", "Accept": "application/json"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        status = "unknown"
+
+        if isinstance(data, list) and data:
+            first = data[0] if isinstance(data[0], dict) else {}
+            if isinstance(first.get("service"), dict):
+                status = str(first["service"].get("status") or "unknown")
+            else:
+                status = str(first.get("status") or "unknown")
+        elif isinstance(data, dict):
+            # Some API variants wrap items under "services" or return a single service object.
+            services = data.get("services")
+            if isinstance(services, list) and services:
+                first = services[0] if isinstance(services[0], dict) else {}
+                status = str(first.get("status") or "unknown")
+            else:
+                status = str(data.get("status") or "unknown")
+    except Exception as exc:
+        log(f"[render-status] error: {exc}")
+        return {"status": "error", "updatedAt": None, "error": str(exc)}
+
+    now_iso = datetime.now().isoformat()
+    with _render_status_lock:
+        _render_status_cache["status"] = status
+        _render_status_cache["updatedAt"] = time.time()
+        _render_status_cache["updatedAt_iso"] = now_iso
+
+    return {"status": status, "updatedAt": now_iso}
 
 
 def format_row_for_client(row: dict) -> dict:

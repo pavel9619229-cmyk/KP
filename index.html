@@ -15,9 +15,25 @@
 
   <main class="container">
     <header class="hero">
-      <p class="eyebrow">1С УТ · OData</p>
+      <div class="hero-top">
+        <p class="eyebrow">1С УТ · OData</p>
+        <div class="render-status" id="renderStatus" title="Статус сервиса на Render">
+          <span class="render-status-dot" id="renderStatusDot"></span>
+          <span id="renderStatusText">Render: …</span>
+        </div>
+      </div>
       <h1>Коммерческие предложения · март–апрель 2026</h1>
       <p class="subtitle">Номер, дата создания, статус и первая строка дополнительной информации</p>
+
+      <section class="status-window" aria-label="Статус сервиса Render">
+        <div class="status-window-title">Статус из Render API</div>
+        <div class="status-window-grid">
+          <div class="status-window-label">status</div>
+          <div class="status-window-value" id="renderStatusField">...</div>
+          <div class="status-window-label">updatedAt</div>
+          <div class="status-window-value" id="renderUpdatedAtField">...</div>
+        </div>
+      </section>
     </header>
 
     <section class="controls" aria-label="Фильтры">
