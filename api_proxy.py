@@ -1269,6 +1269,8 @@ async def on_startup() -> None:
     _cached_rows = load_fresh_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
+    if not _cached_rows:
+        await asyncio.to_thread(refresh_cache_and_file)
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
@@ -1357,6 +1359,8 @@ def format_row_for_client(row: dict) -> dict:
 
 @app.get("/api/kp/all")
 async def get_all_kp():
+    if not _cached_rows:
+        await asyncio.to_thread(refresh_cache_and_file)
     await trigger_refresh_if_stale()
     return [format_row_for_client(row) for row in _cached_rows]
 
