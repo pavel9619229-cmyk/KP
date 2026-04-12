@@ -285,6 +285,13 @@ tbody tr:hover {
   font-size: 0.8rem;
   border: 1px solid var(--line);
   background: #fff;
+  color: inherit;
+}
+
+body.dark .tag {
+  background: #111;
+  color: #e4ede9;
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 @media (max-width: 860px) {
