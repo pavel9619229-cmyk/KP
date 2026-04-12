@@ -80,6 +80,7 @@ _product_specified_cache = {}
 _kp_sent_cache = {}
 _receipt_confirmed_cache = {}
 _edo_sent_cache = {}
+_rejected_cache = {}
 _refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _render_status_lock = threading.Lock()
@@ -243,6 +244,29 @@ def resolve_kp_sent_for_ref(
 
     result = has_marker
     _kp_sent_cache[ref_key] = result
+    return result
+
+
+def resolve_rejected_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> bool | None:
+    if not ref_key:
+        return None
+    if use_cache and ref_key in _rejected_cache:
+        return _rejected_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    raw_comment = row.get("Комментарий") or ""
+    cleaned = strip_html(str(raw_comment))
+    result = "ОТКАЗ" in cleaned
+
+    _rejected_cache[ref_key] = result
     return result
 
 
@@ -845,6 +869,8 @@ def load_rows_from_file() -> list:
             row["receiptConfirmed"] = False
         if "edoSent" not in row:
             row["edoSent"] = False
+        if "rejected" not in row:
+            row["rejected"] = False
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -872,6 +898,8 @@ def save_rows(rows: list) -> None:
             row["receiptConfirmed"] = False
         if "edoSent" not in row:
             row["edoSent"] = False
+        if "rejected" not in row:
+            row["rejected"] = False
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -984,6 +1012,7 @@ def fetch_rows_from_odata() -> list:
                         "kpSent": known_row.get("kpSent"),
                         "receiptConfirmed": known_row.get("receiptConfirmed"),
                         "edoSent": known_row.get("edoSent"),
+                        "rejected": known_row.get("rejected"),
                         "statusKp": status_kp,
                         "additionalInfoFirstLine": "" if requisites_changed else known_row.get("additionalInfoFirstLine", ""),
                         "invoiceCreated": known_row.get("invoiceCreated"),
@@ -1030,6 +1059,7 @@ def fetch_rows_from_odata() -> list:
         should_refresh_kp_sent = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_receipt = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_edo = index < FORCE_INFO_REFRESH_TOP_ROWS
+        should_refresh_rejected = index < FORCE_INFO_REFRESH_TOP_ROWS
         # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
@@ -1038,15 +1068,16 @@ def fetch_rows_from_odata() -> list:
         need_kp_sent = should_refresh_kp_sent or row.get("kpSent") is None
         need_receipt = should_refresh_receipt or row.get("receiptConfirmed") is None
         need_edo = should_refresh_edo or row.get("edoSent") is None
+        need_rejected = should_refresh_rejected or row.get("rejected") is None
         if enriched >= ENRICH_PER_REFRESH:
             break
-        if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo:
+        if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo and not need_rejected:
             continue
 
         doc = {}
-        if need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo:
+        if need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo or need_rejected:
             doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo):
+            if not doc and (need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo or need_rejected):
                 continue
 
         if need_info:
@@ -1118,6 +1149,16 @@ def fetch_rows_from_odata() -> list:
             if edo_sent is not None:
                 row["edoSent"] = edo_sent
 
+        if need_rejected:
+            rejected = resolve_rejected_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=not should_refresh_rejected,
+            )
+            if rejected is not None:
+                row["rejected"] = rejected
+
         enriched += 1
 
     for row in rows:
@@ -1133,6 +1174,8 @@ def fetch_rows_from_odata() -> list:
             row["receiptConfirmed"] = False
         if row.get("edoSent") is None:
             row["edoSent"] = False
+        if row.get("rejected") is None:
+            row["rejected"] = False
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
