@@ -108,6 +108,15 @@ def first_line(*values: str) -> str:
     return ""
 
 
+def is_client_filled(customer_name: str | None) -> bool:
+    name = str(customer_name or "").strip()
+    if not name:
+        return False
+
+    normalized = name.casefold().replace("ё", "е")
+    return normalized not in {"не определен", "неопределен"}
+
+
 def rows_fingerprint(rows: list) -> str:
     return json.dumps(rows, ensure_ascii=False, sort_keys=True)
 
@@ -647,7 +656,7 @@ def load_rows_from_file() -> list:
     for row in data:
         if "customerName" not in row:
             row["customerName"] = ""
-        row["clientFilled"] = bool((row.get("customerName") or "").strip())
+        row["clientFilled"] = is_client_filled(row.get("customerName"))
         if "statusKp" not in row:
             row["statusKp"] = ""
         if "invoiceCreated" not in row:
@@ -664,7 +673,7 @@ def save_rows(rows: list) -> None:
     for row in rows:
         if "customerName" not in row:
             row["customerName"] = ""
-        row["clientFilled"] = bool((row.get("customerName") or "").strip())
+        row["clientFilled"] = is_client_filled(row.get("customerName"))
         if "statusKp" not in row:
             row["statusKp"] = ""
         if "invoiceCreated" not in row:
@@ -852,7 +861,7 @@ def fetch_rows_from_odata() -> list:
 
     for row in rows:
         row.pop("refKey", None)
-        row["clientFilled"] = bool((row.get("customerName") or "").strip())
+        row["clientFilled"] = is_client_filled(row.get("customerName"))
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows

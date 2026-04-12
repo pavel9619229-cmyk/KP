@@ -99,7 +99,9 @@ function render(data) {
       <td>${escapeHtml(r.customerName || '')}</td>
       <td>${formatFlag(getFlag(r, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (row) => {
         const name = String(row.customerName || '').trim();
-        return name ? true : false;
+        if (!name) return false;
+        const normalized = name.toLowerCase().replaceAll('ё', 'е');
+        return normalized !== 'не определен' && normalized !== 'неопределен';
       }))}</td>
       <td>${formatFlag(getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен']))}</td>
       <td>${formatFlag(getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']))}</td>
