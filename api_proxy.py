@@ -73,6 +73,7 @@ _additional_info_cache = {}
 _status_kp_value_cache = {}
 _group_doc_flags_cache = {}
 _manager_filled_cache = {}
+_product_specified_cache = {}
 _refresh_lock = threading.Lock()
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
@@ -172,6 +173,44 @@ def resolve_manager_filled_for_ref(
 
     _manager_filled_cache[ref_key] = True
     return True
+
+
+def resolve_product_specified_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> bool | None:
+    if not ref_key:
+        return None
+    if use_cache and ref_key in _product_specified_cache:
+        return _product_specified_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    goods = row.get("Товары")
+    if not isinstance(goods, list) or not goods:
+        _product_specified_cache[ref_key] = False
+        return False
+
+    dict_rows = [item for item in goods if isinstance(item, dict)]
+    if not dict_rows:
+        _product_specified_cache[ref_key] = False
+        return False
+
+    def line_no(item: dict) -> int:
+        try:
+            return int(str(item.get("LineNumber") or "0"))
+        except Exception:
+            return 0
+
+    top_row = min(dict_rows, key=line_no)
+    nomenclature_key = str(top_row.get("Номенклатура_Key") or "").strip()
+    result = bool(nomenclature_key and nomenclature_key != ZERO_GUID)
+    _product_specified_cache[ref_key] = result
+    return result
 
 
 def rows_fingerprint(rows: list) -> str:
@@ -718,6 +757,8 @@ def load_rows_from_file() -> list:
             row["statusKp"] = ""
         if "managerFilled" not in row:
             row["managerFilled"] = None
+        if "productSpecified" not in row:
+            row["productSpecified"] = False
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -737,6 +778,8 @@ def save_rows(rows: list) -> None:
             row["statusKp"] = ""
         if "managerFilled" not in row:
             row["managerFilled"] = None
+        if "productSpecified" not in row:
+            row["productSpecified"] = False
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -845,6 +888,7 @@ def fetch_rows_from_odata() -> list:
                         "customerName": "" if requisites_changed else known_row.get("customerName", ""),
                         "status": status,
                         "managerFilled": known_row.get("managerFilled"),
+                        "productSpecified": known_row.get("productSpecified"),
                         "statusKp": status_kp,
                         "additionalInfoFirstLine": "" if requisites_changed else known_row.get("additionalInfoFirstLine", ""),
                         "invoiceCreated": known_row.get("invoiceCreated"),
@@ -887,19 +931,21 @@ def fetch_rows_from_odata() -> list:
         should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_manager = index < FORCE_INFO_REFRESH_TOP_ROWS
+        should_refresh_product = index < FORCE_INFO_REFRESH_TOP_ROWS
         # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = should_refresh_manager or row.get("managerFilled") is None
+        need_product = should_refresh_product or row.get("productSpecified") is None
         if enriched >= ENRICH_PER_REFRESH:
             break
-        if not need_customer and not need_info and not need_manager:
+        if not need_customer and not need_info and not need_manager and not need_product:
             continue
 
         doc = {}
-        if need_customer or need_info or need_manager:
+        if need_customer or need_info or need_manager or need_product:
             doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_info or need_manager):
+            if not doc and (need_customer or need_info or need_manager or need_product):
                 continue
 
         if need_info:
@@ -931,6 +977,16 @@ def fetch_rows_from_odata() -> list:
             if manager_filled is not None:
                 row["managerFilled"] = manager_filled
 
+        if need_product:
+            product_specified = resolve_product_specified_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=not should_refresh_product,
+            )
+            if product_specified is not None:
+                row["productSpecified"] = product_specified
+
         enriched += 1
 
     for row in rows:
@@ -938,6 +994,8 @@ def fetch_rows_from_odata() -> list:
         row["clientFilled"] = is_client_filled(row.get("customerName"))
         if row.get("managerFilled") is None:
             row["managerFilled"] = True
+        if row.get("productSpecified") is None:
+            row["productSpecified"] = False
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
