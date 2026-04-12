@@ -76,7 +76,6 @@ _last_group_enrich = None
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
-_group_doc_flags_cache = {}
 _manager_filled_cache = {}
 _product_specified_cache = {}
 _kp_sent_cache = {}
@@ -628,93 +627,6 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         if kp_ref in kp_ref_set:
             row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
             row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
-
-
-def _fetch_kp_group_flags(ref_key: str, headers: dict) -> dict:
-    if not ref_key:
-        return {"invoiceCreated": None, "paymentReceived": None}
-
-    if ref_key in _group_doc_flags_cache:
-        return _group_doc_flags_cache[ref_key]
-
-    order_filter = (
-        "ДокументОснование_Type eq 'StandardODATA.Document_КоммерческоеПредложениеКлиенту' "
-        f"and ДокументОснование eq guid'{ref_key}'"
-    )
-    orders_payload, orders_error = _get_json_with_retry(
-        f"{BASE}/Document_ЗаказКлиента",
-        headers,
-        params={"$select": "Ref_Key", "$filter": order_filter, "$top": "200"},
-        timeout=GROUP_CHECK_TIMEOUT_SECONDS,
-        retries=2,
-    )
-    if orders_error:
-        result = {"invoiceCreated": None, "paymentReceived": None}
-        _group_doc_flags_cache[ref_key] = result
-        return result
-
-    orders = orders_payload.get("value", []) if isinstance(orders_payload, dict) else []
-    if not orders:
-        result = {"invoiceCreated": False, "paymentReceived": False}
-        _group_doc_flags_cache[ref_key] = result
-        return result
-
-    has_invoice = False
-    has_payment = False
-
-    for order in orders:
-        order_ref = str(order.get("Ref_Key") or "").strip()
-        if not order_ref:
-            continue
-
-        if not has_invoice:
-            real_filter = (
-                "ЗаказКлиента_Type eq 'StandardODATA.Document_ЗаказКлиента' "
-                f"and ЗаказКлиента eq guid'{order_ref}'"
-            )
-            real_payload, real_error = _get_json_with_retry(
-                f"{BASE}/Document_РеализацияТоваровУслуг",
-                headers,
-                params={"$select": "Ref_Key", "$filter": real_filter, "$top": "1"},
-                timeout=GROUP_CHECK_TIMEOUT_SECONDS,
-                retries=2,
-            )
-            if real_error:
-                result = {"invoiceCreated": None, "paymentReceived": None}
-                _group_doc_flags_cache[ref_key] = result
-                return result
-            has_invoice = bool((real_payload or {}).get("value"))
-
-        if not has_payment:
-            pay_filters = [
-                f"ОбъектРасчетов_Key eq guid'{order_ref}'",
-                (
-                    "ДокументОснование_Type eq 'StandardODATA.Document_ЗаказКлиента' "
-                    f"and ДокументОснование eq guid'{order_ref}'"
-                ),
-            ]
-            for pay_filter in pay_filters:
-                pay_payload, pay_error = _get_json_with_retry(
-                    f"{BASE}/Document_ПоступлениеБезналичныхДенежныхСредств",
-                    headers,
-                    params={"$select": "Ref_Key", "$filter": pay_filter, "$top": "1"},
-                    timeout=GROUP_CHECK_TIMEOUT_SECONDS,
-                    retries=2,
-                )
-                if pay_error:
-                    result = {"invoiceCreated": None, "paymentReceived": None}
-                    _group_doc_flags_cache[ref_key] = result
-                    return result
-                if bool((pay_payload or {}).get("value")):
-                    has_payment = True
-                    break
-
-        if has_invoice and has_payment:
-            break
-
-    result = {"invoiceCreated": has_invoice, "paymentReceived": has_payment}
-    _group_doc_flags_cache[ref_key] = result
-    return result
 
 
 def resolve_customer_name_for_ref(
