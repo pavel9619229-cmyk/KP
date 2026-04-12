@@ -81,6 +81,53 @@ function formatFlag(flag) {
   return '—';
 }
 
+function computeKpStatus(r) {
+  const problem = getFlag(r, ['problem', 'hasProblem', 'проблема']);
+  if (problem === true) return 'ПРОБЛЕМА';
+
+  const rejected = getFlag(r, ['rejected', 'isRejected', 'отказ']);
+  if (rejected === true) return 'ОТКАЗ';
+
+  const invoiceCreated = getFlag(r, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']);
+  const paymentReceived = getFlag(r, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']);
+  const edoSent = getFlag(r, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']);
+
+  if (invoiceCreated === true && paymentReceived === true && edoSent === true)
+    return 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО';
+  if (invoiceCreated === true && edoSent === true && paymentReceived !== true)
+    return 'ЖДЕМ ОПЛАТУ';
+  if (invoiceCreated === true && edoSent !== true)
+    return 'ОТПРАВИТЬ В ЭДО';
+
+  const shipmentPending = getFlag(r, ['shipmentPending', 'isShipmentPending', 'отгрузить']);
+  if (shipmentPending === true) return 'ОТГРУЗИТЬ';
+
+  const receiptConfirmed = getFlag(r, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']);
+  if (receiptConfirmed === true) return 'КЛИЕНТ ДУМАЕТ';
+
+  const kpSent = getFlag(r, ['kpSent', 'isKpSent', 'кпОтправлено']);
+  if (kpSent === true) return 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП';
+
+  const clientFilled = getFlag(r, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (row) => {
+    const name = String(row.customerName || '').trim();
+    if (!name) return false;
+    const normalized = name.toLowerCase().replaceAll('ё', 'е');
+    return normalized !== 'не определен' && normalized !== 'неопределен';
+  });
+  const managerFilled = getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен'], (row) => {
+    const manager = String(row.managerName || row.manager || row['Менеджер'] || '').trim();
+    if (!manager) return null;
+    const normalized = manager.toLowerCase().replaceAll('ё', 'е');
+    return normalized !== 'не определен' && normalized !== 'неопределен';
+  });
+  const productSpecified = getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']);
+
+  if (clientFilled === true && managerFilled === true && productSpecified === true)
+    return 'ОТПРАВИТЬ КЛИЕНТУ';
+
+  return 'ОБРАБОТАТЬ';
+}
+
 function render(data) {
   const synced = lastSyncAt
     ? ` · обновлено ${lastSyncAt.toLocaleTimeString('ru-RU')}`
@@ -117,7 +164,7 @@ function render(data) {
       <td>${formatFlag(getFlag(r, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']))}</td>
       <td>${formatFlag(getFlag(r, ['rejected', 'isRejected', 'отказ']))}</td>
       <td>${formatFlag(getFlag(r, ['problem', 'hasProblem', 'проблема']))}</td>
-      <td><span class="tag">${escapeHtml(r.statusKp || '')}</span></td>
+      <td><span class="tag">${escapeHtml(computeKpStatus(r))}</span></td>
       <td>${escapeHtml(r.additionalInfoFirstLine || '')}</td>
     </tr>
   `).join('');
@@ -128,8 +175,8 @@ function applyFilters() {
   const status = statusFilter.value;
 
   const filtered = rows.filter((r) => {
-    const byStatus = !status || (r.status || '') === status;
-    const text = `${r.number || ''} ${r.customerName || ''} ${r.status || ''} ${r.statusKp || ''} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
+    const byStatus = !status || computeKpStatus(r) === status;
+    const text = `${r.number || ''} ${r.customerName || ''} ${computeKpStatus(r)} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
     const byText = !q || text.includes(q);
     return byStatus && byText;
   });
@@ -140,7 +187,7 @@ function applyFilters() {
 function fillStatuses(data) {
   const selectedStatus = statusFilter.value;
   statusFilter.innerHTML = '<option value="">Все</option>';
-  const statuses = [...new Set(data.map((r) => r.status).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+  const statuses = [...new Set(data.map((r) => computeKpStatus(r)))].sort((a, b) => a.localeCompare(b, 'ru'));
   for (const s of statuses) {
     const option = document.createElement('option');
     option.value = s;
