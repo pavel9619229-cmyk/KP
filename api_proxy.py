@@ -968,7 +968,7 @@ def save_rows(rows: list) -> None:
 
 def build_known_rows_lookup() -> dict:
     known = {}
-    for source_row in load_rows_from_file() + list(_cached_rows):
+    for source_row in list(_cached_rows):
         number = source_row.get("number")
         if number and number not in known:
             known[number] = source_row
@@ -1281,14 +1281,9 @@ def refresh_cache_and_file() -> None:
                 log(f"refresh success: {len(fetched)} rows")
                 return
 
-            log("refresh returned 0 rows, using file fallback")
+            log("refresh returned 0 rows, keeping last successful live cache")
         except Exception as exc:
-            log(f"refresh failed: {exc}")
-
-        fallback = load_rows_from_file()
-        _cached_rows = fallback
-        _cached_fp = rows_fingerprint(fallback)
-        _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log(f"refresh failed, keeping last successful live cache: {exc}")
 
 
 def cache_is_stale() -> bool:
@@ -1323,10 +1318,10 @@ async def refresh_loop() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
-    _cached_rows = load_rows_from_file()
+    _cached_rows = []
     _cached_fp = rows_fingerprint(_cached_rows)
-    _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log(f"startup cache loaded: {len(_cached_rows)} rows")
+    _last_refresh = None
+    log("startup cache initialized without file seed")
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
