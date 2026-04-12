@@ -3,6 +3,7 @@
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import re
@@ -651,6 +652,8 @@ def load_rows_from_file() -> list:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
             row["paymentReceived"] = None
+        if "statusHash" not in row:
+            row["statusHash"] = ""
     data.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return data
 
@@ -666,6 +669,8 @@ def save_rows(rows: list) -> None:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
             row["paymentReceived"] = None
+        if "statusHash" not in row:
+            row["statusHash"] = ""
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
@@ -748,20 +753,30 @@ def fetch_rows_from_odata() -> list:
 
             if TARGET_START <= dt <= TARGET_END:
                 known_row = known_rows.get(number, {})
+
+                # Detect changes in 1C requisites by hashing Статус + ДополнительныеРеквизиты.
+                # If the hash changed compared to what we cached, force re-enrich this row.
+                current_hash = hashlib.md5(
+                    (str(status) + str(requisites)).encode("utf-8")
+                ).hexdigest()[:10]
+                requisites_changed = current_hash != known_row.get("statusHash", "")
+
                 status_kp = known_row.get("statusKp", "")
-                if not status_kp:
+                if not status_kp or requisites_changed:
                     status_kp = resolve_status_kp_from_requisites(requisites, headers)
+
                 rows.append(
                     {
                         "refKey": str(ref_key),
                         "number": number,
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                        "customerName": known_row.get("customerName", ""),
+                        "customerName": "" if requisites_changed else known_row.get("customerName", ""),
                         "status": status,
                         "statusKp": status_kp,
-                        "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
+                        "additionalInfoFirstLine": "" if requisites_changed else known_row.get("additionalInfoFirstLine", ""),
                         "invoiceCreated": known_row.get("invoiceCreated"),
                         "paymentReceived": known_row.get("paymentReceived"),
+                        "statusHash": current_hash,
                     }
                 )
 
@@ -785,6 +800,7 @@ def fetch_rows_from_odata() -> list:
 
         should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
+        # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         if enriched >= ENRICH_PER_REFRESH:
