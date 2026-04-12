@@ -234,8 +234,7 @@ def resolve_kp_sent_for_ref(
     first_five_lines = cleaned.split("\n")[:5]
     has_marker = any("КП ОТПРАВЛЕНО" in line for line in first_five_lines)
 
-    # User rule is inverted: if the exact marker is absent in the first 5 lines, show "Да".
-    result = not has_marker
+    result = has_marker
     _kp_sent_cache[ref_key] = result
     return result
 
