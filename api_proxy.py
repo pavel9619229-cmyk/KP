@@ -72,7 +72,10 @@ _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
 _group_doc_flags_cache = {}
+_manager_filled_cache = {}
 _refresh_lock = threading.Lock()
+
+ZERO_GUID = "00000000-0000-0000-0000-000000000000"
 
 
 def log(message: str) -> None:
@@ -115,6 +118,60 @@ def is_client_filled(customer_name: str | None) -> bool:
 
     normalized = name.casefold().replace("ё", "е")
     return normalized not in {"не определен", "неопределен"}
+
+
+def is_manager_filled(manager_name: str | None) -> bool:
+    name = str(manager_name or "").strip()
+    if not name:
+        return True
+
+    normalized = name.casefold().replace("ё", "е")
+    return normalized not in {"не определен", "неопределен"}
+
+
+def resolve_manager_filled_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> bool | None:
+    if not ref_key:
+        return None
+    if use_cache and ref_key in _manager_filled_cache:
+        return _manager_filled_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    manager_key = str(row.get("Менеджер_Key") or "").strip()
+    if not manager_key or manager_key == ZERO_GUID:
+        _manager_filled_cache[ref_key] = False
+        return False
+
+    nav_link = str(row.get("Менеджер@navigationLinkUrl") or "").strip()
+    if not nav_link:
+        _manager_filled_cache[ref_key] = True
+        return True
+
+    try:
+        nav_resp = requests.get(
+            f"{BASE}/{nav_link}",
+            headers=headers,
+            timeout=NAV_TIMEOUT_SECONDS,
+            verify=False,
+        )
+        if nav_resp.status_code == 200:
+            nav_obj = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
+            manager_name = str(nav_obj.get("Description") or "").strip()
+            result = is_manager_filled(manager_name)
+            _manager_filled_cache[ref_key] = result
+            return result
+    except Exception:
+        pass
+
+    _manager_filled_cache[ref_key] = True
+    return True
 
 
 def rows_fingerprint(rows: list) -> str:
@@ -659,6 +716,8 @@ def load_rows_from_file() -> list:
         row["clientFilled"] = is_client_filled(row.get("customerName"))
         if "statusKp" not in row:
             row["statusKp"] = ""
+        if "managerFilled" not in row:
+            row["managerFilled"] = None
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -676,6 +735,8 @@ def save_rows(rows: list) -> None:
         row["clientFilled"] = is_client_filled(row.get("customerName"))
         if "statusKp" not in row:
             row["statusKp"] = ""
+        if "managerFilled" not in row:
+            row["managerFilled"] = None
         if "invoiceCreated" not in row:
             row["invoiceCreated"] = None
         if "paymentReceived" not in row:
@@ -783,6 +844,7 @@ def fetch_rows_from_odata() -> list:
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
                         "customerName": "" if requisites_changed else known_row.get("customerName", ""),
                         "status": status,
+                        "managerFilled": known_row.get("managerFilled"),
                         "statusKp": status_kp,
                         "additionalInfoFirstLine": "" if requisites_changed else known_row.get("additionalInfoFirstLine", ""),
                         "invoiceCreated": known_row.get("invoiceCreated"),
@@ -824,18 +886,20 @@ def fetch_rows_from_odata() -> list:
 
         should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
         should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
+        should_refresh_manager = index < FORCE_INFO_REFRESH_TOP_ROWS
         # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
+        need_manager = should_refresh_manager or row.get("managerFilled") is None
         if enriched >= ENRICH_PER_REFRESH:
             break
-        if not need_customer and not need_info:
+        if not need_customer and not need_info and not need_manager:
             continue
 
         doc = {}
-        if need_customer or need_info:
+        if need_customer or need_info or need_manager:
             doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_info):
+            if not doc and (need_customer or need_info or need_manager):
                 continue
 
         if need_info:
@@ -857,11 +921,23 @@ def fetch_rows_from_odata() -> list:
             if customer:
                 row["customerName"] = customer
 
+        if need_manager:
+            manager_filled = resolve_manager_filled_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=not should_refresh_manager,
+            )
+            if manager_filled is not None:
+                row["managerFilled"] = manager_filled
+
         enriched += 1
 
     for row in rows:
         row.pop("refKey", None)
         row["clientFilled"] = is_client_filled(row.get("customerName"))
+        if row.get("managerFilled") is None:
+            row["managerFilled"] = True
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
