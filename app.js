@@ -20,7 +20,6 @@ darkBtn.addEventListener('click', () => {
 
 const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
-const RENDER_STATUS_INTERVAL_MS = 30000;
 
 let rows = [];
 let lastFingerprint = '';
@@ -28,6 +27,9 @@ let lastSyncAt = null;
 let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 15;
+
+const pageUpdatedText = document.getElementById('pageUpdatedText');
+const pageUpdatedField = document.getElementById('pageUpdatedField');
 
 function escapeHtml(text) {
   return String(text)
@@ -80,6 +82,22 @@ function formatFlag(flag) {
   if (flag === true) return 'Да';
   if (flag === false) return 'Нет';
   return '—';
+}
+
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('ru-RU');
+}
+
+function updatePageUpdatedAt(value = new Date()) {
+  const formatted = formatDateTime(value);
+  if (pageUpdatedText) {
+    pageUpdatedText.textContent = `Обновлено: ${formatted}`;
+  }
+  if (pageUpdatedField) {
+    pageUpdatedField.textContent = formatted;
+  }
 }
 
 function render(data) {
@@ -198,6 +216,7 @@ function setRows(nextRows, syncedAt = null) {
   }
 
   lastSyncAt = syncedAt || new Date();
+  updatePageUpdatedAt(lastSyncAt);
   applyFilters();
 }
 
@@ -270,76 +289,4 @@ resetBtn.addEventListener('click', () => {
 });
 
 init();
-
-// --- Render service status badge ---
-const renderStatusEl = document.getElementById('renderStatus');
-const renderStatusDot = document.getElementById('renderStatusDot');
-const renderStatusText = document.getElementById('renderStatusText');
-const renderStatusField = document.getElementById('renderStatusField');
-const renderUpdatedAtField = document.getElementById('renderUpdatedAtField');
-
-const RENDER_STATUS_LABELS = {
-  live: 'работает',
-  suspended: 'приостановлен',
-  not_deployed: 'не задеплоен',
-  deploy_failed: 'ошибка деплоя',
-  build_in_progress: 'сборка…',
-  deploy_in_progress: 'деплой…',
-  update_in_progress: 'обновление…',
-  pre_deploy_in_progress: 'pre-deploy…',
-  deactivated: 'деактивирован',
-  suspended_by_admin: 'заблокирован',
-  unknown: 'неизвестно',
-  error: 'ошибка',
-};
-
-function applyRenderStatus(status) {
-  if (!renderStatusEl) return;
-  const label = RENDER_STATUS_LABELS[status] || status;
-  renderStatusText.textContent = `Render: ${label}`;
-  renderStatusEl.dataset.status = status;
-
-  if (renderStatusField) {
-    renderStatusField.textContent = String(status || 'unknown');
-  }
-}
-
-function applyRenderUpdatedAt(updatedAt) {
-  if (!renderUpdatedAtField) return;
-  if (!updatedAt) {
-    renderUpdatedAtField.textContent = '—';
-    return;
-  }
-
-  const parsed = new Date(updatedAt);
-  if (Number.isNaN(parsed.getTime())) {
-    renderUpdatedAtField.textContent = String(updatedAt);
-    return;
-  }
-
-  renderUpdatedAtField.textContent = parsed.toLocaleString('ru-RU');
-}
-
-async function fetchRenderStatus() {
-  const sources = [
-    '/render-status',
-    'https://onec-kp-realtime.onrender.com/render-status',
-  ];
-  for (const src of sources) {
-    try {
-      const r = await fetch(src, { cache: 'no-store' });
-      if (!r.ok) continue;
-      const data = await r.json();
-      applyRenderStatus(data.status || 'unknown');
-      applyRenderUpdatedAt(data.updatedAt || null);
-      return;
-    } catch {
-      // try next source
-    }
-  }
-  applyRenderStatus('error');
-  applyRenderUpdatedAt(null);
-}
-
-fetchRenderStatus();
-setInterval(fetchRenderStatus, RENDER_STATUS_INTERVAL_MS);
+updatePageUpdatedAt(new Date());

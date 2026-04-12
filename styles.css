@@ -105,8 +105,8 @@ body {
   margin: 0;
 }
 
-/* Render service status badge */
-.render-status {
+/* Page last-updated indicator */
+.page-updated-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -123,34 +123,17 @@ body {
   transition: background 0.2s;
 }
 
-body.dark .render-status {
+body.dark .page-updated-pill {
   background: rgba(22, 32, 28, 0.7);
 }
 
-.render-status-dot {
+.page-updated-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--muted);
+  background: #22c55e;
   flex-shrink: 0;
-  transition: background 0.3s;
 }
-
-.render-status[data-status="live"] .render-status-dot       { background: #22c55e; }
-.render-status[data-status="live"]                          { color: #166534; border-color: rgba(34, 197, 94, 0.35); }
-body.dark .render-status[data-status="live"]                { color: #86efac; }
-
-.render-status[data-status="suspended"] .render-status-dot,
-.render-status[data-status="suspended_by_admin"] .render-status-dot,
-.render-status[data-status="deactivated"] .render-status-dot { background: #f97316; }
-
-.render-status[data-status="deploy_failed"] .render-status-dot,
-.render-status[data-status="error"] .render-status-dot      { background: #ef4444; }
-
-.render-status[data-status="build_in_progress"] .render-status-dot,
-.render-status[data-status="deploy_in_progress"] .render-status-dot,
-.render-status[data-status="update_in_progress"] .render-status-dot,
-.render-status[data-status="pre_deploy_in_progress"] .render-status-dot { background: #eab308; }
 
 .subtitle {
   margin-top: 8px;
