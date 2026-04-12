@@ -3,6 +3,20 @@ const countLabel = document.getElementById('countLabel');
 const searchInput = document.getElementById('searchInput');
 const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
+const darkBtn = document.getElementById('darkBtn');
+
+(function initDark() {
+  if (localStorage.getItem('darkMode') === '1') {
+    document.body.classList.add('dark');
+    darkBtn.textContent = '☀️ Светлый фон';
+  }
+})();
+
+darkBtn.addEventListener('click', () => {
+  const isDark = document.body.classList.toggle('dark');
+  darkBtn.textContent = isDark ? '☀️ Светлый фон' : '🌙 Тёмный фон';
+  localStorage.setItem('darkMode', isDark ? '1' : '0');
+});
 
 const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
@@ -87,10 +101,7 @@ function render(data) {
         const name = String(row.customerName || '').trim();
         return name ? true : false;
       }))}</td>
-      <td>${formatFlag(getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен'], (row) => {
-        const name = String(row.customerName || '').trim();
-        return name ? true : false;
-      }))}</td>
+      <td>${formatFlag(getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен']))}</td>
       <td>${formatFlag(getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']))}</td>
       <td>${formatFlag(getFlag(r, ['kpSent', 'isKpSent', 'кпОтправлено']))}</td>
       <td>${formatFlag(getFlag(r, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']))}</td>

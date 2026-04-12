@@ -7,6 +7,26 @@
   --line: rgba(27, 33, 31, 0.12);
   --accent: #0e8b72;
   --accent-2: #1461a9;
+  --th-bg: #f3f7f6;
+  --sticky-bg: #f7faf9;
+}
+
+body.dark {
+  --bg-1: #111816;
+  --bg-2: #0d1512;
+  --text: #e4ede9;
+  --muted: #8aaba1;
+  --panel: rgba(22, 32, 28, 0.92);
+  --line: rgba(255, 255, 255, 0.1);
+  --th-bg: #1a2622;
+  --sticky-bg: #1a2622;
+}
+
+body.dark {
+  background:
+    radial-gradient(1200px 600px at 100% 0%, rgba(20, 97, 169, 0.18), transparent 60%),
+    radial-gradient(1000px 700px at 0% 20%, rgba(14, 139, 114, 0.18), transparent 55%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-2));
 }
 
 * {
@@ -82,7 +102,7 @@ body {
   margin-top: 20px;
   display: grid;
   gap: 10px;
-  grid-template-columns: 1fr 220px 120px;
+  grid-template-columns: 1fr 220px 120px 160px;
 }
 
 .controls label {
@@ -152,7 +172,7 @@ td {
 th {
   position: sticky;
   top: 0;
-  background: #f3f7f6;
+  background: var(--th-bg);
   font-weight: 800;
   font-size: 0.72rem;
 }
@@ -169,7 +189,7 @@ td:nth-child(1) {
   position: sticky;
   left: 0;
   z-index: 3;
-  background: #f7faf9;
+  background: var(--sticky-bg);
 }
 
 th:nth-child(2),
@@ -179,7 +199,7 @@ td:nth-child(2) {
   position: sticky;
   left: 110px;
   z-index: 3;
-  background: #f7faf9;
+  background: var(--sticky-bg);
 }
 
 th:nth-child(3),
@@ -189,7 +209,7 @@ td:nth-child(3) {
   position: sticky;
   left: 250px;
   z-index: 3;
-  background: #f7faf9;
+  background: var(--sticky-bg);
   box-shadow: 2px 0 0 rgba(27, 33, 31, 0.08);
 }
 
