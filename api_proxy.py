@@ -40,6 +40,7 @@ USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
+SEED_META_FILE = os.getenv("SEED_META_FILE", "kp_seed_meta.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
@@ -936,14 +937,22 @@ def load_rows_from_file() -> list:
 
 def load_fresh_seed_rows() -> list:
     path = Path(DATA_FILE)
+    meta_path = Path(SEED_META_FILE)
     if not path.exists():
         log("startup seed skipped: data file does not exist")
         return []
+    if not meta_path.exists():
+        log("startup seed skipped: seed metadata file does not exist")
+        return []
 
     try:
-        age_seconds = max(0, time.time() - path.stat().st_mtime)
-    except OSError as exc:
-        log(f"startup seed skipped: cannot stat data file: {exc}")
+        with meta_path.open("r", encoding="utf-8") as f:
+            meta = json.load(f)
+        generated_at_raw = str(meta.get("generatedAt") or "").strip()
+        generated_at = datetime.fromisoformat(generated_at_raw)
+        age_seconds = max(0, time.time() - generated_at.timestamp())
+    except Exception as exc:
+        log(f"startup seed skipped: cannot read seed metadata: {exc}")
         return []
 
     if age_seconds > SEED_MAX_AGE_SECONDS:
@@ -989,6 +998,8 @@ def save_rows(rows: list) -> None:
             row["statusHash"] = ""
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
+    with open(SEED_META_FILE, "w", encoding="utf-8") as f:
+        json.dump({"generatedAt": datetime.now().isoformat()}, f, ensure_ascii=False, indent=2)
 
 
 def build_known_rows_lookup() -> dict:
