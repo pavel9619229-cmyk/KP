@@ -488,7 +488,9 @@ def resolve_customer_name_for_ref(
         else:
             fallback_links.append(v)
 
-    nav_links = (priority_links + fallback_links)[:NAV_LINK_LIMIT]
+    # If priority (customer) links exist, only use them — never fall back to
+    # unrelated links (e.g. Валюта → "руб.") when Контрагент is empty in 1C.
+    nav_links = (priority_links if priority_links else fallback_links)[:NAV_LINK_LIMIT]
 
     best_description = ""
     best_score = 0
@@ -514,6 +516,8 @@ def resolve_customer_name_for_ref(
                 if description:
                     best_description = description
                     break
+                # Priority link exists but Description is empty → Клиент not filled
+                continue
 
             candidate_score = score_customer_candidate(nav_obj)
             if candidate_score > best_score:
