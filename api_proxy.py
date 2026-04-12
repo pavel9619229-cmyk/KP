@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 import urllib3
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1362,6 +1362,8 @@ async def get_all_kp():
     if not _cached_rows:
         await asyncio.to_thread(refresh_cache_and_file)
     await trigger_refresh_if_stale()
+    if not _cached_rows:
+        raise HTTPException(status_code=503, detail="KP data is not available yet")
     return [format_row_for_client(row) for row in _cached_rows]
 
 
@@ -1372,6 +1374,11 @@ async def ws_kp(websocket: WebSocket):
 
     try:
         while True:
+            if not _cached_rows:
+                await trigger_refresh_if_stale()
+                await asyncio.sleep(2)
+                continue
+
             current_fp = _cached_fp
             if current_fp != previous_fp:
                 previous_fp = current_fp
