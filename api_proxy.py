@@ -90,6 +90,32 @@ _render_status_lock = threading.Lock()
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
 
+STORAGE_DEFAULTS = {
+    "statusKp": "",
+    "managerFilled": None,
+    "productSpecified": False,
+    "kpSent": False,
+    "receiptConfirmed": False,
+    "edoSent": False,
+    "rejected": False,
+    "problem": False,
+    "shipmentPending": False,
+    "invoiceCreated": None,
+    "paymentReceived": None,
+    "statusHash": "",
+}
+
+RUNTIME_NONE_DEFAULTS = {
+    "managerFilled": True,
+    "productSpecified": False,
+    "kpSent": False,
+    "receiptConfirmed": False,
+    "edoSent": False,
+    "rejected": False,
+    "problem": False,
+    "shipmentPending": False,
+}
+
 
 def log(message: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
@@ -140,6 +166,55 @@ def is_manager_filled(manager_name: str | None) -> bool:
 
     normalized = name.casefold().replace("ё", "е")
     return normalized not in {"не определен", "неопределен"}
+
+
+def apply_storage_defaults(row: dict) -> dict:
+    if "customerName" not in row:
+        row["customerName"] = ""
+
+    row["clientFilled"] = is_client_filled(row.get("customerName"))
+    for key, default_value in STORAGE_DEFAULTS.items():
+        if key not in row:
+            row[key] = default_value
+    return row
+
+
+def apply_runtime_defaults(row: dict) -> dict:
+    row["clientFilled"] = is_client_filled(row.get("customerName"))
+    for key, default_value in RUNTIME_NONE_DEFAULTS.items():
+        if row.get(key) is None:
+            row[key] = default_value
+    return row
+
+
+def _resolve_comment_flag_for_ref(
+    ref_key: str,
+    headers: dict,
+    cache: dict,
+    marker: str,
+    *,
+    doc: dict | None = None,
+    use_cache: bool = True,
+    first_lines: int | None = None,
+) -> bool | None:
+    if not ref_key:
+        return None
+    if use_cache and ref_key in cache:
+        return cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    cleaned = strip_html(str(row.get("Комментарий") or "")).replace("\r\n", "\n").replace("\r", "\n")
+    if first_lines is not None:
+        lines = cleaned.split("\n")[:first_lines]
+        result = any(marker in line for line in lines)
+    else:
+        result = marker in cleaned
+
+    cache[ref_key] = result
+    return result
 
 
 def resolve_manager_filled_for_ref(
@@ -231,23 +306,15 @@ def resolve_kp_sent_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _kp_sent_cache:
-        return _kp_sent_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment)).replace("\r\n", "\n").replace("\r", "\n")
-    first_five_lines = cleaned.split("\n")[:5]
-    has_marker = any("КП ОТПРАВЛЕНО" in line for line in first_five_lines)
-
-    result = has_marker
-    _kp_sent_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _kp_sent_cache,
+        "КП ОТПРАВЛЕНО",
+        doc=doc,
+        use_cache=use_cache,
+        first_lines=5,
+    )
 
 
 def resolve_problem_for_ref(
@@ -256,21 +323,14 @@ def resolve_problem_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _problem_cache:
-        return _problem_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment))
-    result = "ПРОБЛЕМА" in cleaned
-
-    _problem_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _problem_cache,
+        "ПРОБЛЕМА",
+        doc=doc,
+        use_cache=use_cache,
+    )
 
 
 def resolve_shipment_pending_for_ref(
@@ -279,21 +339,14 @@ def resolve_shipment_pending_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _shipment_pending_cache:
-        return _shipment_pending_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment))
-    result = "ОТГРУЗИТЬ" in cleaned
-
-    _shipment_pending_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _shipment_pending_cache,
+        "ОТГРУЗИТЬ",
+        doc=doc,
+        use_cache=use_cache,
+    )
 
 
 def resolve_rejected_for_ref(
@@ -302,21 +355,14 @@ def resolve_rejected_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _rejected_cache:
-        return _rejected_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment))
-    result = "ОТКАЗ" in cleaned
-
-    _rejected_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _rejected_cache,
+        "ОТКАЗ",
+        doc=doc,
+        use_cache=use_cache,
+    )
 
 
 def resolve_edo_sent_for_ref(
@@ -325,21 +371,14 @@ def resolve_edo_sent_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _edo_sent_cache:
-        return _edo_sent_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment))
-    result = "В ЭДО ОТПРАВЛЕНО" in cleaned
-
-    _edo_sent_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _edo_sent_cache,
+        "В ЭДО ОТПРАВЛЕНО",
+        doc=doc,
+        use_cache=use_cache,
+    )
 
 
 def resolve_receipt_confirmed_for_ref(
@@ -348,22 +387,15 @@ def resolve_receipt_confirmed_for_ref(
     doc: dict | None = None,
     use_cache: bool = True,
 ) -> bool | None:
-    if not ref_key:
-        return None
-    if use_cache and ref_key in _receipt_confirmed_cache:
-        return _receipt_confirmed_cache[ref_key]
-
-    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-    if not row:
-        return None
-
-    raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment)).replace("\r\n", "\n").replace("\r", "\n")
-    first_five_lines = cleaned.split("\n")[:5]
-    result = any("КЛИЕНТ КП УВИДЕЛ" in line for line in first_five_lines)
-
-    _receipt_confirmed_cache[ref_key] = result
-    return result
+    return _resolve_comment_flag_for_ref(
+        ref_key,
+        headers,
+        _receipt_confirmed_cache,
+        "КЛИЕНТ КП УВИДЕЛ",
+        doc=doc,
+        use_cache=use_cache,
+        first_lines=5,
+    )
 
 
 def rows_fingerprint(rows: list) -> str:
@@ -816,33 +848,7 @@ def load_rows_from_file() -> list:
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     for row in data:
-        if "customerName" not in row:
-            row["customerName"] = ""
-        row["clientFilled"] = is_client_filled(row.get("customerName"))
-        if "statusKp" not in row:
-            row["statusKp"] = ""
-        if "managerFilled" not in row:
-            row["managerFilled"] = None
-        if "productSpecified" not in row:
-            row["productSpecified"] = False
-        if "kpSent" not in row:
-            row["kpSent"] = False
-        if "receiptConfirmed" not in row:
-            row["receiptConfirmed"] = False
-        if "edoSent" not in row:
-            row["edoSent"] = False
-        if "rejected" not in row:
-            row["rejected"] = False
-        if "problem" not in row:
-            row["problem"] = False
-        if "shipmentPending" not in row:
-            row["shipmentPending"] = False
-        if "invoiceCreated" not in row:
-            row["invoiceCreated"] = None
-        if "paymentReceived" not in row:
-            row["paymentReceived"] = None
-        if "statusHash" not in row:
-            row["statusHash"] = ""
+        apply_storage_defaults(row)
     data.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return data
 
@@ -881,33 +887,7 @@ def load_fresh_seed_rows() -> list:
 
 def save_rows(rows: list) -> None:
     for row in rows:
-        if "customerName" not in row:
-            row["customerName"] = ""
-        row["clientFilled"] = is_client_filled(row.get("customerName"))
-        if "statusKp" not in row:
-            row["statusKp"] = ""
-        if "managerFilled" not in row:
-            row["managerFilled"] = None
-        if "productSpecified" not in row:
-            row["productSpecified"] = False
-        if "kpSent" not in row:
-            row["kpSent"] = False
-        if "receiptConfirmed" not in row:
-            row["receiptConfirmed"] = False
-        if "edoSent" not in row:
-            row["edoSent"] = False
-        if "rejected" not in row:
-            row["rejected"] = False
-        if "problem" not in row:
-            row["problem"] = False
-        if "shipmentPending" not in row:
-            row["shipmentPending"] = False
-        if "invoiceCreated" not in row:
-            row["invoiceCreated"] = None
-        if "paymentReceived" not in row:
-            row["paymentReceived"] = None
-        if "statusHash" not in row:
-            row["statusHash"] = ""
+        apply_storage_defaults(row)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
     with open(SEED_META_FILE, "w", encoding="utf-8") as f:
@@ -1193,23 +1173,7 @@ def fetch_rows_from_odata() -> list:
 
     for row in rows:
         row.pop("refKey", None)
-        row["clientFilled"] = is_client_filled(row.get("customerName"))
-        if row.get("managerFilled") is None:
-            row["managerFilled"] = True
-        if row.get("productSpecified") is None:
-            row["productSpecified"] = False
-        if row.get("kpSent") is None:
-            row["kpSent"] = False
-        if row.get("receiptConfirmed") is None:
-            row["receiptConfirmed"] = False
-        if row.get("edoSent") is None:
-            row["edoSent"] = False
-        if row.get("rejected") is None:
-            row["rejected"] = False
-        if row.get("problem") is None:
-            row["problem"] = False
-        if row.get("shipmentPending") is None:
-            row["shipmentPending"] = False
+        apply_runtime_defaults(row)
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
