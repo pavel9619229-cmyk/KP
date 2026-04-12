@@ -261,8 +261,9 @@ def resolve_receipt_confirmed_for_ref(
         return None
 
     raw_comment = row.get("Комментарий") or ""
-    cleaned = strip_html(str(raw_comment))
-    result = "В ЭДО ОТПРАВЛЕНО" in cleaned
+    cleaned = strip_html(str(raw_comment)).replace("\r\n", "\n").replace("\r", "\n")
+    first_five_lines = cleaned.split("\n")[:5]
+    result = any("КЛИЕНТ КП УВИДЕЛ" in line for line in first_five_lines)
 
     _receipt_confirmed_cache[ref_key] = result
     return result
