@@ -40,6 +40,7 @@ USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 DATA_FILE = os.getenv("DATA_FILE", "kp_2026_march_april.json")
+SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
@@ -933,6 +934,30 @@ def load_rows_from_file() -> list:
     return data
 
 
+def load_fresh_seed_rows() -> list:
+    path = Path(DATA_FILE)
+    if not path.exists():
+        log("startup seed skipped: data file does not exist")
+        return []
+
+    try:
+        age_seconds = max(0, time.time() - path.stat().st_mtime)
+    except OSError as exc:
+        log(f"startup seed skipped: cannot stat data file: {exc}")
+        return []
+
+    if age_seconds > SEED_MAX_AGE_SECONDS:
+        log(
+            "startup seed skipped: data file is stale "
+            f"({int(age_seconds)}s old, limit {SEED_MAX_AGE_SECONDS}s)"
+        )
+        return []
+
+    rows = load_rows_from_file()
+    log(f"startup seed loaded: {len(rows)} rows from fresh snapshot ({int(age_seconds)}s old)")
+    return rows
+
+
 def save_rows(rows: list) -> None:
     for row in rows:
         if "customerName" not in row:
@@ -1318,10 +1343,9 @@ async def refresh_loop() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
-    _cached_rows = []
+    _cached_rows = load_fresh_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
-    log("startup cache initialized without file seed")
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
