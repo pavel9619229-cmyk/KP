@@ -640,6 +640,7 @@ def load_rows_from_file() -> list:
     for row in data:
         if "customerName" not in row:
             row["customerName"] = ""
+        row["clientFilled"] = bool((row.get("customerName") or "").strip())
         if "statusKp" not in row:
             row["statusKp"] = ""
         if "invoiceCreated" not in row:
@@ -654,6 +655,7 @@ def save_rows(rows: list) -> None:
     for row in rows:
         if "customerName" not in row:
             row["customerName"] = ""
+        row["clientFilled"] = bool((row.get("customerName") or "").strip())
         if "statusKp" not in row:
             row["statusKp"] = ""
         if "invoiceCreated" not in row:
@@ -815,6 +817,7 @@ def fetch_rows_from_odata() -> list:
 
     for row in rows:
         row.pop("refKey", None)
+        row["clientFilled"] = bool((row.get("customerName") or "").strip())
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
     return rows
