@@ -28,9 +28,6 @@ let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 15;
 
-const pageUpdatedText = document.getElementById('pageUpdatedText');
-const pageUpdatedField = document.getElementById('pageUpdatedField');
-
 function escapeHtml(text) {
   return String(text)
     .replaceAll('&', '&amp;')
@@ -82,22 +79,6 @@ function formatFlag(flag) {
   if (flag === true) return 'Да';
   if (flag === false) return 'Нет';
   return '—';
-}
-
-function formatDateTime(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('ru-RU');
-}
-
-function updatePageUpdatedAt(value = new Date()) {
-  const formatted = formatDateTime(value);
-  if (pageUpdatedText) {
-    pageUpdatedText.textContent = `Обновлено: ${formatted}`;
-  }
-  if (pageUpdatedField) {
-    pageUpdatedField.textContent = formatted;
-  }
 }
 
 function render(data) {
@@ -216,7 +197,6 @@ function setRows(nextRows, syncedAt = null) {
   }
 
   lastSyncAt = syncedAt || new Date();
-  updatePageUpdatedAt(lastSyncAt);
   applyFilters();
 }
 
@@ -289,4 +269,3 @@ resetBtn.addEventListener('click', () => {
 });
 
 init();
-updatePageUpdatedAt(new Date());
