@@ -6,7 +6,7 @@
 
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from urllib.parse import urljoin
 from requests.auth import HTTPBasicAuth
 
@@ -29,12 +29,6 @@ print("=" * 80)
 print("ИССЛЕДОВАНИЕ OData СЕРВИСА 1С")
 print("=" * 80)
 print(f"\nПодключение к: {BASE_URL}\n")
-
-# Заголовки с UTF-8 кодировкой
-headers = {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Accept-Charset': 'utf-8'
-}
 
 # === ТЕСТ 1: Метаданные ===
 print("\n1. ПОЛУЧЕНИЕ МЕТАДАННЫХ")
