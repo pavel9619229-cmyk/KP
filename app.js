@@ -343,4 +343,3 @@ async function fetchRenderStatus() {
 
 fetchRenderStatus();
 setInterval(fetchRenderStatus, RENDER_STATUS_INTERVAL_MS);
-setInterval(fetchRenderStatus, RENDER_STATUS_INTERVAL_MS);
