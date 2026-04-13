@@ -1058,15 +1058,9 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     if not target_refs:
         return
 
-    unresolved_refs = {
-        r.get("refKey")
-        for r in rows
-        if r.get("refKey") and (r.get("invoiceCreated") is None or r.get("paymentReceived") is None)
-    }
-    if not unresolved_refs:
-        return
-
-    kp_ref_set = set(unresolved_refs)
+    # Recompute flags for all visible KP rows on each group enrichment cycle.
+    # This avoids sticky stale values when links/payments change in 1C over time.
+    kp_ref_set = set(target_refs)
 
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
@@ -1082,10 +1076,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         digits_trim = digits.lstrip("0")
 
         tokens = {raw, compact}
-        if digits:
-            tokens.add(digits)
         if digits_trim:
-            tokens.add(digits_trim)
             # Common short form in payment purpose: ут-219 for УТ-000219.
             tokens.add(f"ут-{digits_trim}")
             tokens.add(f"ут{digits_trim}")
