@@ -64,6 +64,7 @@ STATUS_KP_PROPERTY_KEY = os.getenv(
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
+STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
@@ -175,19 +176,23 @@ def _status_rules_path() -> Path:
     return Path(STATUS_RULES_FILE)
 
 
+def _effective_default_rules() -> str:
+    return STATUS_RULES_TEXT_ENV or DEFAULT_STATUS_RULES_TEXT
+
+
 def load_status_rules_text() -> str:
     path = _status_rules_path()
     if not path.exists():
-        return DEFAULT_STATUS_RULES_TEXT
+        return _effective_default_rules()
 
     try:
         with path.open("r", encoding="utf-8") as f:
             payload = json.load(f)
         rules_text = str(payload.get("rulesText") or "").strip()
-        return rules_text or DEFAULT_STATUS_RULES_TEXT
+        return rules_text or _effective_default_rules()
     except Exception as exc:
         log(f"status rules read failed, using default: {exc}")
-        return DEFAULT_STATUS_RULES_TEXT
+        return _effective_default_rules()
 
 
 def save_status_rules_text(rules_text: str) -> None:
