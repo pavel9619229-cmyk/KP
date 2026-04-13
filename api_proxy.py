@@ -685,7 +685,7 @@ def resolve_product_specified_for_ref(
             nav_resp = requests.get(
                 f"{BASE}/{goods_nav}",
                 headers=headers,
-                params={"$top": "1", "$select": "Номенклатура_Key"},
+                params={"$top": "1", "$select": "Номенклатура_Key,Номенклатура"},
                 timeout=NAV_TIMEOUT_SECONDS,
                 verify=False,
             )
@@ -695,7 +695,8 @@ def resolve_product_specified_for_ref(
                 if isinstance(values, list) and values:
                     first_goods = values[0] if isinstance(values[0], dict) else {}
                     nav_nomenclature_key = str(first_goods.get("Номенклатура_Key") or "").strip()
-                    if nav_nomenclature_key and nav_nomenclature_key != ZERO_GUID:
+                    nav_nomenclature_text = str(first_goods.get("Номенклатура") or "").strip()
+                    if (nav_nomenclature_key and nav_nomenclature_key != ZERO_GUID) or nav_nomenclature_text:
                         _product_specified_cache[ref_key] = True
                         return True
         except Exception:
@@ -719,7 +720,8 @@ def resolve_product_specified_for_ref(
 
     top_row = min(dict_rows, key=line_no)
     nomenclature_key = str(top_row.get("Номенклатура_Key") or "").strip()
-    result = bool(nomenclature_key and nomenclature_key != ZERO_GUID)
+    nomenclature_text = str(top_row.get("Номенклатура") or "").strip()
+    result = bool((nomenclature_key and nomenclature_key != ZERO_GUID) or nomenclature_text)
     _product_specified_cache[ref_key] = result
     return result
 
