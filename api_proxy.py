@@ -744,13 +744,13 @@ def resolve_additional_info_for_ref(
 ) -> str:
     if not ref_key:
         return ""
-    if use_cache and ref_key in _additional_info_cache:
-        return _additional_info_cache[ref_key]
+    cached_value = _additional_info_cache.get(ref_key, "")
+    if use_cache and cached_value:
+        return cached_value
 
     row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
     if not row:
-        _additional_info_cache[ref_key] = ""
-        return ""
+        return cached_value
 
     comment_line = first_line(row.get("Комментарий") or "")
     if comment_line:
@@ -798,8 +798,11 @@ def resolve_additional_info_for_ref(
             best_score = score
             best_line = line
 
-    _additional_info_cache[ref_key] = best_line
-    return best_line
+    if best_line:
+        _additional_info_cache[ref_key] = best_line
+        return best_line
+
+    return cached_value
 
 
 def resolve_status_kp_from_requisites(requisites: list, headers: dict) -> str:
@@ -984,6 +987,8 @@ def fetch_rows_from_odata() -> list:
                 if not status_kp or requisites_changed:
                     status_kp = resolve_status_kp_from_requisites(requisites, headers)
 
+                previous_info = known_row.get("additionalInfoFirstLine", "")
+
                 rows.append(
                     {
                         "refKey": str(ref_key),
@@ -1000,7 +1005,7 @@ def fetch_rows_from_odata() -> list:
                         "problem": known_row.get("problem"),
                         "shipmentPending": known_row.get("shipmentPending"),
                         "statusKp": status_kp,
-                        "additionalInfoFirstLine": "" if requisites_changed else known_row.get("additionalInfoFirstLine", ""),
+                        "additionalInfoFirstLine": previous_info,
                         "invoiceCreated": known_row.get("invoiceCreated"),
                         "paymentReceived": known_row.get("paymentReceived"),
                         "statusHash": current_hash,
@@ -1077,7 +1082,8 @@ def fetch_rows_from_odata() -> list:
                 doc=doc,
                 use_cache=not should_refresh_info,
             )
-            row["additionalInfoFirstLine"] = line
+            if line:
+                row["additionalInfoFirstLine"] = line
 
         if need_customer:
             customer = resolve_customer_name_for_ref(
