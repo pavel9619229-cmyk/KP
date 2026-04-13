@@ -100,16 +100,36 @@ body.light .updated-at-inline {
 .search-box {
   display: block;
   width: 100%;
+  position: relative;
 }
 
 .search-box input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px 18px;
+  padding: 14px 96px 14px 18px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   outline: none;
+}
+
+.search-clear-btn {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body.light .search-clear-btn {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 body.light .search-box input {

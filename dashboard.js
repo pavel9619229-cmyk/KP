@@ -1,4 +1,5 @@
 const searchInput = document.getElementById('searchInput');
+const clearSearchBtn = document.getElementById('clearSearchBtn');
 const newRequestBtn = document.getElementById('newRequestBtn');
 const newRequestPanel = document.getElementById('newRequestPanel');
 const requestTextInput = document.getElementById('requestTextInput');
@@ -58,7 +59,17 @@ themeBtn.addEventListener('click', () => {
   themeBtn.textContent = isLight ? 'Тёмная тема' : 'Светлая тема';
 });
 
-searchInput.addEventListener('input', renderBoard);
+searchInput.addEventListener('input', () => {
+  updateClearSearchButton();
+  renderBoard();
+});
+
+clearSearchBtn.addEventListener('click', () => {
+  searchInput.value = '';
+  updateClearSearchButton();
+  renderBoard();
+  searchInput.focus();
+});
 newRequestBtn.addEventListener('click', () => {
   const isHidden = newRequestPanel.hidden;
   newRequestPanel.hidden = !isHidden;
@@ -128,6 +139,10 @@ function initTheme() {
   const isLight = savedTheme === 'light';
   document.body.classList.toggle('light', isLight);
   themeBtn.textContent = isLight ? 'Тёмная тема' : 'Светлая тема';
+}
+
+function updateClearSearchButton() {
+  clearSearchBtn.hidden = !String(searchInput.value || '').trim();
 }
 
 function escapeHtml(text) {
@@ -507,6 +522,7 @@ function connectWebSocket() {
 }
 
 async function init() {
+  updateClearSearchButton();
   await refreshData(true);
   connectWebSocket();
   setInterval(() => {
