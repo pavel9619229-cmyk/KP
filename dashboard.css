@@ -158,14 +158,21 @@ body.light .dashboard-board {
 
 .status-toolbar {
   margin-top: 20px;
+  width: 100%;
+  overflow: hidden;
 }
 
 .status-tabs {
   display: flex;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 6px;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .status-tab {
@@ -385,13 +392,35 @@ body.light .kp-card__status {
     padding-top: 20px;
   }
 
+  .status-tabs {
+    gap: 6px;
+    padding-bottom: 10px;
+  }
+
   .status-tab {
-    min-width: 132px;
-    padding: 12px 14px;
+    flex: 0 0 calc((100vw - 44px) / 4);
+    min-width: calc((100vw - 44px) / 4);
+    max-width: calc((100vw - 44px) / 4);
+    padding: 10px 8px;
+    border-radius: 14px;
+    gap: 6px;
   }
 
   .status-tab__label {
-    font-size: 0.86rem;
+    min-width: 0;
+    font-size: 0.72rem;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: clip;
+    text-align: left;
+  }
+
+  .status-tab__count {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 0.7rem;
   }
 
   .board-header,

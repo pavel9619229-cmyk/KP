@@ -25,6 +25,20 @@ const STATUS_ORDER = [
   'ОБРАБОТАТЬ',
 ];
 
+const STATUS_LABELS_COMPACT = {
+  '__all__': 'Все',
+  'ПРОБЛЕМА': 'Пробл.',
+  'ОТКАЗ': 'Отказ',
+  'ЖДЕМ ОПЛАТУ': 'Оплата',
+  'ОТПРАВИТЬ В ЭДО': 'ЭДО',
+  'ОТГРУЗИТЬ': 'Отгр.',
+  'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП': 'Проверка',
+  'КЛИЕНТ ДУМАЕТ': 'Думает',
+  'ОТПРАВИТЬ КЛИЕНТУ': 'Клиенту',
+  'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО': 'Готово',
+  'ОБРАБОТАТЬ': 'В работу',
+};
+
 let rows = [];
 let ws = null;
 let wsActive = false;
@@ -159,6 +173,14 @@ function getOrderedStatuses(counts) {
   return STATUS_ORDER.filter((status) => counts.has(status)).concat(dynamicStatuses);
 }
 
+function getTabLabel(statusKey, fallbackLabel) {
+  const isCompactViewport = window.matchMedia('(max-width: 720px)').matches;
+  if (!isCompactViewport) {
+    return fallbackLabel;
+  }
+  return STATUS_LABELS_COMPACT[statusKey] || fallbackLabel;
+}
+
 function formatUpdatedAt(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     return 'Нет данных';
@@ -206,7 +228,7 @@ function renderTabs(counts) {
 
   statusTabs.innerHTML = tabs.map((tab) => `
     <button class="status-tab ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
-      <span class="status-tab__label">${escapeHtml(tab.label)}</span>
+      <span class="status-tab__label">${escapeHtml(getTabLabel(tab.key, tab.label))}</span>
       <span class="status-tab__count">${tab.count}</span>
     </button>
   `).join('');
