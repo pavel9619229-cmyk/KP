@@ -39,8 +39,12 @@ BASE = os.getenv(
 USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
-DATA_FILE = os.getenv("DATA_FILE", "data/kp_2026_march_april.json")
-SEED_META_FILE = os.getenv("SEED_META_FILE", "data/kp_seed_meta.json")
+SEED_DATA_FILE = os.getenv(
+    "SEED_DATA_FILE",
+    os.getenv("DATA_FILE", "data/kp_2026_march_april.json"),
+)
+RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
+RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
@@ -844,8 +848,7 @@ def resolve_status_kp_from_requisites(requisites: list, headers: dict) -> str:
     return ""
 
 
-def load_rows_from_file() -> list:
-    path = Path(DATA_FILE)
+def load_rows_from_path(path: Path) -> list:
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8") as f:
@@ -856,14 +859,25 @@ def load_rows_from_file() -> list:
     return data
 
 
-def load_fresh_seed_rows() -> list:
-    path = Path(DATA_FILE)
-    meta_path = Path(SEED_META_FILE)
+def load_seed_rows() -> list:
+    path = Path(SEED_DATA_FILE)
     if not path.exists():
-        log("startup seed skipped: data file does not exist")
+        log("startup seed skipped: tracked seed file does not exist")
+        return []
+
+    rows = load_rows_from_path(path)
+    log(f"startup seed loaded: {len(rows)} rows from tracked snapshot")
+    return rows
+
+
+def load_fresh_runtime_rows() -> list:
+    path = Path(RUNTIME_DATA_FILE)
+    meta_path = Path(RUNTIME_META_FILE)
+    if not path.exists():
+        log("runtime snapshot skipped: runtime data file does not exist")
         return []
     if not meta_path.exists():
-        log("startup seed skipped: seed metadata file does not exist")
+        log("runtime snapshot skipped: runtime metadata file does not exist")
         return []
 
     try:
@@ -873,27 +887,31 @@ def load_fresh_seed_rows() -> list:
         generated_at = datetime.fromisoformat(generated_at_raw)
         age_seconds = max(0, time.time() - generated_at.timestamp())
     except Exception as exc:
-        log(f"startup seed skipped: cannot read seed metadata: {exc}")
+        log(f"runtime snapshot skipped: cannot read runtime metadata: {exc}")
         return []
 
     if age_seconds > SEED_MAX_AGE_SECONDS:
         log(
-            "startup seed skipped: data file is stale "
+            "runtime snapshot skipped: data file is stale "
             f"({int(age_seconds)}s old, limit {SEED_MAX_AGE_SECONDS}s)"
         )
         return []
 
-    rows = load_rows_from_file()
-    log(f"startup seed loaded: {len(rows)} rows from fresh snapshot ({int(age_seconds)}s old)")
+    rows = load_rows_from_path(path)
+    log(f"runtime snapshot loaded: {len(rows)} rows from fresh cache ({int(age_seconds)}s old)")
     return rows
 
 
 def save_rows(rows: list) -> None:
     for row in rows:
         apply_storage_defaults(row)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    runtime_path = Path(RUNTIME_DATA_FILE)
+    runtime_meta_path = Path(RUNTIME_META_FILE)
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_meta_path.parent.mkdir(parents=True, exist_ok=True)
+    with runtime_path.open("w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
-    with open(SEED_META_FILE, "w", encoding="utf-8") as f:
+    with runtime_meta_path.open("w", encoding="utf-8") as f:
         json.dump({"generatedAt": datetime.now().isoformat()}, f, ensure_ascii=False, indent=2)
 
 
@@ -1236,7 +1254,9 @@ async def refresh_loop() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
-    _cached_rows = load_fresh_seed_rows()
+    _cached_rows = load_fresh_runtime_rows()
+    if not _cached_rows:
+        _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
     if not _cached_rows:

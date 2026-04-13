@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 _metadata.xml
 data/kp_seed_meta.json
+data/kp_runtime_cache.json
+data/kp_runtime_meta.json
