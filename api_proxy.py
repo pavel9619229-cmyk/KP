@@ -9,7 +9,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import unescape
 from pathlib import Path
 
@@ -81,6 +81,7 @@ _last_group_enrich = None
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
+_status_kp_catalog_value_key_cache = {}
 _manager_filled_cache = {}
 _product_specified_cache = {}
 _kp_sent_cache = {}
@@ -262,6 +263,141 @@ def _ensure_catalog_item_key_by_description(
     return str(payload.get("Ref_Key") or "").strip(), str(payload.get("Description") or description).strip()
 
 
+def _find_catalog_value_key_for_property(
+    property_key: str,
+    value_description: str,
+    headers: dict,
+) -> str:
+    cache_key = f"{property_key.lower()}::{_normalize_human_name(value_description)}"
+    if cache_key in _status_kp_catalog_value_key_cache:
+        return _status_kp_catalog_value_key_cache[cache_key]
+
+    desired = str(value_description or "").strip()
+    if not desired:
+        return ""
+
+    payload, error = _get_json_with_retry(
+        (
+            f"{BASE}/Catalog_ЗначенияСвойствОбъектов"
+            f"?$select=Ref_Key,Description,Owner_Key"
+            f"&$filter=Owner_Key eq guid'{property_key}'"
+            f" and Description eq '{_escape_odata_literal(desired)}'"
+            f"&$top=1"
+        ),
+        headers,
+        timeout=6,
+        retries=2,
+    )
+    if not error and isinstance(payload, dict):
+        rows = payload.get("value", [])
+        if rows:
+            ref_key = str((rows[0] or {}).get("Ref_Key") or "").strip()
+            if ref_key:
+                _status_kp_catalog_value_key_cache[cache_key] = ref_key
+                return ref_key
+
+    desired_norm = _normalize_human_name(desired)
+    property_key_norm = str(property_key or "").strip().lower()
+    for skip in range(0, 500, 100):
+        payload, error = _get_json_with_retry(
+            (
+                f"{BASE}/Catalog_ЗначенияСвойствОбъектов"
+                f"?$select=Ref_Key,Description,Owner_Key"
+                f"&$filter=Owner_Key eq guid'{property_key}'"
+                f"&$top=100&$skip={skip}"
+            ),
+            headers,
+            timeout=8,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            break
+
+        rows = payload.get("value", [])
+        if not rows:
+            break
+
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("Owner_Key") or "").strip().lower() != property_key_norm:
+                continue
+            description = str(item.get("Description") or "").strip()
+            if _normalize_human_name(description) != desired_norm:
+                continue
+            ref_key = str(item.get("Ref_Key") or "").strip()
+            if ref_key:
+                _status_kp_catalog_value_key_cache[cache_key] = ref_key
+                return ref_key
+
+    return ""
+
+
+def _try_apply_status_kp_after_create(ref_key: str, headers: dict) -> bool:
+    ref_key = str(ref_key or "").strip()
+    if not ref_key:
+        return False
+
+    status_value_key = _find_catalog_value_key_for_property(
+        STATUS_KP_PROPERTY_KEY,
+        NEW_REQUEST_STATUS_TEXT,
+        headers,
+    )
+    if not status_value_key:
+        log(f"Status value '{NEW_REQUEST_STATUS_TEXT}' was not found for property {STATUS_KP_PROPERTY_KEY}")
+        return False
+
+    response = requests.patch(
+        f"{BASE}/{ENTITY}(guid'{ref_key}')",
+        headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        json={
+            "ДополнительныеРеквизиты": [
+                {
+                    "Ref_Key": ref_key,
+                    "LineNumber": 1,
+                    "Свойство_Key": STATUS_KP_PROPERTY_KEY,
+                    "Значение": status_value_key,
+                    "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+                    "ТекстоваяСтрока": "",
+                }
+            ]
+        },
+        timeout=20,
+        verify=False,
+    )
+    if response.status_code in (200, 204):
+        return True
+
+    log(
+        "Status KP patch failed for "
+        f"{ref_key}: HTTP {response.status_code}: {response.text[:300]}"
+    )
+    return False
+
+
+def _try_prefix_status_in_comment(ref_key: str, request_text: str, headers: dict) -> bool:
+    ref_key = str(ref_key or "").strip()
+    if not ref_key:
+        return False
+
+    comment = f"{NEW_REQUEST_STATUS_TEXT}\n{request_text}" if request_text else NEW_REQUEST_STATUS_TEXT
+    response = requests.patch(
+        f"{BASE}/{ENTITY}(guid'{ref_key}')",
+        headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        json={"Комментарий": comment},
+        timeout=20,
+        verify=False,
+    )
+    if response.status_code in (200, 204):
+        return True
+
+    log(
+        "Comment fallback patch failed for "
+        f"{ref_key}: HTTP {response.status_code}: {response.text[:300]}"
+    )
+    return False
+
+
 def _resolve_manager_key(headers: dict) -> str:
     manager_catalogs = [
         "Catalog_Пользователи",
@@ -321,28 +457,19 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
     client_key, customer_key, resolved_customer_name, requested_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
     manager_key = _resolve_manager_key(headers)
     now = datetime.now()
-    now_iso = now.replace(microsecond=0).isoformat()
-
-    status_prefixed_comment = f"{NEW_REQUEST_STATUS_TEXT}\n{normalized_request_text}" if normalized_request_text else NEW_REQUEST_STATUS_TEXT
+    create_dt = now + timedelta(hours=2)
+    now_iso = create_dt.replace(microsecond=0).isoformat()
 
     base_payload = {
         "Date": now_iso,
         "ДействуетДо": now_iso,
         "ЦенаВключаетНДС": True,
-        "Комментарий": status_prefixed_comment,
+        "Комментарий": normalized_request_text,
         "Клиент_Key": client_key,
         "Контрагент_Key": customer_key,
         "Менеджер_Key": manager_key,
         "Товары": [],
     }
-
-    payload_with_requisites = dict(base_payload)
-    payload_with_requisites["ДополнительныеРеквизиты"] = [
-        {
-            "Свойство_Key": STATUS_KP_PROPERTY_KEY,
-            "ТекстоваяСтрока": NEW_REQUEST_STATUS_TEXT,
-        }
-    ]
 
     post_headers = {
         **headers,
@@ -352,23 +479,10 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
     resp = requests.post(
         f"{BASE}/{ENTITY}",
         headers=post_headers,
-        json=payload_with_requisites,
+        json=base_payload,
         timeout=20,
         verify=False,
     )
-
-    status_kp_applied = True
-    if resp.status_code not in (200, 201):
-        # Some 1C bases reject writing ДополнительныеРеквизиты during create.
-        # Fallback: create document without requisites but keep NEW_REQUEST marker in comment.
-        status_kp_applied = False
-        resp = requests.post(
-            f"{BASE}/{ENTITY}",
-            headers=post_headers,
-            json=base_payload,
-            timeout=20,
-            verify=False,
-        )
 
     if resp.status_code not in (200, 201):
         raise HTTPException(
@@ -382,16 +496,27 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
     except Exception:
         created = {}
 
+    ref_key = str(created.get("Ref_Key") or "").strip()
+    status_kp_applied = _try_apply_status_kp_after_create(ref_key, headers)
+    status_marked_in_comment = False
+    if not status_kp_applied:
+        status_marked_in_comment = _try_prefix_status_in_comment(
+            ref_key,
+            normalized_request_text,
+            headers,
+        )
+
     return {
         "ok": True,
         "number": str(created.get("Number") or "").strip(),
-        "refKey": str(created.get("Ref_Key") or "").strip(),
+        "refKey": ref_key,
         "resolvedCustomerName": resolved_customer_name,
         "requestedCustomerName": requested_customer_name,
         "recognizedCustomer": recognized,
         "manager": UNKNOWN_MANAGER_NAME,
         "statusKp": NEW_REQUEST_STATUS_TEXT,
         "statusKpApplied": status_kp_applied,
+        "statusMarkedInComment": status_marked_in_comment,
     }
 
 
