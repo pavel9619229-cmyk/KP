@@ -72,6 +72,7 @@ LIGHT_SELECT_FIELDS = [
     "Date",
     "Статус",
     "ДополнительныеРеквизиты",
+    "Комментарий",
 ]
 
 _cached_rows = []
@@ -539,6 +540,14 @@ def first_line(*values: str) -> str:
             if line:
                 return line
     return ""
+
+
+def has_reject_marker(*values: str) -> bool:
+    for value in values:
+        text = str(value or "").upper()
+        if "ОТКАЗ" in text:
+            return True
+    return False
 
 
 def is_client_filled(customer_name: str | None) -> bool:
@@ -1370,7 +1379,7 @@ def fetch_rows_from_odata() -> list:
         for item in batch:
             ref_key = item.get("Ref_Key") or ""
             values = [item.get(f) or "" for f in LIGHT_SELECT_FIELDS]
-            number, dt_raw, status, requisites = values[0], values[1], values[2], values[3]
+            number, dt_raw, status, requisites, comment = values[0], values[1], values[2], values[3], values[4]
             try:
                 dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
             except Exception:
@@ -1393,6 +1402,12 @@ def fetch_rows_from_odata() -> list:
                     status_kp = resolve_status_kp_from_requisites(requisites, headers)
 
                 previous_info = known_row.get("additionalInfoFirstLine", "")
+                if not previous_info:
+                    previous_info = first_line(comment)
+
+                rejected_flag = known_row.get("rejected")
+                if has_reject_marker(comment, status_kp):
+                    rejected_flag = True
 
                 rows.append(
                     {
@@ -1406,7 +1421,7 @@ def fetch_rows_from_odata() -> list:
                         "kpSent": known_row.get("kpSent"),
                         "receiptConfirmed": known_row.get("receiptConfirmed"),
                         "edoSent": known_row.get("edoSent"),
-                        "rejected": known_row.get("rejected"),
+                        "rejected": rejected_flag,
                         "problem": known_row.get("problem"),
                         "shipmentPending": known_row.get("shipmentPending"),
                         "statusKp": status_kp,
