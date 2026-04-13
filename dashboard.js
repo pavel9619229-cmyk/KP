@@ -140,6 +140,23 @@ function escapeHtml(text) {
     .replaceAll("'", '&#039;');
 }
 
+function parseKpNumber(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return Number.NEGATIVE_INFINITY;
+  const digits = raw.replace(/\D+/g, '');
+  if (!digits) return Number.NEGATIVE_INFINITY;
+  const parsed = Number.parseInt(digits, 10);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function sortRowsByKpNumberDesc(data) {
+  return data.sort((a, b) => {
+    const byNumber = parseKpNumber(b?.number) - parseKpNumber(a?.number);
+    if (byNumber !== 0) return byNumber;
+    return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
+  });
+}
+
 function normalizeFlag(value) {
   if (value === true || value === false) {
     return value;
@@ -379,8 +396,7 @@ async function loadRows() {
   }
 
   const data = await response.json();
-  data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  return data;
+  return sortRowsByKpNumberDesc(data);
 }
 
 function fingerprint(data) {
@@ -433,7 +449,7 @@ function connectWebSocket() {
     try {
       const payload = JSON.parse(event.data);
       if (payload.type === 'rows' && Array.isArray(payload.rows)) {
-        const sorted = payload.rows.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const sorted = sortRowsByKpNumberDesc(payload.rows.slice());
         setRows(sorted, new Date());
       }
     } catch {
