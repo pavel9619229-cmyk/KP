@@ -168,6 +168,11 @@ th {
   font-size: 0.72rem;
 }
 
+th[title] {
+  cursor: help;
+  text-decoration: underline dotted var(--text-muted, #888);
+}
+
 td {
   font-size: 0.9rem;
 }
