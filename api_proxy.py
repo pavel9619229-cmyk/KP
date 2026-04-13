@@ -97,6 +97,7 @@ _refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
+_enrich_cursor = 0
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
@@ -1463,6 +1464,7 @@ def get_total_count(headers: dict) -> int:
 
 
 def fetch_rows_from_odata() -> list:
+    global _enrich_cursor
     headers = _build_headers()
     known_rows = build_known_rows_lookup()
 
@@ -1581,20 +1583,53 @@ def fetch_rows_from_odata() -> list:
     _enrich_group_flags_bulk(rows, headers)
     _last_group_enrich = datetime.now()
 
-    extra_enriched = 0
-    for index, row in enumerate(rows):
+    forced_limit = min(FORCE_INFO_REFRESH_TOP_ROWS, len(rows))
+    priority_indices = []
+    regular_indices = []
+    for idx in range(forced_limit, len(rows)):
+        candidate = rows[idx]
+        if not (candidate.get("customerName") or "").strip():
+            priority_indices.append(idx)
+        else:
+            regular_indices.append(idx)
+
+    # Avoid starvation on either side: interleave newest and oldest empty-customer rows.
+    # This keeps both recent and older blanks progressing under fixed budget.
+    balanced_priority_indices = []
+    left = 0
+    right = len(priority_indices) - 1
+    while left <= right:
+        balanced_priority_indices.append(priority_indices[left])
+        if left != right:
+            balanced_priority_indices.append(priority_indices[right])
+        left += 1
+        right -= 1
+
+    # Always process empty-customer rows so missing clients are filled promptly.
+    # Keep ENRICH_PER_REFRESH budget only for regular (non-priority) rows.
+    selected_regular_indices = []
+    if regular_indices:
+        take = min(ENRICH_PER_REFRESH, len(regular_indices))
+        start = _enrich_cursor % len(regular_indices)
+        selected_regular_indices = [
+            regular_indices[(start + i) % len(regular_indices)] for i in range(take)
+        ]
+        _enrich_cursor = (start + take) % len(regular_indices)
+    else:
+        _enrich_cursor = 0
+
+    enrich_indices = list(range(forced_limit)) + balanced_priority_indices + selected_regular_indices
+
+    for index in enrich_indices:
+        row = rows[index]
         ref_key = row.get("refKey", "")
         if not ref_key:
             continue
 
         in_forced_zone = index < FORCE_INFO_REFRESH_TOP_ROWS
-        # Forced zone: always re-enrich top N rows regardless of cached values.
-        # Beyond forced zone: limited to ENRICH_PER_REFRESH extra enrichments.
-        if not in_forced_zone and extra_enriched >= ENRICH_PER_REFRESH:
-            break
 
         should_refresh_info = in_forced_zone
-        should_refresh_customer = in_forced_zone
+        should_refresh_customer = in_forced_zone or not (row.get("customerName") or "").strip()
         should_refresh_manager = in_forced_zone
         should_refresh_product = in_forced_zone
         should_refresh_kp_sent = in_forced_zone
@@ -1730,9 +1765,6 @@ def fetch_rows_from_odata() -> list:
             )
             if shipment_pending is not None:
                 row["shipmentPending"] = shipment_pending
-
-        if not in_forced_zone:
-            extra_enriched += 1
 
     for row in rows:
         row.pop("refKey", None)
