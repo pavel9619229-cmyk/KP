@@ -199,34 +199,67 @@ def _find_catalog_item_key_by_description(
             first = rows[0] if isinstance(rows[0], dict) else {}
             return str(first.get("Ref_Key") or "").strip(), str(first.get("Description") or "").strip()
 
-    payload, error = _get_json_with_retry(
-        f"{BASE}/{entity_name}",
-        headers,
-        params={"$select": "Ref_Key,Description", "$top": "300"},
-        timeout=8,
-        retries=2,
-    )
-    if error or not isinstance(payload, dict):
-        return "", ""
-
     wanted_norm = _normalize_human_name(desired)
     best_ref = ""
     best_name = ""
-    for item in payload.get("value", []):
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("Description") or "").strip()
-        if not name:
-            continue
-        name_norm = _normalize_human_name(name)
-        if name_norm == wanted_norm:
-            return str(item.get("Ref_Key") or "").strip(), name
-        if wanted_norm and (wanted_norm in name_norm or name_norm in wanted_norm):
-            if not best_ref:
-                best_ref = str(item.get("Ref_Key") or "").strip()
-                best_name = name
+
+    for skip in range(0, 2000, 200):
+        payload, error = _get_json_with_retry(
+            f"{BASE}/{entity_name}",
+            headers,
+            params={"$select": "Ref_Key,Description", "$top": "200", "$skip": str(skip)},
+            timeout=8,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            break
+
+        rows = payload.get("value", [])
+        if not rows:
+            break
+
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("Description") or "").strip()
+            if not name:
+                continue
+            name_norm = _normalize_human_name(name)
+            if name_norm == wanted_norm:
+                return str(item.get("Ref_Key") or "").strip(), name
+            if wanted_norm and (wanted_norm in name_norm or name_norm in wanted_norm):
+                if not best_ref:
+                    best_ref = str(item.get("Ref_Key") or "").strip()
+                    best_name = name
 
     return best_ref, best_name
+
+
+def _ensure_catalog_item_key_by_description(
+    entity_name: str,
+    description: str,
+    headers: dict,
+) -> tuple[str, str]:
+    ref_key, name = _find_catalog_item_key_by_description(entity_name, description, headers)
+    if ref_key:
+        return ref_key, (name or description)
+
+    response = requests.post(
+        f"{BASE}/{entity_name}",
+        headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        json={"Description": description},
+        timeout=20,
+        verify=False,
+    )
+    if response.status_code not in (200, 201):
+        return "", description
+
+    try:
+        payload = response.json() if isinstance(response.json(), dict) else {}
+    except Exception:
+        payload = {}
+
+    return str(payload.get("Ref_Key") or "").strip(), str(payload.get("Description") or description).strip()
 
 
 def _resolve_manager_key(headers: dict) -> str:
@@ -242,31 +275,50 @@ def _resolve_manager_key(headers: dict) -> str:
     return ZERO_GUID
 
 
-def _resolve_customer_for_new_request(request_text: str, headers: dict) -> tuple[str, str, bool]:
+def _resolve_customer_for_new_request(request_text: str, headers: dict) -> tuple[str, str, str, str, bool]:
+    partner_catalog = "Catalog_Партнеры"
     customer_catalog = "Catalog_Контрагенты"
-    unknown_key, unknown_name = _find_catalog_item_key_by_description(
+
+    unknown_partner_key, unknown_partner_name = _ensure_catalog_item_key_by_description(
+        partner_catalog,
+        UNKNOWN_CUSTOMER_NAME,
+        headers,
+    )
+    unknown_customer_key, unknown_customer_name = _ensure_catalog_item_key_by_description(
         customer_catalog,
         UNKNOWN_CUSTOMER_NAME,
         headers,
     )
-    if not unknown_name:
-        unknown_name = UNKNOWN_CUSTOMER_NAME
-    if not unknown_key:
-        unknown_key = ZERO_GUID
+    if not unknown_partner_name:
+        unknown_partner_name = UNKNOWN_CUSTOMER_NAME
+    if not unknown_partner_key:
+        unknown_partner_key = ZERO_GUID
+    if not unknown_customer_name:
+        unknown_customer_name = UNKNOWN_CUSTOMER_NAME
+    if not unknown_customer_key:
+        unknown_customer_key = ZERO_GUID
 
     candidate_name = _extract_customer_name_from_text(request_text)
     if candidate_name:
-        found_key, found_name = _find_catalog_item_key_by_description(customer_catalog, candidate_name, headers)
-        if found_key:
-            return found_key, (found_name or candidate_name), True
+        partner_key, partner_name = _find_catalog_item_key_by_description(partner_catalog, candidate_name, headers)
+        customer_key, customer_name = _find_catalog_item_key_by_description(customer_catalog, candidate_name, headers)
+        if partner_key or customer_key:
+            resolved_name = partner_name or customer_name or candidate_name
+            return (
+                partner_key or unknown_partner_key,
+                customer_key or unknown_customer_key,
+                resolved_name,
+                candidate_name,
+                True,
+            )
 
-    return unknown_key, unknown_name, False
+    return unknown_partner_key, unknown_customer_key, unknown_customer_name, UNKNOWN_CUSTOMER_NAME, False
 
 
 def _create_kp_in_1c_from_request(request_text: str) -> dict:
     headers = _build_headers()
     normalized_request_text = str(request_text).replace("\x00", "").strip()
-    customer_key, resolved_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
+    client_key, customer_key, resolved_customer_name, requested_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
     manager_key = _resolve_manager_key(headers)
     now = datetime.now()
     now_iso = now.replace(microsecond=0).isoformat()
@@ -278,6 +330,7 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
         "ДействуетДо": now_iso,
         "ЦенаВключаетНДС": True,
         "Комментарий": status_prefixed_comment,
+        "Клиент_Key": client_key,
         "Контрагент_Key": customer_key,
         "Менеджер_Key": manager_key,
         "Товары": [],
@@ -334,6 +387,7 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
         "number": str(created.get("Number") or "").strip(),
         "refKey": str(created.get("Ref_Key") or "").strip(),
         "resolvedCustomerName": resolved_customer_name,
+        "requestedCustomerName": requested_customer_name,
         "recognizedCustomer": recognized,
         "manager": UNKNOWN_MANAGER_NAME,
         "statusKp": NEW_REQUEST_STATUS_TEXT,
