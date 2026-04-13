@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 urllib3.disable_warnings()
 
@@ -93,6 +94,9 @@ _render_status_cache: dict = {"status": None, "updatedAt": None}
 _render_status_lock = threading.Lock()
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
+UNKNOWN_MANAGER_NAME = os.getenv("UNKNOWN_MANAGER_NAME", "НЕ ОПРЕДЕЛЕН")
+UNKNOWN_CUSTOMER_NAME = os.getenv("UNKNOWN_CUSTOMER_NAME", "НЕ ОПРЕДЕЛЕН")
+NEW_REQUEST_STATUS_TEXT = os.getenv("NEW_REQUEST_STATUS_TEXT", "1. НОВЫЙ ЗАПРОС")
 
 STORAGE_DEFAULTS = {
     "statusKp": "",
@@ -130,6 +134,186 @@ def _build_headers() -> dict:
     return {
         "Authorization": f"Basic {creds}",
         "Accept": "application/json",
+    }
+
+
+class NewRequestPayload(BaseModel):
+    requestText: str = Field(min_length=3, max_length=8000)
+
+
+def _escape_odata_literal(value: str) -> str:
+    return str(value).replace("'", "''")
+
+
+def _normalize_human_name(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().lower().replace("ё", "е")
+
+
+def _extract_customer_name_from_text(request_text: str) -> str:
+    text = str(request_text or "").strip()
+    if not text:
+        return ""
+
+    for line in text.splitlines():
+        line_l = line.lower()
+        if line_l.startswith("клиент:") or line_l.startswith("компания:"):
+            candidate = line.split(":", 1)[1].strip()
+            if candidate:
+                return candidate
+
+    legal_re = re.compile(
+        r"\b(?:ООО|ИП|АО|ПАО|ЗАО)\s+[\"«]?[A-Za-zА-Яа-я0-9 .,_\-]{2,}[\"»]?",
+        re.IGNORECASE,
+    )
+    match = legal_re.search(text)
+    if match:
+        return match.group(0).strip()
+
+    return ""
+
+
+def _find_catalog_item_key_by_description(
+    entity_name: str,
+    description: str,
+    headers: dict,
+) -> tuple[str, str]:
+    desired = str(description or "").strip()
+    if not desired:
+        return "", ""
+
+    params = {
+        "$select": "Ref_Key,Description",
+        "$filter": f"Description eq '{_escape_odata_literal(desired)}'",
+        "$top": "1",
+    }
+    payload, error = _get_json_with_retry(
+        f"{BASE}/{entity_name}",
+        headers,
+        params=params,
+        timeout=6,
+        retries=2,
+    )
+    if not error and isinstance(payload, dict):
+        rows = payload.get("value", [])
+        if rows:
+            first = rows[0] if isinstance(rows[0], dict) else {}
+            return str(first.get("Ref_Key") or "").strip(), str(first.get("Description") or "").strip()
+
+    payload, error = _get_json_with_retry(
+        f"{BASE}/{entity_name}",
+        headers,
+        params={"$select": "Ref_Key,Description", "$top": "300"},
+        timeout=8,
+        retries=2,
+    )
+    if error or not isinstance(payload, dict):
+        return "", ""
+
+    wanted_norm = _normalize_human_name(desired)
+    best_ref = ""
+    best_name = ""
+    for item in payload.get("value", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("Description") or "").strip()
+        if not name:
+            continue
+        name_norm = _normalize_human_name(name)
+        if name_norm == wanted_norm:
+            return str(item.get("Ref_Key") or "").strip(), name
+        if wanted_norm and (wanted_norm in name_norm or name_norm in wanted_norm):
+            if not best_ref:
+                best_ref = str(item.get("Ref_Key") or "").strip()
+                best_name = name
+
+    return best_ref, best_name
+
+
+def _resolve_manager_key(headers: dict) -> str:
+    manager_catalogs = [
+        "Catalog_Пользователи",
+        "Catalog_Сотрудники",
+        "Catalog_СотрудникиОрганизаций",
+    ]
+    for entity_name in manager_catalogs:
+        ref_key, _ = _find_catalog_item_key_by_description(entity_name, UNKNOWN_MANAGER_NAME, headers)
+        if ref_key:
+            return ref_key
+    return ZERO_GUID
+
+
+def _resolve_customer_for_new_request(request_text: str, headers: dict) -> tuple[str, str, bool]:
+    customer_catalog = "Catalog_Контрагенты"
+    unknown_key, unknown_name = _find_catalog_item_key_by_description(
+        customer_catalog,
+        UNKNOWN_CUSTOMER_NAME,
+        headers,
+    )
+    if not unknown_name:
+        unknown_name = UNKNOWN_CUSTOMER_NAME
+    if not unknown_key:
+        unknown_key = ZERO_GUID
+
+    candidate_name = _extract_customer_name_from_text(request_text)
+    if candidate_name:
+        found_key, found_name = _find_catalog_item_key_by_description(customer_catalog, candidate_name, headers)
+        if found_key:
+            return found_key, (found_name or candidate_name), True
+
+    return unknown_key, unknown_name, False
+
+
+def _create_kp_in_1c_from_request(request_text: str) -> dict:
+    headers = _build_headers()
+    customer_key, resolved_customer_name, recognized = _resolve_customer_for_new_request(request_text, headers)
+    manager_key = _resolve_manager_key(headers)
+    now = datetime.now()
+    now_iso = now.replace(microsecond=0).isoformat()
+
+    payload = {
+        "Date": now_iso,
+        "ДействуетДо": now_iso,
+        "ЦенаВключаетНДС": True,
+        "Комментарий": str(request_text).strip(),
+        "Контрагент_Key": customer_key,
+        "Менеджер_Key": manager_key,
+        "Товары": [],
+        "ДополнительныеРеквизиты": [
+            {
+                "Свойство_Key": STATUS_KP_PROPERTY_KEY,
+                "ТекстоваяСтрока": NEW_REQUEST_STATUS_TEXT,
+            }
+        ],
+    }
+
+    resp = requests.post(
+        f"{BASE}/{ENTITY}",
+        headers={**headers, "Content-Type": "application/json"},
+        data=json.dumps(payload, ensure_ascii=False),
+        timeout=20,
+        verify=False,
+    )
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=502,
+            detail=f"1C create failed: HTTP {resp.status_code}: {resp.text[:500]}",
+        )
+
+    created = {}
+    try:
+        created = resp.json() if isinstance(resp.json(), dict) else {}
+    except Exception:
+        created = {}
+
+    return {
+        "ok": True,
+        "number": str(created.get("Number") or "").strip(),
+        "refKey": str(created.get("Ref_Key") or "").strip(),
+        "resolvedCustomerName": resolved_customer_name,
+        "recognizedCustomer": recognized,
+        "manager": UNKNOWN_MANAGER_NAME,
+        "statusKp": NEW_REQUEST_STATUS_TEXT,
     }
 
 
@@ -1360,6 +1544,17 @@ async def get_all_kp():
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
     return [format_row_for_client(row) for row in _cached_rows]
+
+
+@app.post("/api/kp/new-request")
+async def create_kp_from_new_request(payload: NewRequestPayload):
+    request_text = str(payload.requestText or "").strip()
+    if len(request_text) < 3:
+        raise HTTPException(status_code=400, detail="Request text is too short")
+
+    result = await asyncio.to_thread(_create_kp_in_1c_from_request, request_text)
+    await asyncio.to_thread(refresh_cache_and_file)
+    return result
 
 
 @app.websocket("/ws/kp")

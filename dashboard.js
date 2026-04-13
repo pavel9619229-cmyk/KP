@@ -1,4 +1,9 @@
 const searchInput = document.getElementById('searchInput');
+const newRequestBtn = document.getElementById('newRequestBtn');
+const newRequestPanel = document.getElementById('newRequestPanel');
+const requestTextInput = document.getElementById('requestTextInput');
+const submitRequestBtn = document.getElementById('submitRequestBtn');
+const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
@@ -55,6 +60,58 @@ themeBtn.addEventListener('click', () => {
 });
 
 searchInput.addEventListener('input', renderBoard);
+newRequestBtn.addEventListener('click', () => {
+  const isHidden = newRequestPanel.hidden;
+  newRequestPanel.hidden = !isHidden;
+  if (isHidden) {
+    requestTextInput.focus();
+    newRequestBtn.textContent = 'СКРЫТЬ ФОРМУ';
+  } else {
+    newRequestBtn.textContent = 'НОВЫЙ ЗАПРОС';
+  }
+});
+
+submitRequestBtn.addEventListener('click', async () => {
+  const requestText = String(requestTextInput.value || '').trim();
+  if (!requestText) {
+    requestStatusMsg.className = 'request-panel__status is-error';
+    requestStatusMsg.textContent = 'Введите текст запроса.';
+    return;
+  }
+
+  submitRequestBtn.disabled = true;
+  submitRequestBtn.textContent = 'ОТПРАВКА...';
+  requestStatusMsg.className = 'request-panel__status';
+  requestStatusMsg.textContent = 'Создаю КП в 1С...';
+
+  try {
+    const response = await fetch('/api/kp/new-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestText }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
+      throw new Error(String(details));
+    }
+
+    const number = payload?.number ? ` № ${payload.number}` : '';
+    const customer = payload?.resolvedCustomerName ? ` · Клиент: ${payload.resolvedCustomerName}` : '';
+    requestStatusMsg.className = 'request-panel__status is-success';
+    requestStatusMsg.textContent = `КП успешно создано${number}${customer}.`;
+    requestTextInput.value = '';
+    await refreshData(false);
+  } catch (error) {
+    requestStatusMsg.className = 'request-panel__status is-error';
+    requestStatusMsg.textContent = `Ошибка создания КП: ${error.message}`;
+  } finally {
+    submitRequestBtn.disabled = false;
+    submitRequestBtn.textContent = 'ОТПРАВИТЬ';
+  }
+});
+
 statusTabs.addEventListener('click', (event) => {
   const button = event.target.closest('[data-status-key]');
   if (!(button instanceof HTMLButtonElement)) {

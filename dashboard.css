@@ -54,7 +54,8 @@ body.light {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -120,6 +121,81 @@ body.light .search-box input {
   padding: 14px 16px;
   cursor: pointer;
   font-weight: 700;
+}
+
+.primary-button {
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-radius: 14px;
+  padding: 11px 18px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.request-panel {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+body.light .request-panel {
+  background: var(--panel-2);
+}
+
+.request-panel__header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.request-panel__field {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.request-panel textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 12px 14px;
+  resize: vertical;
+  min-height: 120px;
+}
+
+body.light .request-panel textarea {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.request-panel__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.request-panel__status {
+  margin: 10px 0 0;
+  min-height: 1.2em;
+  color: var(--muted);
+}
+
+.request-panel__status.is-success {
+  color: #4ec99c;
+}
+
+.request-panel__status.is-error {
+  color: #f38ca0;
 }
 
 .dashboard-summary {
