@@ -8,9 +8,6 @@ const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
-const activeTabLabel = document.getElementById('activeTabLabel');
-const activeTabHint = document.getElementById('activeTabHint');
-const activeCountBadge = document.getElementById('activeCountBadge');
 const boardContent = document.getElementById('boardContent');
 
 const REFRESH_INTERVAL_MS = 15000;
@@ -387,11 +384,6 @@ function renderBoard() {
   renderTabs(counts);
 
   updatedAtLabel.textContent = formatUpdatedAt(lastSyncAt);
-  activeTabLabel.textContent = activeTab === ALL_TAB_KEY ? 'Все КП' : activeTab;
-  activeTabHint.textContent = activeTab === ALL_TAB_KEY
-    ? 'Все коммерческие предложения, доступные пользователю.'
-    : 'Коммерческие предложения в выбранном статусе.';
-  activeCountBadge.textContent = String(filtered.length);
 
   if (!filtered.length) {
     boardContent.innerHTML = '<div class="board-empty">По текущему фильтру подходящих КП нет.</div>';
