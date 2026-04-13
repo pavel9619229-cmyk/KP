@@ -222,6 +222,16 @@ function persistStatusRules() {
 }
 
 function deriveStatusFacts(row) {
+  const commentText = [
+    row?.additionalInfoFirstLine,
+    row?.comment,
+    row?.Комментарий,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toUpperCase())
+    .join(' ');
+  const rejectByComment = commentText.includes('ОТКАЗ');
+
   const clientFilled = getFlag(row, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (currentRow) => {
     const name = String(currentRow.customerName || '').trim();
     if (!name) return false;
@@ -238,7 +248,7 @@ function deriveStatusFacts(row) {
 
   return {
     problem: getFlag(row, ['problem', 'hasProblem', 'проблема']),
-    rejected: getFlag(row, ['rejected', 'isRejected', 'отказ']),
+    rejected: rejectByComment || getFlag(row, ['rejected', 'isRejected', 'отказ']),
     invoiceCreated: getFlag(row, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']),
     paymentReceived: getFlag(row, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']),
     edoSent: getFlag(row, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']),

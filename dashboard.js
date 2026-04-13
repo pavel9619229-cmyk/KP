@@ -194,9 +194,23 @@ function getFlag(row, keys, fallback = null) {
   return null;
 }
 
+function hasRejectInComment(row) {
+  const commentText = [
+    row?.additionalInfoFirstLine,
+    row?.comment,
+    row?.Комментарий,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toUpperCase())
+    .join(' ');
+  return commentText.includes('ОТКАЗ');
+}
+
 function computeKpStatus(row) {
   const problem = getFlag(row, ['problem', 'hasProblem', 'проблема']);
   if (problem === true) return 'ПРОБЛЕМА';
+
+  if (hasRejectInComment(row)) return 'ОТКАЗ';
 
   const rejected = getFlag(row, ['rejected', 'isRejected', 'отказ']);
   if (rejected === true) return 'ОТКАЗ';
