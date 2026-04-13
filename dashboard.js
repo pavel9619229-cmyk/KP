@@ -18,10 +18,10 @@ const STATUS_ORDER = [
   'ПРОБЛЕМА',
   'ОТКАЗ',
   'ЖДЕМ ОПЛАТУ',
+  'КЛИЕНТ ДУМАЕТ',
   'ОТПРАВИТЬ В ЭДО',
   'ОТГРУЗИТЬ',
   'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
-  'КЛИЕНТ ДУМАЕТ',
   'ОТПРАВИТЬ КЛИЕНТУ',
   'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
   'ОБРАБОТАТЬ',
@@ -358,6 +358,9 @@ function getTabRowClass(tabKey) {
     return 'status-tab--top-pair';
   }
   if (tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ') {
+    return 'status-tab--second-pair';
+  }
+  if (tabKey === 'КЛИЕНТ ДУМАЕТ' || tabKey === 'ОТПРАВИТЬ В ЭДО') {
     return 'status-tab--second-pair';
   }
   return 'status-tab--full';
