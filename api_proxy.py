@@ -1538,7 +1538,9 @@ def fetch_rows_from_odata() -> list:
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = should_refresh_manager or row.get("managerFilled") is None
-        need_product = should_refresh_product or row.get("productSpecified") is None
+        # Re-check product for rows where it is still not confirmed.
+        # Otherwise False can become sticky for older rows outside forced top-N.
+        need_product = should_refresh_product or row.get("productSpecified") is not True
         need_kp_sent = should_refresh_kp_sent or row.get("kpSent") is None
         need_receipt = should_refresh_receipt or row.get("receiptConfirmed") is None
         need_edo = should_refresh_edo or row.get("edoSent") is None
