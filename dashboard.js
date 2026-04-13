@@ -7,7 +7,6 @@ const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
-const totalCountLabel = document.getElementById('totalCountLabel');
 const activeTabLabel = document.getElementById('activeTabLabel');
 const activeTabHint = document.getElementById('activeTabHint');
 const activeCountBadge = document.getElementById('activeCountBadge');
@@ -262,7 +261,13 @@ function formatUpdatedAt(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     return 'Нет данных';
   }
-  return value.toLocaleString('ru-RU');
+  return value.toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function buildMetaChips(row) {
@@ -331,7 +336,6 @@ function renderBoard() {
 
   renderTabs(counts);
 
-  totalCountLabel.textContent = String(rows.length);
   updatedAtLabel.textContent = formatUpdatedAt(lastSyncAt);
   activeTabLabel.textContent = activeTab === ALL_TAB_KEY ? 'Все КП' : activeTab;
   activeTabHint.textContent = activeTab === ALL_TAB_KEY

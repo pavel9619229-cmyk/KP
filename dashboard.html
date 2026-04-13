@@ -12,11 +12,8 @@
 <body>
   <main class="dashboard-shell">
     <header class="dashboard-topbar">
-      <div class="brand-block">
-        <p class="eyebrow">Коммерческие предложения</p>
-        <h1>КП по статусам</h1>
-      </div>
       <div class="topbar-actions">
+        <span id="updatedAtLabel" class="updated-at-inline">Загрузка...</span>
         <label class="search-box" aria-label="Поиск по КП">
           <input id="searchInput" type="text" placeholder="Поиск по номеру, клиенту или комментарию">
         </label>
@@ -36,21 +33,6 @@
         <button id="submitRequestBtn" type="button" class="primary-button">ОТПРАВИТЬ</button>
       </div>
       <p id="requestStatusMsg" class="request-panel__status" aria-live="polite"></p>
-    </section>
-
-    <section class="dashboard-summary">
-      <div>
-        <span class="summary-label">Режим</span>
-        <strong>Пользовательская доска</strong>
-      </div>
-      <div>
-        <span class="summary-label">Обновление</span>
-        <strong id="updatedAtLabel">Загрузка...</strong>
-      </div>
-      <div>
-        <span class="summary-label">Всего КП</span>
-        <strong id="totalCountLabel">0</strong>
-      </div>
     </section>
 
     <section class="status-toolbar" aria-label="Закладки по статусам">

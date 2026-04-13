@@ -68,30 +68,31 @@ textarea {
 .dashboard-topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
-}
-
-.brand-block h1 {
-  margin: 4px 0 0;
-  font-size: clamp(1.9rem, 4vw, 2.8rem);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.75rem;
-  font-weight: 800;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.updated-at-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.light .updated-at-inline {
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .search-box {
@@ -198,14 +199,6 @@ body.light .request-panel textarea {
   color: #f38ca0;
 }
 
-.dashboard-summary {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.dashboard-summary > div,
 .dashboard-board {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
   border: 1px solid var(--line);
@@ -213,23 +206,8 @@ body.light .request-panel textarea {
   box-shadow: var(--shadow);
 }
 
-body.light .dashboard-summary > div,
 body.light .dashboard-board {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.9));
-}
-
-.dashboard-summary > div {
-  padding: 18px 20px;
-}
-
-.summary-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-  font-weight: 800;
 }
 
 .status-toolbar {
@@ -421,10 +399,6 @@ body.light .kp-card__status {
 
   .search-box {
     width: 100%;
-  }
-
-  .dashboard-summary {
-    grid-template-columns: 1fr;
   }
 }
 
