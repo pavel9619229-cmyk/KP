@@ -309,17 +309,8 @@ body.light .kp-card__status {
 
 .kp-cell {
   min-width: 0;
-  display: grid;
-  gap: 6px;
-  align-content: start;
-}
-
-.kp-cell__label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  font-weight: 800;
+  display: flex;
+  align-items: center;
 }
 
 .kp-cell__value {

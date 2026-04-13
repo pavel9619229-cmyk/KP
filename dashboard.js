@@ -273,23 +273,18 @@ function renderBoard() {
       <article class="kp-card">
         <div class="kp-card__row">
           <div class="kp-cell kp-cell--number">
-            <span class="kp-cell__label">КП</span>
             <span class="kp-cell__value kp-card__number">${escapeHtml(row.number || '—')}</span>
           </div>
           <div class="kp-cell kp-cell--date">
-            <span class="kp-cell__label">Дата</span>
             <span class="kp-cell__value kp-card__date">${escapeHtml(row.createdAt || '')}</span>
           </div>
           <div class="kp-cell kp-cell--customer">
-            <span class="kp-cell__label">Клиент</span>
             <span class="kp-cell__value kp-card__customer">${escapeHtml(row.customerName || 'Клиент не указан')}</span>
           </div>
           <div class="kp-cell kp-cell--status">
-            <span class="kp-cell__label">Статус</span>
             <span class="kp-cell__value kp-card__status">${escapeHtml(status)}</span>
           </div>
           <div class="kp-cell kp-cell--note">
-            <span class="kp-cell__label">Доп. информация</span>
             <span class="kp-cell__value kp-card__note">${escapeHtml(row.additionalInfoFirstLine || 'Без дополнительной информации')}</span>
           </div>
         </div>
