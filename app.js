@@ -4,6 +4,12 @@ const searchInput = document.getElementById('searchInput');
 const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
+const rulesBtn = document.getElementById('rulesBtn');
+const rulesPanel = document.getElementById('rulesPanel');
+const closeRulesBtn = document.getElementById('closeRulesBtn');
+const rulesList = document.getElementById('rulesList');
+const addRuleBtn = document.getElementById('addRuleBtn');
+const resetRulesBtn = document.getElementById('resetRulesBtn');
 
 (function initDark() {
   if (localStorage.getItem('darkMode') === '1') {
@@ -20,6 +26,29 @@ darkBtn.addEventListener('click', () => {
 
 const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
+const STATUS_RULES_STORAGE_KEY = 'kpStatusRulesV1';
+const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
+
+const RULE_FIELDS = [
+  { value: 'problem', label: 'Проблема' },
+  { value: 'rejected', label: 'Отказ' },
+  { value: 'invoiceCreated', label: 'Накладная создана' },
+  { value: 'paymentReceived', label: 'Оплата получена' },
+  { value: 'edoSent', label: 'В ЭДО отправлено' },
+  { value: 'shipmentPending', label: 'Нужно отгрузить' },
+  { value: 'receiptConfirmed', label: 'Получение подтверждено' },
+  { value: 'kpSent', label: 'КП отправлено' },
+  { value: 'clientFilled', label: 'Клиент заполнен' },
+  { value: 'managerFilled', label: 'Менеджер заполнен' },
+  { value: 'productSpecified', label: 'Товар указан' },
+];
+
+const RULE_OPERATORS = [
+  { value: 'is_true', label: 'равно Да' },
+  { value: 'is_false', label: 'равно Нет' },
+  { value: 'is_not_true', label: 'не равно Да' },
+  { value: 'is_not_false', label: 'не равно Нет' },
+];
 
 let rows = [];
 let lastFingerprint = '';
@@ -27,6 +56,7 @@ let lastSyncAt = null;
 let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 15;
+let statusRules = loadStatusRules();
 
 function escapeHtml(text) {
   return String(text)
@@ -81,51 +111,210 @@ function formatFlag(flag) {
   return '—';
 }
 
-function computeKpStatus(r) {
-  const problem = getFlag(r, ['problem', 'hasProblem', 'проблема']);
-  if (problem === true) return 'ПРОБЛЕМА';
+function createRuleId() {
+  return `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
 
-  const rejected = getFlag(r, ['rejected', 'isRejected', 'отказ']);
-  if (rejected === true) return 'ОТКАЗ';
+function createDefaultStatusRules() {
+  return [
+    { id: createRuleId(), label: 'ПРОБЛЕМА', conditions: [{ field: 'problem', operator: 'is_true' }] },
+    { id: createRuleId(), label: 'ОТКАЗ', conditions: [{ field: 'rejected', operator: 'is_true' }] },
+    {
+      id: createRuleId(),
+      label: 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'paymentReceived', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_true' },
+      ],
+    },
+    {
+      id: createRuleId(),
+      label: 'ЖДЕМ ОПЛАТУ',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_true' },
+        { field: 'paymentReceived', operator: 'is_not_true' },
+      ],
+    },
+    {
+      id: createRuleId(),
+      label: 'ОТПРАВИТЬ В ЭДО',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_not_true' },
+      ],
+    },
+    { id: createRuleId(), label: 'ОТГРУЗИТЬ', conditions: [{ field: 'shipmentPending', operator: 'is_true' }] },
+    { id: createRuleId(), label: 'КЛИЕНТ ДУМАЕТ', conditions: [{ field: 'receiptConfirmed', operator: 'is_true' }] },
+    { id: createRuleId(), label: 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП', conditions: [{ field: 'kpSent', operator: 'is_true' }] },
+    {
+      id: createRuleId(),
+      label: 'ОТПРАВИТЬ КЛИЕНТУ',
+      conditions: [
+        { field: 'clientFilled', operator: 'is_true' },
+        { field: 'managerFilled', operator: 'is_true' },
+        { field: 'productSpecified', operator: 'is_true' },
+      ],
+    },
+  ];
+}
 
-  const invoiceCreated = getFlag(r, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']);
-  const paymentReceived = getFlag(r, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']);
-  const edoSent = getFlag(r, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']);
+function normalizeStoredCondition(condition) {
+  const field = RULE_FIELDS.some((item) => item.value === condition?.field)
+    ? condition.field
+    : 'problem';
+  const operator = RULE_OPERATORS.some((item) => item.value === condition?.operator)
+    ? condition.operator
+    : 'is_true';
+  return { field, operator };
+}
 
-  if (invoiceCreated === true && paymentReceived === true && edoSent === true)
-    return 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО';
-  if (invoiceCreated === true && edoSent === true && paymentReceived !== true)
-    return 'ЖДЕМ ОПЛАТУ';
-  if (invoiceCreated === true && edoSent !== true)
-    return 'ОТПРАВИТЬ В ЭДО';
+function normalizeStoredRule(rule, index) {
+  const conditions = Array.isArray(rule?.conditions) && rule.conditions.length
+    ? rule.conditions.map(normalizeStoredCondition)
+    : [{ field: 'problem', operator: 'is_true' }];
 
-  const shipmentPending = getFlag(r, ['shipmentPending', 'isShipmentPending', 'отгрузить']);
-  if (shipmentPending === true) return 'ОТГРУЗИТЬ';
+  return {
+    id: typeof rule?.id === 'string' && rule.id ? rule.id : `rule-restored-${index}`,
+    label: String(rule?.label || '').trim() || `Правило ${index + 1}`,
+    conditions,
+  };
+}
 
-  const receiptConfirmed = getFlag(r, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']);
-  if (receiptConfirmed === true) return 'КЛИЕНТ ДУМАЕТ';
+function loadStatusRules() {
+  try {
+    const raw = localStorage.getItem(STATUS_RULES_STORAGE_KEY);
+    if (!raw) {
+      return createDefaultStatusRules();
+    }
 
-  const kpSent = getFlag(r, ['kpSent', 'isKpSent', 'кпОтправлено']);
-  if (kpSent === true) return 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП';
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) {
+      return createDefaultStatusRules();
+    }
 
-  const clientFilled = getFlag(r, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (row) => {
-    const name = String(row.customerName || '').trim();
+    return parsed.map(normalizeStoredRule);
+  } catch {
+    return createDefaultStatusRules();
+  }
+}
+
+function persistStatusRules() {
+  localStorage.setItem(STATUS_RULES_STORAGE_KEY, JSON.stringify(statusRules));
+}
+
+function deriveStatusFacts(row) {
+  const clientFilled = getFlag(row, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (currentRow) => {
+    const name = String(currentRow.customerName || '').trim();
     if (!name) return false;
     const normalized = name.toLowerCase().replaceAll('ё', 'е');
     return normalized !== 'не определен' && normalized !== 'неопределен';
   });
-  const managerFilled = getFlag(r, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен'], (row) => {
-    const manager = String(row.managerName || row.manager || row['Менеджер'] || '').trim();
+  const managerFilled = getFlag(row, ['managerFilled', 'isManagerFilled', 'менеджерЗаполнен'], (currentRow) => {
+    const manager = String(currentRow.managerName || currentRow.manager || currentRow['Менеджер'] || '').trim();
     if (!manager) return null;
     const normalized = manager.toLowerCase().replaceAll('ё', 'е');
     return normalized !== 'не определен' && normalized !== 'неопределен';
   });
-  const productSpecified = getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']);
+  const productSpecified = getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']);
 
-  if (clientFilled === true && managerFilled === true && productSpecified === true)
-    return 'ОТПРАВИТЬ КЛИЕНТУ';
+  return {
+    problem: getFlag(row, ['problem', 'hasProblem', 'проблема']),
+    rejected: getFlag(row, ['rejected', 'isRejected', 'отказ']),
+    invoiceCreated: getFlag(row, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']),
+    paymentReceived: getFlag(row, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']),
+    edoSent: getFlag(row, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']),
+    shipmentPending: getFlag(row, ['shipmentPending', 'isShipmentPending', 'отгрузить']),
+    receiptConfirmed: getFlag(row, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']),
+    kpSent: getFlag(row, ['kpSent', 'isKpSent', 'кпОтправлено']),
+    clientFilled,
+    managerFilled,
+    productSpecified,
+  };
+}
 
-  return 'ОБРАБОТАТЬ';
+function matchesRuleCondition(facts, condition) {
+  const value = facts[condition.field];
+  switch (condition.operator) {
+    case 'is_true':
+      return value === true;
+    case 'is_false':
+      return value === false;
+    case 'is_not_true':
+      return value !== true;
+    case 'is_not_false':
+      return value !== false;
+    default:
+      return false;
+  }
+}
+
+function computeKpStatus(row) {
+  const facts = deriveStatusFacts(row);
+  for (const rule of statusRules) {
+    if (rule.conditions.every((condition) => matchesRuleCondition(facts, condition))) {
+      return rule.label;
+    }
+  }
+  return DEFAULT_FALLBACK_STATUS;
+}
+
+function updateRulesAndRefresh() {
+  persistStatusRules();
+  renderRulesEditor();
+  fillStatuses(rows);
+  applyFilters();
+}
+
+function renderRulesEditor() {
+  if (!statusRules.length) {
+    rulesList.innerHTML = '<div class="rule-empty">Правил пока нет.</div>';
+    return;
+  }
+
+  rulesList.innerHTML = statusRules.map((rule, index) => `
+    <article class="rule-card" data-rule-id="${escapeHtml(rule.id)}">
+      <div class="rule-card__header">
+        <div>
+          <div class="rule-card__priority">Приоритет ${index + 1}</div>
+          <input data-action="label" data-rule-index="${index}" type="text" value="${escapeHtml(rule.label)}" aria-label="Название статуса">
+        </div>
+        <div class="rule-card__actions">
+          <button data-action="move-up" data-rule-index="${index}" type="button" ${index === 0 ? 'disabled' : ''}>Выше</button>
+          <button data-action="move-down" data-rule-index="${index}" type="button" ${index === statusRules.length - 1 ? 'disabled' : ''}>Ниже</button>
+        </div>
+      </div>
+      <div class="rule-card__conditions">
+        ${rule.conditions.map((condition, conditionIndex) => `
+          <div class="rule-condition">
+            <select data-action="field" data-rule-index="${index}" data-condition-index="${conditionIndex}" aria-label="Поле условия">
+              ${RULE_FIELDS.map((field) => `<option value="${field.value}" ${field.value === condition.field ? 'selected' : ''}>${field.label}</option>`).join('')}
+            </select>
+            <select data-action="operator" data-rule-index="${index}" data-condition-index="${conditionIndex}" aria-label="Оператор условия">
+              ${RULE_OPERATORS.map((operator) => `<option value="${operator.value}" ${operator.value === condition.operator ? 'selected' : ''}>${operator.label}</option>`).join('')}
+            </select>
+            <button data-action="remove-condition" data-rule-index="${index}" data-condition-index="${conditionIndex}" type="button" ${rule.conditions.length === 1 ? 'disabled' : ''}>Удалить условие</button>
+          </div>
+        `).join('')}
+      </div>
+      <div class="rule-card__footer">
+        <button data-action="add-condition" data-rule-index="${index}" type="button">Добавить условие</button>
+        <button data-action="remove-rule" data-rule-index="${index}" type="button" ${statusRules.length === 1 ? 'disabled' : ''}>Удалить правило</button>
+      </div>
+    </article>
+  `).join('');
+}
+
+function openRulesPanel() {
+  rulesPanel.hidden = false;
+  rulesBtn.textContent = 'Скрыть правила';
+  renderRulesEditor();
+}
+
+function closeRulesPanel() {
+  rulesPanel.hidden = true;
+  rulesBtn.textContent = 'Правила статусов';
 }
 
 function render(data) {
@@ -298,6 +487,7 @@ function connectWebSocket() {
 
 async function init() {
   await refreshData(true);
+  renderRulesEditor();
   connectWebSocket();
   setInterval(() => {
     if (!wsActive) {
@@ -312,6 +502,109 @@ resetBtn.addEventListener('click', () => {
   searchInput.value = '';
   statusFilter.value = '';
   applyFilters();
+});
+
+rulesBtn.addEventListener('click', () => {
+  if (rulesPanel.hidden) {
+    openRulesPanel();
+  } else {
+    closeRulesPanel();
+  }
+});
+
+closeRulesBtn.addEventListener('click', closeRulesPanel);
+
+addRuleBtn.addEventListener('click', () => {
+  statusRules.push({
+    id: createRuleId(),
+    label: `Новое правило ${statusRules.length + 1}`,
+    conditions: [{ field: 'problem', operator: 'is_true' }],
+  });
+  updateRulesAndRefresh();
+});
+
+resetRulesBtn.addEventListener('click', () => {
+  statusRules = createDefaultStatusRules();
+  updateRulesAndRefresh();
+});
+
+rulesList.addEventListener('change', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const ruleIndex = Number(target.dataset.ruleIndex);
+  const rule = statusRules[ruleIndex];
+  if (!rule) {
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.dataset.action === 'label') {
+    rule.label = target.value.trim() || `Правило ${ruleIndex + 1}`;
+    updateRulesAndRefresh();
+    return;
+  }
+
+  const conditionIndex = Number(target.dataset.conditionIndex);
+  const condition = rule.conditions?.[conditionIndex];
+  if (!condition) {
+    return;
+  }
+
+  if (target.dataset.action === 'field') {
+    condition.field = target.value;
+  }
+  if (target.dataset.action === 'operator') {
+    condition.operator = target.value;
+  }
+  updateRulesAndRefresh();
+});
+
+rulesList.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const action = target.dataset.action;
+  const ruleIndex = Number(target.dataset.ruleIndex);
+  const conditionIndex = Number(target.dataset.conditionIndex);
+
+  if (!Number.isInteger(ruleIndex) || !statusRules[ruleIndex]) {
+    return;
+  }
+
+  if (action === 'move-up' && ruleIndex > 0) {
+    [statusRules[ruleIndex - 1], statusRules[ruleIndex]] = [statusRules[ruleIndex], statusRules[ruleIndex - 1]];
+    updateRulesAndRefresh();
+    return;
+  }
+
+  if (action === 'move-down' && ruleIndex < statusRules.length - 1) {
+    [statusRules[ruleIndex + 1], statusRules[ruleIndex]] = [statusRules[ruleIndex], statusRules[ruleIndex + 1]];
+    updateRulesAndRefresh();
+    return;
+  }
+
+  if (action === 'add-condition') {
+    statusRules[ruleIndex].conditions.push({ field: 'problem', operator: 'is_true' });
+    updateRulesAndRefresh();
+    return;
+  }
+
+  if (action === 'remove-condition') {
+    if (statusRules[ruleIndex].conditions.length > 1 && Number.isInteger(conditionIndex)) {
+      statusRules[ruleIndex].conditions.splice(conditionIndex, 1);
+      updateRulesAndRefresh();
+    }
+    return;
+  }
+
+  if (action === 'remove-rule' && statusRules.length > 1) {
+    statusRules.splice(ruleIndex, 1);
+    updateRulesAndRefresh();
+  }
 });
 
 init();
