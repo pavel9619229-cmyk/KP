@@ -304,17 +304,37 @@ function buildMetaChips(row) {
 
 function renderTabs(counts) {
   const orderedStatuses = getOrderedStatuses(counts);
-  const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }].concat(
-    orderedStatuses.map((status) => ({ key: status, label: status, count: counts.get(status) || 0 }))
-  );
-  const hasRejectTab = tabs.some((tab) => tab.key === 'ОТКАЗ');
+  const pinnedOrder = ['ОТКАЗ', 'ОБРАБОТАТЬ', 'ОТПРАВИТЬ КЛИЕНТУ', 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП'];
+
+  const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
+  for (const status of pinnedOrder) {
+    if (counts.has(status)) {
+      tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
+    }
+  }
+
+  for (const status of orderedStatuses) {
+    if (!pinnedOrder.includes(status)) {
+      tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
+    }
+  }
 
   statusTabs.innerHTML = tabs.map((tab) => `
-    <button class="status-tab ${hasRejectTab && (tab.key === ALL_TAB_KEY || tab.key === 'ОТКАЗ') ? 'status-tab--top-pair' : 'status-tab--full'} ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
+    <button class="status-tab ${getTabRowClass(tab.key)} ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
       <span class="status-tab__label">${escapeHtml(tab.label)}</span>
       <span class="status-tab__count">${tab.count}</span>
     </button>
   `).join('');
+}
+
+function getTabRowClass(tabKey) {
+  if (tabKey === ALL_TAB_KEY || tabKey === 'ОТКАЗ') {
+    return 'status-tab--top-pair';
+  }
+  if (tabKey === 'ОТПРАВИТЬ КЛИЕНТУ' || tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП') {
+    return 'status-tab--second-pair';
+  }
+  return 'status-tab--full';
 }
 
 function renderBoard() {

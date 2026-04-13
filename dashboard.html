@@ -11,17 +11,6 @@
 </head>
 <body>
   <main class="dashboard-shell">
-    <header class="dashboard-topbar">
-      <div class="topbar-actions">
-        <span id="updatedAtLabel" class="updated-at-inline">Загрузка...</span>
-        <label class="search-box" aria-label="Поиск по КП">
-          <input id="searchInput" type="text" placeholder="Поиск по номеру, клиенту или комментарию">
-        </label>
-        <button id="newRequestBtn" type="button" class="ghost-button">НОВЫЙ ЗАПРОС</button>
-        <button id="themeBtn" type="button" class="ghost-button">Тёмный фон</button>
-      </div>
-    </header>
-
     <section id="newRequestPanel" class="request-panel" hidden>
       <div class="request-panel__header">
         <strong>Новый запрос клиента</strong>
@@ -38,6 +27,17 @@
     <section class="status-toolbar" aria-label="Закладки по статусам">
       <div id="statusTabs" class="status-tabs"></div>
     </section>
+
+    <header class="dashboard-topbar">
+      <div class="topbar-actions">
+        <span id="updatedAtLabel" class="updated-at-inline">Загрузка...</span>
+        <label class="search-box" aria-label="Поиск по КП">
+          <input id="searchInput" type="text" placeholder="Поиск по номеру, клиенту или комментарию">
+        </label>
+        <button id="newRequestBtn" type="button" class="ghost-button">НОВЫЙ ЗАПРОС</button>
+        <button id="themeBtn" type="button" class="ghost-button">Тёмный фон</button>
+      </div>
+    </header>
 
     <section class="dashboard-board">
       <div class="board-header">
