@@ -1062,6 +1062,12 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     # This avoids sticky stale values when links/payments change in 1C over time.
     kp_ref_set = set(target_refs)
 
+    # Start from a clean state each run; set True only when a live match is found.
+    for row in rows:
+        if row.get("refKey") in kp_ref_set:
+            row["invoiceCreated"] = False
+            row["paymentReceived"] = False
+
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
     order_tokens: dict[str, set[str]] = {}
@@ -1583,19 +1589,8 @@ def fetch_rows_from_odata() -> list:
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
 
     global _last_group_enrich
-    now = datetime.now()
-    group_age = (now - _last_group_enrich).total_seconds() if _last_group_enrich else None
-    if group_age is None or group_age >= GROUP_ENRICH_INTERVAL_SECONDS:
-        _enrich_group_flags_bulk(rows, headers)
-        _last_group_enrich = now
-    else:
-        # Re-use cached invoiceCreated/paymentReceived from known_rows
-        for row in rows:
-            known = known_rows.get(row.get("number", ""), {})
-            if row.get("invoiceCreated") is None:
-                row["invoiceCreated"] = known.get("invoiceCreated")
-            if row.get("paymentReceived") is None:
-                row["paymentReceived"] = known.get("paymentReceived")
+    _enrich_group_flags_bulk(rows, headers)
+    _last_group_enrich = datetime.now()
 
     extra_enriched = 0
     for index, row in enumerate(rows):
