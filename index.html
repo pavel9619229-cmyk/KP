@@ -36,12 +36,12 @@
       <div class="rules-panel__header">
         <div>
           <strong>Правила выбора статуса КП (текст)</strong>
-          <p>Одна строка = одно правило. Формат: <code>условие AND условие -&gt; СТАТУС</code>.</p>
+          <p>Одна строка = одно правило. Простой формат: <code>статус СТАТУС устанавливается, если Поле - ДА/НЕТ</code>.</p>
         </div>
         <button id="closeRulesBtn" type="button">Закрыть</button>
       </div>
 
-      <textarea id="rulesTextInput" class="rules-text-input" rows="12" spellcheck="false" placeholder="invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО"></textarea>
+      <textarea id="rulesTextInput" class="rules-text-input" rows="12" spellcheck="false" placeholder="статус ОТПРАВИТЬ В ЭДО устанавливается, если Накладная создана - ДА, В ЭДО отправлено - НЕТ"></textarea>
       <p id="rulesSaveMsg" class="rules-save-msg" aria-live="polite"></p>
 
       <div class="rules-panel__footer">

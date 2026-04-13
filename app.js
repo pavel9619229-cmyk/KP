@@ -41,20 +41,46 @@ const RULE_FIELDS = new Set([
   'managerFilled',
   'productSpecified',
 ]);
+const RULE_FIELD_ALIASES = new Map([
+  ['problem', 'problem'],
+  ['проблема', 'problem'],
+  ['rejected', 'rejected'],
+  ['отказ', 'rejected'],
+  ['invoicecreated', 'invoiceCreated'],
+  ['накладнаясоздана', 'invoiceCreated'],
+  ['paymentreceived', 'paymentReceived'],
+  ['оплатаполучена', 'paymentReceived'],
+  ['edosent', 'edoSent'],
+  ['вэдоотправлено', 'edoSent'],
+  ['shipmentpending', 'shipmentPending'],
+  ['отгрузить', 'shipmentPending'],
+  ['требуетсяотгрузка', 'shipmentPending'],
+  ['receiptconfirmed', 'receiptConfirmed'],
+  ['клиенткувидел', 'receiptConfirmed'],
+  ['получениекпподтверждено', 'receiptConfirmed'],
+  ['kpsent', 'kpSent'],
+  ['кпотправлено', 'kpSent'],
+  ['clientfilled', 'clientFilled'],
+  ['клиентзаполнен', 'clientFilled'],
+  ['managerfilled', 'managerFilled'],
+  ['менеджерзаполнен', 'managerFilled'],
+  ['productspecified', 'productSpecified'],
+  ['товаруказан', 'productSpecified'],
+]);
 const DEFAULT_STATUS_RULES_TEXT = [
-  '# Формат: условие AND условие -> СТАТУС',
-  '# Поля: problem, rejected, invoiceCreated, paymentReceived, edoSent, shipmentPending, receiptConfirmed, kpSent, clientFilled, managerFilled, productSpecified',
-  '# Операторы: = true|false или != true|false',
+  '# Формат 1 (простой): статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ',
+  '# Формат 2 (технический, тоже поддерживается): condition AND condition -> STATUS',
+  '# Поля: Проблема, Отказ, Накладная создана, Оплата получена, В ЭДО отправлено, Отгрузить, Клиент КП увидел, КП отправлено, Клиент заполнен, Менеджер заполнен, Товар указан',
   '',
-  'problem = true -> ПРОБЛЕМА',
-  'rejected = true -> ОТКАЗ',
-  'invoiceCreated = true AND paymentReceived = true AND edoSent = true -> ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
-  'invoiceCreated = true AND edoSent = true AND paymentReceived != true -> ЖДЕМ ОПЛАТУ',
-  'invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО',
-  'shipmentPending = true -> ОТГРУЗИТЬ',
-  'receiptConfirmed = true -> КЛИЕНТ ДУМАЕТ',
-  'kpSent = true -> ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
-  'clientFilled = true AND managerFilled = true AND productSpecified = true -> ОТПРАВИТЬ КЛИЕНТУ',
+  'статус ПРОБЛЕМА устанавливается, если Проблема - ДА',
+  'статус ОТКАЗ устанавливается, если Отказ - ДА',
+  'статус ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО устанавливается, если Накладная создана - ДА, Оплата получена - ДА, В ЭДО отправлено - ДА',
+  'статус ЖДЕМ ОПЛАТУ устанавливается, если Накладная создана - ДА, В ЭДО отправлено - ДА, Оплата получена - НЕТ',
+  'статус ОТПРАВИТЬ В ЭДО устанавливается, если Накладная создана - ДА, В ЭДО отправлено - НЕТ',
+  'статус ОТГРУЗИТЬ устанавливается, если Отгрузить - ДА',
+  'статус КЛИЕНТ ДУМАЕТ устанавливается, если Клиент КП увидел - ДА',
+  'статус ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП устанавливается, если КП отправлено - ДА',
+  'статус ОТПРАВИТЬ КЛИЕНТУ устанавливается, если Клиент заполнен - ДА, Менеджер заполнен - ДА, Товар указан - ДА',
 ].join('\n');
 
 let rows = [];
@@ -180,23 +206,78 @@ function parseBooleanToken(value) {
   return null;
 }
 
+function normalizeRuleFieldName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+    .replace(/[^a-zа-я0-9]/gi, '');
+}
+
+function resolveRuleField(fieldRaw) {
+  const field = String(fieldRaw || '').trim();
+  if (RULE_FIELDS.has(field)) return field;
+  const alias = RULE_FIELD_ALIASES.get(normalizeRuleFieldName(field));
+  return alias || '';
+}
+
 function parseConditionToken(token) {
-  const match = String(token || '').trim().match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=)\s*(.+)$/);
-  if (!match) return { error: `Некорректное условие: ${token}` };
+  const raw = String(token || '').trim();
 
-  const field = String(match[1] || '').trim();
-  if (!RULE_FIELDS.has(field)) return { error: `Неизвестное поле: ${field}` };
+  const technicalMatch = raw.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=)\s*(.+)$/);
+  if (technicalMatch) {
+    const field = resolveRuleField(technicalMatch[1]);
+    if (!field) return { error: `Неизвестное поле: ${technicalMatch[1]}` };
 
-  const boolValue = parseBooleanToken(match[3]);
-  if (boolValue === null) return { error: `Значение должно быть true/false (или да/нет): ${match[3]}` };
+    const boolValue = parseBooleanToken(technicalMatch[3]);
+    if (boolValue === null) {
+      return { error: `Значение должно быть true/false (или да/нет): ${technicalMatch[3]}` };
+    }
 
-  let operator = 'is_true';
-  if (match[2] === '=' && boolValue === true) operator = 'is_true';
-  if (match[2] === '=' && boolValue === false) operator = 'is_false';
-  if (match[2] === '!=' && boolValue === true) operator = 'is_not_true';
-  if (match[2] === '!=' && boolValue === false) operator = 'is_not_false';
+    let operator = 'is_true';
+    if (technicalMatch[2] === '=' && boolValue === true) operator = 'is_true';
+    if (technicalMatch[2] === '=' && boolValue === false) operator = 'is_false';
+    if (technicalMatch[2] === '!=' && boolValue === true) operator = 'is_not_true';
+    if (technicalMatch[2] === '!=' && boolValue === false) operator = 'is_not_false';
 
-  return { condition: { field, operator } };
+    return { condition: { field, operator } };
+  }
+
+  const humanMatch = raw.match(/^(.+?)\s*[-:=]\s*(.+)$/);
+  if (!humanMatch) {
+    return { error: `Некорректное условие: ${token}` };
+  }
+
+  const field = resolveRuleField(humanMatch[1]);
+  if (!field) return { error: `Неизвестное поле: ${humanMatch[1]}` };
+
+  const boolValue = parseBooleanToken(humanMatch[2]);
+  if (boolValue === null) {
+    return { error: `Значение должно быть да/нет (или true/false): ${humanMatch[2]}` };
+  }
+
+  return { condition: { field, operator: boolValue ? 'is_true' : 'is_false' } };
+}
+
+function parseHumanRuleLine(line) {
+  const match = String(line || '').trim().match(/^статус\s+(.+?)\s+устанавливается,\s*если\s+(.+)$/i);
+  if (!match) return null;
+
+  const label = String(match[1] || '').trim();
+  const left = String(match[2] || '').trim();
+  if (!label || !left) return { error: 'пустой статус или условие' };
+
+  const conditionTokens = left.split(/\s*,\s*|\s+(?:AND|И)\s+/i).map((x) => x.trim()).filter(Boolean);
+  if (!conditionTokens.length) return { error: 'нет условий после слова "если"' };
+
+  const conditions = [];
+  for (const token of conditionTokens) {
+    const parsed = parseConditionToken(token);
+    if (parsed.error) return { error: parsed.error };
+    conditions.push(parsed.condition);
+  }
+
+  return { rule: { label, conditions } };
 }
 
 function parseRulesText(text) {
@@ -209,9 +290,19 @@ function parseRulesText(text) {
     const line = lines[i].trim();
     if (!line || line.startsWith('#')) continue;
 
+    const humanRule = parseHumanRuleLine(line);
+    if (humanRule) {
+      if (humanRule.error) {
+        errors.push(`Строка ${i + 1}: ${humanRule.error}`);
+      } else {
+        rules.push(humanRule.rule);
+      }
+      continue;
+    }
+
     const parts = line.split('->');
     if (parts.length < 2) {
-      errors.push(`Строка ${i + 1}: нет разделителя ->`);
+      errors.push(`Строка ${i + 1}: нет формата правила (используйте "статус ... устанавливается, если ..." или "... -> ...")`);
       continue;
     }
 

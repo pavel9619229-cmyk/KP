@@ -97,25 +97,26 @@ _render_status_cache: dict = {"status": None, "updatedAt": None}
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 
-DEFAULT_STATUS_RULES_TEXT = """# Формат: условие AND условие -> СТАТУС
-# Допустимые поля:
-# problem, rejected, invoiceCreated, paymentReceived, edoSent,
-# shipmentPending, receiptConfirmed, kpSent, clientFilled,
-# managerFilled, productSpecified
+DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
+# статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
 #
-# Операторы:
-# = true|false (или да|нет)
-# != true|false (или да|нет)
+# Поля:
+# Проблема, Отказ, Накладная создана, Оплата получена,
+# В ЭДО отправлено, Отгрузить, Клиент КП увидел, КП отправлено,
+# Клиент заполнен, Менеджер заполнен, Товар указан
+#
+# Формат 2 (технический, тоже поддерживается на фронтенде):
+# condition AND condition -> STATUS
 
-problem = true -> ПРОБЛЕМА
-rejected = true -> ОТКАЗ
-invoiceCreated = true AND paymentReceived = true AND edoSent = true -> ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО
-invoiceCreated = true AND edoSent = true AND paymentReceived != true -> ЖДЕМ ОПЛАТУ
-invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО
-shipmentPending = true -> ОТГРУЗИТЬ
-receiptConfirmed = true -> КЛИЕНТ ДУМАЕТ
-kpSent = true -> ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП
-clientFilled = true AND managerFilled = true AND productSpecified = true -> ОТПРАВИТЬ КЛИЕНТУ
+статус ПРОБЛЕМА устанавливается, если Проблема - ДА
+статус ОТКАЗ устанавливается, если Отказ - ДА
+статус ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО устанавливается, если Накладная создана - ДА, Оплата получена - ДА, В ЭДО отправлено - ДА
+статус ЖДЕМ ОПЛАТУ устанавливается, если Накладная создана - ДА, В ЭДО отправлено - ДА, Оплата получена - НЕТ
+статус ОТПРАВИТЬ В ЭДО устанавливается, если Накладная создана - ДА, В ЭДО отправлено - НЕТ
+статус ОТГРУЗИТЬ устанавливается, если Отгрузить - ДА
+статус КЛИЕНТ ДУМАЕТ устанавливается, если Клиент КП увидел - ДА
+статус ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП устанавливается, если КП отправлено - ДА
+статус ОТПРАВИТЬ КЛИЕНТУ устанавливается, если Клиент заполнен - ДА, Менеджер заполнен - ДА, Товар указан - ДА
 """
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
