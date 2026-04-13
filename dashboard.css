@@ -68,14 +68,15 @@ textarea {
 .dashboard-topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: 16px;
 }
 
 .topbar-actions {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(300px, 2fr) minmax(170px, 1fr) minmax(150px, 1fr);
   gap: 12px;
+  width: 100%;
 }
 
 .updated-at-inline {
@@ -97,7 +98,7 @@ body.light .updated-at-inline {
 
 .search-box {
   display: block;
-  width: min(420px, 50vw);
+  width: 100%;
 }
 
 .search-box input {
@@ -122,6 +123,7 @@ body.light .search-box input {
   padding: 14px 16px;
   cursor: pointer;
   font-weight: 700;
+  width: 100%;
 }
 
 .primary-button {
@@ -393,12 +395,17 @@ body.light .kp-card__status {
   }
 
   .topbar-actions {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-box {
     width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar-actions {
+    grid-template-columns: 1fr;
   }
 }
 
