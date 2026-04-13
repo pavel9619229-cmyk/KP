@@ -357,7 +357,7 @@ function getTabRowClass(tabKey) {
   if (tabKey === ALL_TAB_KEY || tabKey === 'ОТКАЗ') {
     return 'status-tab--top-pair';
   }
-  if (tabKey === 'ОТПРАВИТЬ КЛИЕНТУ' || tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП') {
+  if (tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ') {
     return 'status-tab--second-pair';
   }
   return 'status-tab--full';
