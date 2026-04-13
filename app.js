@@ -67,6 +67,19 @@ const RULE_FIELD_ALIASES = new Map([
   ['productspecified', 'productSpecified'],
   ['товаруказан', 'productSpecified'],
 ]);
+const HUMAN_FIELD_LABELS = {
+  problem: 'Проблема',
+  rejected: 'Отказ',
+  invoiceCreated: 'Накладная создана',
+  paymentReceived: 'Оплата получена',
+  edoSent: 'В ЭДО отправлено',
+  shipmentPending: 'Отгрузить',
+  receiptConfirmed: 'Клиент КП увидел',
+  kpSent: 'КП отправлено',
+  clientFilled: 'Клиент заполнен',
+  managerFilled: 'Менеджер заполнен',
+  productSpecified: 'Товар указан',
+};
 const DEFAULT_STATUS_RULES_TEXT = [
   '# Формат 1 (простой): статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ',
   '# Формат 2 (технический, тоже поддерживается): condition AND condition -> STATUS',
@@ -189,6 +202,30 @@ function createDefaultStatusRules() {
       ],
     },
   ];
+}
+
+function isHumanReadableRulesText(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  return lines.some((line) => /^\s*статус\s+.+\s+устанавливается,\s*если\s+/i.test(line));
+}
+
+function conditionToHumanText(condition) {
+  const fieldLabel = HUMAN_FIELD_LABELS[condition.field] || condition.field;
+  const value = condition.operator === 'is_false' || condition.operator === 'is_not_true' ? 'НЕТ' : 'ДА';
+  return `${fieldLabel} - ${value}`;
+}
+
+function rulesToHumanText(rules) {
+  const header = [
+    '# Формат: статус СТАТУС устанавливается, если Поле - ДА/НЕТ, Поле - ДА/НЕТ',
+    '# Редактируйте строки ниже по одной на правило',
+    '',
+  ];
+  const lines = rules.map((rule) => {
+    const conditions = (rule.conditions || []).map(conditionToHumanText).join(', ');
+    return `статус ${rule.label} устанавливается, если ${conditions}`;
+  });
+  return [...header, ...lines].join('\n');
 }
 
 function setRulesMessage(text, type = '') {
@@ -419,7 +456,8 @@ async function loadStatusRulesFromServer() {
       const rulesText = String(payload?.rulesText || '').trim() || DEFAULT_STATUS_RULES_TEXT;
       const parsed = parseRulesText(rulesText);
       statusRules = parsed.rules;
-      renderRulesEditor(rulesText);
+      const displayText = isHumanReadableRulesText(rulesText) ? rulesText : rulesToHumanText(parsed.rules);
+      renderRulesEditor(displayText);
       if (parsed.errors.length) {
         setRulesMessage(`Загружено с предупреждениями: ${parsed.errors[0]}`, 'error');
       } else {
