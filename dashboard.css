@@ -278,8 +278,8 @@ body.light .dashboard-board {
 }
 
 .status-tab.is-active {
-  background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  border-color: transparent;
+  background: linear-gradient(180deg, #6f7a88, #596372);
+  border-color: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
