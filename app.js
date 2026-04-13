@@ -57,6 +57,7 @@ const RULE_FIELD_ALIASES = new Map([
   ['требуетсяотгрузка', 'shipmentPending'],
   ['receiptconfirmed', 'receiptConfirmed'],
   ['клиенткувидел', 'receiptConfirmed'],
+  ['клиенткпувидел', 'receiptConfirmed'],
   ['получениекпподтверждено', 'receiptConfirmed'],
   ['kpsent', 'kpSent'],
   ['кпотправлено', 'kpSent'],
