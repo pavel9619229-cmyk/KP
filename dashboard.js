@@ -14,6 +14,47 @@ const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
 const ALL_TAB_KEY = '__all__';
+const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
+const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
+const RULE_FIELDS = new Set([
+  'problem',
+  'rejected',
+  'invoiceCreated',
+  'paymentReceived',
+  'edoSent',
+  'shipmentPending',
+  'receiptConfirmed',
+  'kpSent',
+  'clientFilled',
+  'managerFilled',
+  'productSpecified',
+]);
+const RULE_FIELD_ALIASES = new Map([
+  ['problem', 'problem'],
+  ['проблема', 'problem'],
+  ['rejected', 'rejected'],
+  ['отказ', 'rejected'],
+  ['invoicecreated', 'invoiceCreated'],
+  ['накладнаясоздана', 'invoiceCreated'],
+  ['paymentreceived', 'paymentReceived'],
+  ['оплатаполучена', 'paymentReceived'],
+  ['edosent', 'edoSent'],
+  ['вэдоотправлено', 'edoSent'],
+  ['shipmentpending', 'shipmentPending'],
+  ['отгрузить', 'shipmentPending'],
+  ['требуетсяотгрузка', 'shipmentPending'],
+  ['receiptconfirmed', 'receiptConfirmed'],
+  ['клиенткувидел', 'receiptConfirmed'],
+  ['получениекпподтверждено', 'receiptConfirmed'],
+  ['kpsent', 'kpSent'],
+  ['кпотправлено', 'kpSent'],
+  ['clientfilled', 'clientFilled'],
+  ['клиентзаполнен', 'clientFilled'],
+  ['managerfilled', 'managerFilled'],
+  ['менеджерзаполнен', 'managerFilled'],
+  ['productspecified', 'productSpecified'],
+  ['товаруказан', 'productSpecified'],
+]);
 const STATUS_ORDER = [
   'ПРОБЛЕМА',
   'ОТКАЗ',
@@ -47,6 +88,7 @@ let wsActive = false;
 let activeTab = ALL_TAB_KEY;
 let lastFingerprint = '';
 let lastSyncAt = null;
+let statusRules = createDefaultStatusRules();
 
 initTheme();
 
@@ -218,31 +260,186 @@ function hasRejectInComment(row) {
   return commentText.includes('ОТКАЗ');
 }
 
-function computeKpStatus(row) {
-  const problem = getFlag(row, ['problem', 'hasProblem', 'проблема']);
-  if (problem === true) return 'ПРОБЛЕМА';
+function createDefaultStatusRules() {
+  return [
+    { label: 'ПРОБЛЕМА', conditions: [{ field: 'problem', operator: 'is_true' }] },
+    { label: 'ОТКАЗ', conditions: [{ field: 'rejected', operator: 'is_true' }] },
+    {
+      label: 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'paymentReceived', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_true' },
+      ],
+    },
+    {
+      label: 'ЖДЕМ ОПЛАТУ',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_true' },
+        { field: 'paymentReceived', operator: 'is_not_true' },
+      ],
+    },
+    {
+      label: 'ОТПРАВИТЬ В ЭДО',
+      conditions: [
+        { field: 'invoiceCreated', operator: 'is_true' },
+        { field: 'edoSent', operator: 'is_not_true' },
+      ],
+    },
+    { label: 'ОТГРУЗИТЬ', conditions: [{ field: 'shipmentPending', operator: 'is_true' }] },
+    { label: 'КЛИЕНТ ДУМАЕТ', conditions: [{ field: 'receiptConfirmed', operator: 'is_true' }] },
+    { label: 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП', conditions: [{ field: 'kpSent', operator: 'is_true' }] },
+    {
+      label: 'ОТПРАВИТЬ КЛИЕНТУ',
+      conditions: [
+        { field: 'clientFilled', operator: 'is_true' },
+        { field: 'managerFilled', operator: 'is_true' },
+        { field: 'productSpecified', operator: 'is_true' },
+      ],
+    },
+  ];
+}
 
-  if (hasRejectInComment(row)) return 'ОТКАЗ';
+function parseBooleanToken(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'да'].includes(v)) return true;
+  if (['false', '0', 'no', 'n', 'нет'].includes(v)) return false;
+  return null;
+}
 
-  const rejected = getFlag(row, ['rejected', 'isRejected', 'отказ']);
-  if (rejected === true) return 'ОТКАЗ';
+function normalizeRuleFieldName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+    .replace(/[^a-zа-я0-9]/gi, '');
+}
 
-  const invoiceCreated = getFlag(row, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']);
-  const paymentReceived = getFlag(row, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']);
-  const edoSent = getFlag(row, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']);
-  if (invoiceCreated === true && paymentReceived === true && edoSent === true) return 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО';
-  if (invoiceCreated === true && edoSent === true && paymentReceived !== true) return 'ЖДЕМ ОПЛАТУ';
-  if (invoiceCreated === true && edoSent !== true) return 'ОТПРАВИТЬ В ЭДО';
+function resolveRuleField(fieldRaw) {
+  const field = String(fieldRaw || '').trim();
+  if (RULE_FIELDS.has(field)) return field;
+  const alias = RULE_FIELD_ALIASES.get(normalizeRuleFieldName(field));
+  return alias || '';
+}
 
-  const shipmentPending = getFlag(row, ['shipmentPending', 'isShipmentPending', 'отгрузить']);
-  if (shipmentPending === true) return 'ОТГРУЗИТЬ';
+function parseConditionToken(token) {
+  const raw = String(token || '').trim();
 
-  const receiptConfirmed = getFlag(row, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']);
-  if (receiptConfirmed === true) return 'КЛИЕНТ ДУМАЕТ';
+  const technicalMatch = raw.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=)\s*(.+)$/);
+  if (technicalMatch) {
+    const field = resolveRuleField(technicalMatch[1]);
+    if (!field) return { error: `Неизвестное поле: ${technicalMatch[1]}` };
 
-  const kpSent = getFlag(row, ['kpSent', 'isKpSent', 'кпОтправлено']);
-  if (kpSent === true) return 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП';
+    const boolValue = parseBooleanToken(technicalMatch[3]);
+    if (boolValue === null) return { error: `Значение должно быть true/false (или да/нет): ${technicalMatch[3]}` };
 
+    let operator = 'is_true';
+    if (technicalMatch[2] === '=' && boolValue === true) operator = 'is_true';
+    if (technicalMatch[2] === '=' && boolValue === false) operator = 'is_false';
+    if (technicalMatch[2] === '!=' && boolValue === true) operator = 'is_not_true';
+    if (technicalMatch[2] === '!=' && boolValue === false) operator = 'is_not_false';
+    return { condition: { field, operator } };
+  }
+
+  const humanMatch = raw.match(/^(.+?)\s*[-:=]\s*(.+)$/);
+  if (!humanMatch) return { error: `Некорректное условие: ${token}` };
+
+  const field = resolveRuleField(humanMatch[1]);
+  if (!field) return { error: `Неизвестное поле: ${humanMatch[1]}` };
+
+  const boolValue = parseBooleanToken(humanMatch[2]);
+  if (boolValue === null) return { error: `Значение должно быть да/нет (или true/false): ${humanMatch[2]}` };
+
+  return { condition: { field, operator: boolValue ? 'is_true' : 'is_false' } };
+}
+
+function parseHumanRuleLine(line) {
+  const match = String(line || '').trim().match(/^статус\s+(.+?)\s+устанавливается,\s*если\s+(.+)$/i);
+  if (!match) return null;
+
+  const label = String(match[1] || '').trim();
+  const left = String(match[2] || '').trim();
+  if (!label || !left) return { error: 'пустой статус или условие' };
+
+  const conditionTokens = left.split(/\s*,\s*|\s+(?:AND|И)\s+/i).map((x) => x.trim()).filter(Boolean);
+  if (!conditionTokens.length) return { error: 'нет условий после слова "если"' };
+
+  const conditions = [];
+  for (const token of conditionTokens) {
+    const parsed = parseConditionToken(token);
+    if (parsed.error) return { error: parsed.error };
+    conditions.push(parsed.condition);
+  }
+
+  return { rule: { label, conditions } };
+}
+
+function parseRulesText(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const parsedRules = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const humanRule = parseHumanRuleLine(line);
+    if (humanRule && humanRule.rule) {
+      parsedRules.push(humanRule.rule);
+      continue;
+    }
+
+    const parts = line.split('->');
+    if (parts.length < 2) continue;
+
+    const left = parts[0].trim();
+    const label = parts.slice(1).join('->').trim();
+    if (!left || !label) continue;
+
+    const conditionTokens = left.split(/\s+(?:AND|И)\s+/i).map((x) => x.trim()).filter(Boolean);
+    if (!conditionTokens.length) continue;
+
+    const conditions = [];
+    let valid = true;
+    for (const token of conditionTokens) {
+      const parsed = parseConditionToken(token);
+      if (parsed.error) {
+        valid = false;
+        break;
+      }
+      conditions.push(parsed.condition);
+    }
+
+    if (valid && conditions.length) {
+      parsedRules.push({ label, conditions });
+    }
+  }
+
+  return parsedRules.length ? parsedRules : createDefaultStatusRules();
+}
+
+async function loadStatusRulesFromServer() {
+  let loaded = false;
+  for (const src of STATUS_RULES_SOURCES) {
+    try {
+      const response = await fetch(src, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const rulesText = String(payload?.rulesText || '').trim();
+      statusRules = parseRulesText(rulesText);
+      loaded = true;
+      break;
+    } catch {
+      // Try next source.
+    }
+  }
+
+  if (!loaded) {
+    statusRules = createDefaultStatusRules();
+  }
+}
+
+function deriveStatusFacts(row) {
   const clientFilled = getFlag(row, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (currentRow) => {
     const name = String(currentRow.customerName || '').trim();
     if (!name) return false;
@@ -255,10 +452,46 @@ function computeKpStatus(row) {
     const normalized = manager.toLowerCase().replaceAll('ё', 'е');
     return normalized !== 'не определен' && normalized !== 'неопределен';
   });
-  const productSpecified = getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']);
 
-  if (clientFilled === true && managerFilled === true && productSpecified === true) return 'ОТПРАВИТЬ КЛИЕНТУ';
-  return 'ОБРАБОТАТЬ';
+  return {
+    problem: getFlag(row, ['problem', 'hasProblem', 'проблема']),
+    rejected: hasRejectInComment(row) || getFlag(row, ['rejected', 'isRejected', 'отказ']),
+    invoiceCreated: getFlag(row, ['invoiceCreated', 'isInvoiceCreated', 'накладнаяСоздана']),
+    paymentReceived: getFlag(row, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']),
+    edoSent: getFlag(row, ['edoSent', 'isEdoSent', 'вЭдоОтправлено']),
+    shipmentPending: getFlag(row, ['shipmentPending', 'isShipmentPending', 'отгрузить']),
+    receiptConfirmed: getFlag(row, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']),
+    kpSent: getFlag(row, ['kpSent', 'isKpSent', 'кпОтправлено']),
+    clientFilled,
+    managerFilled,
+    productSpecified: getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']),
+  };
+}
+
+function matchesRuleCondition(facts, condition) {
+  const value = facts[condition.field];
+  switch (condition.operator) {
+    case 'is_true':
+      return value === true;
+    case 'is_false':
+      return value === false;
+    case 'is_not_true':
+      return value !== true;
+    case 'is_not_false':
+      return value !== false;
+    default:
+      return false;
+  }
+}
+
+function computeKpStatus(row) {
+  const facts = deriveStatusFacts(row);
+  for (const rule of statusRules) {
+    if (rule.conditions.every((condition) => matchesRuleCondition(facts, condition))) {
+      return rule.label;
+    }
+  }
+  return DEFAULT_FALLBACK_STATUS;
 }
 
 function getStatusCounts(data) {
@@ -454,20 +687,17 @@ function fingerprint(data) {
 
 function setRows(nextRows, syncedAt = null) {
   const nextFingerprint = fingerprint(nextRows);
-  if (nextFingerprint === lastFingerprint) {
-    lastSyncAt = syncedAt || new Date();
-    updatedAtLabel.textContent = formatUpdatedAt(lastSyncAt);
-    return;
+  if (nextFingerprint !== lastFingerprint) {
+    rows = nextRows;
+    lastFingerprint = nextFingerprint;
   }
-
-  rows = nextRows;
-  lastFingerprint = nextFingerprint;
   lastSyncAt = syncedAt || new Date();
   renderBoard();
 }
 
 async function refreshData(initial = false) {
   try {
+    await loadStatusRulesFromServer();
     const nextRows = await loadRows();
     setRows(nextRows, new Date());
   } catch (error) {
@@ -518,6 +748,7 @@ function connectWebSocket() {
 
 async function init() {
   updateClearSearchButton();
+  await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();
   setInterval(() => {
