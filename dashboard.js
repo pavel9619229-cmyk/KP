@@ -563,17 +563,23 @@ function buildMetaChips(row) {
 
 function renderTabs(counts) {
   const orderedStatuses = getOrderedStatuses(counts);
-  const pinnedOrder = ['ОТКАЗ', 'ОБРАБОТАТЬ', 'ОТПРАВИТЬ КЛИЕНТУ', 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП'];
+  const primaryTabs = [
+    'ОТКАЗ',
+    'ОБРАБОТАТЬ',
+    'ОТПРАВИТЬ КЛИЕНТУ',
+    'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
+    'КЛИЕНТ ДУМАЕТ',
+    'ОТПРАВИТЬ В ЭДО',
+    'ОТГРУЗИТЬ',
+  ];
 
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
-  for (const status of pinnedOrder) {
-    if (counts.has(status)) {
-      tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
-    }
+  for (const status of primaryTabs) {
+    tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
   }
 
   for (const status of orderedStatuses) {
-    if (!pinnedOrder.includes(status)) {
+    if (!primaryTabs.includes(status)) {
       tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
     }
   }
