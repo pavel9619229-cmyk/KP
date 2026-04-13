@@ -542,6 +542,29 @@ def first_line(*values: str) -> str:
     return ""
 
 
+def looks_like_product_hint(value: str) -> bool:
+    line = first_line(value)
+    if not line:
+        return False
+
+    upper = line.upper()
+    non_product_markers = (
+        "НОВЫЙ ЗАПРОС",
+        "КЛИЕНТ ПОЛУЧИЛ КП",
+        "ОБРАБОТАТЬ И ОТПРАВИТЬ КП",
+        "КП ОТПРАВЛЕНО",
+        "ПРОБЛЕМА",
+        "ОТКАЗ",
+    )
+    if any(marker in upper for marker in non_product_markers):
+        return False
+
+    if "\t" in line:
+        return True
+
+    return bool(re.search(r"\d+[\.,]\d{2,3}", line))
+
+
 def has_reject_marker(*values: str) -> bool:
     for value in values:
         text = str(value or "").upper()
@@ -1460,6 +1483,10 @@ def fetch_rows_from_odata() -> list:
                 if not previous_info:
                     previous_info = first_line(comment)
 
+                product_specified = known_row.get("productSpecified")
+                if product_specified is not True and looks_like_product_hint(previous_info):
+                    product_specified = True
+
                 rejected_flag = known_row.get("rejected")
                 if has_reject_marker(comment, status_kp):
                     rejected_flag = True
@@ -1472,7 +1499,7 @@ def fetch_rows_from_odata() -> list:
                         "customerName": "" if requisites_changed else known_row.get("customerName", ""),
                         "status": status,
                         "managerFilled": known_row.get("managerFilled"),
-                        "productSpecified": known_row.get("productSpecified"),
+                        "productSpecified": product_specified,
                         "kpSent": known_row.get("kpSent"),
                         "receiptConfirmed": known_row.get("receiptConfirmed"),
                         "edoSent": known_row.get("edoSent"),
@@ -1593,6 +1620,10 @@ def fetch_rows_from_odata() -> list:
                 doc=doc,
                 use_cache=not should_refresh_product,
             )
+            if product_specified is not True and looks_like_product_hint(
+                row.get("additionalInfoFirstLine") or doc.get("ДополнительнаяИнформация") or doc.get("Комментарий")
+            ):
+                product_specified = True
             if product_specified is not None:
                 row["productSpecified"] = product_specified
 
