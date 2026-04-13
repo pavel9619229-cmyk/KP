@@ -1250,6 +1250,11 @@ async def root():
     return FileResponse("index.html", media_type="text/html")
 
 
+@app.get("/dashboard")
+async def dashboard():
+    return FileResponse("dashboard.html", media_type="text/html")
+
+
 @app.get("/healthz")
 async def healthz():
     return {

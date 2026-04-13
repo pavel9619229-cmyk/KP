@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>КП по статусам</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css?v=1">
+</head>
+<body>
+  <main class="dashboard-shell">
+    <header class="dashboard-topbar">
+      <div class="brand-block">
+        <p class="eyebrow">Коммерческие предложения</p>
+        <h1>КП по статусам</h1>
+      </div>
+      <div class="topbar-actions">
+        <label class="search-box" aria-label="Поиск по КП">
+          <input id="searchInput" type="text" placeholder="Поиск по номеру, клиенту или комментарию">
+        </label>
+        <button id="themeBtn" type="button" class="ghost-button">Тёмный фон</button>
+      </div>
+    </header>
+
+    <section class="dashboard-summary">
+      <div>
+        <span class="summary-label">Режим</span>
+        <strong>Пользовательская доска</strong>
+      </div>
+      <div>
+        <span class="summary-label">Обновление</span>
+        <strong id="updatedAtLabel">Загрузка...</strong>
+      </div>
+      <div>
+        <span class="summary-label">Всего КП</span>
+        <strong id="totalCountLabel">0</strong>
+      </div>
+    </section>
+
+    <section class="status-toolbar" aria-label="Закладки по статусам">
+      <div id="statusTabs" class="status-tabs"></div>
+    </section>
+
+    <section class="dashboard-board">
+      <div class="board-header">
+        <div>
+          <strong id="activeTabLabel">Все КП</strong>
+          <p id="activeTabHint">Список коммерческих предложений по текущему фильтру.</p>
+        </div>
+        <span id="activeCountBadge" class="active-count">0</span>
+      </div>
+      <div id="boardContent" class="board-content">
+        <div class="board-empty">Загрузка...</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="dashboard.js?v=1"></script>
+</body>
+</html>
