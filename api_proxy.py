@@ -265,7 +265,8 @@ def _resolve_customer_for_new_request(request_text: str, headers: dict) -> tuple
 
 def _create_kp_in_1c_from_request(request_text: str) -> dict:
     headers = _build_headers()
-    customer_key, resolved_customer_name, recognized = _resolve_customer_for_new_request(request_text, headers)
+    normalized_request_text = str(request_text).replace("\x00", "").strip()
+    customer_key, resolved_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
     manager_key = _resolve_manager_key(headers)
     now = datetime.now()
     now_iso = now.replace(microsecond=0).isoformat()
@@ -274,7 +275,7 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
         "Date": now_iso,
         "ДействуетДо": now_iso,
         "ЦенаВключаетНДС": True,
-        "Комментарий": str(request_text).strip(),
+        "Комментарий": normalized_request_text,
         "Контрагент_Key": customer_key,
         "Менеджер_Key": manager_key,
         "Товары": [],
@@ -288,8 +289,11 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
 
     resp = requests.post(
         f"{BASE}/{ENTITY}",
-        headers={**headers, "Content-Type": "application/json"},
-        data=json.dumps(payload, ensure_ascii=False),
+        headers={
+            **headers,
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        json=payload,
         timeout=20,
         verify=False,
     )
