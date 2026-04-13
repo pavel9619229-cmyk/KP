@@ -1569,7 +1569,9 @@ def fetch_rows_from_odata() -> list:
         # Otherwise False can become sticky for older rows outside forced top-N.
         need_product = should_refresh_product or row.get("productSpecified") is not True
         need_kp_sent = should_refresh_kp_sent or row.get("kpSent") is None
-        need_receipt = should_refresh_receipt or row.get("receiptConfirmed") is None
+        # Re-check receipt marker for rows where confirmation is still not true.
+        # Otherwise old False can remain stale for rows outside forced top-N.
+        need_receipt = should_refresh_receipt or row.get("receiptConfirmed") is not True
         need_edo = should_refresh_edo or row.get("edoSent") is None
         need_rejected = should_refresh_rejected or row.get("rejected") is None
         need_problem = should_refresh_problem or row.get("problem") is None
