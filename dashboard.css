@@ -159,30 +159,21 @@ body.light .dashboard-board {
 .status-toolbar {
   margin-top: 20px;
   width: 100%;
-  overflow: hidden;
 }
 
 .status-tabs {
-  display: flex;
+  display: grid;
   gap: 10px;
   width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 6px;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
 }
 
 .status-tab {
-  flex: 0 0 auto;
-  min-width: 160px;
+  width: 100%;
   border: 1px solid var(--line);
   background: var(--bg-soft);
   color: var(--text);
   border-radius: 18px;
-  padding: 14px 16px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -203,11 +194,10 @@ body.light .dashboard-board {
 }
 
 .status-tab__label {
+  min-width: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .status-tab__count {
@@ -393,34 +383,25 @@ body.light .kp-card__status {
   }
 
   .status-tabs {
-    gap: 6px;
-    padding-bottom: 10px;
+    gap: 8px;
   }
 
   .status-tab {
-    flex: 0 0 calc((100vw - 44px) / 4);
-    min-width: calc((100vw - 44px) / 4);
-    max-width: calc((100vw - 44px) / 4);
-    padding: 10px 8px;
+    padding: 12px 14px;
     border-radius: 14px;
-    gap: 6px;
+    gap: 10px;
   }
 
   .status-tab__label {
-    min-width: 0;
-    font-size: 0.72rem;
-    line-height: 1.1;
-    white-space: normal;
-    overflow: hidden;
-    text-overflow: clip;
-    text-align: left;
+    font-size: 0.82rem;
+    line-height: 1.25;
   }
 
   .status-tab__count {
-    min-width: 24px;
-    height: 24px;
-    padding: 0 6px;
-    font-size: 0.7rem;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 0.74rem;
   }
 
   .board-header,

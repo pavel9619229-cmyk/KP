@@ -178,7 +178,7 @@ function getTabLabel(statusKey, fallbackLabel) {
   if (!isCompactViewport) {
     return fallbackLabel;
   }
-  return STATUS_LABELS_COMPACT[statusKey] || fallbackLabel;
+  return STATUS_LABELS_COMPACT[statusKey] ? STATUS_LABELS_COMPACT[statusKey] : fallbackLabel;
 }
 
 function formatUpdatedAt(value) {
@@ -228,7 +228,7 @@ function renderTabs(counts) {
 
   statusTabs.innerHTML = tabs.map((tab) => `
     <button class="status-tab ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
-      <span class="status-tab__label">${escapeHtml(getTabLabel(tab.key, tab.label))}</span>
+      <span class="status-tab__label">${escapeHtml(tab.label)}</span>
       <span class="status-tab__count">${tab.count}</span>
     </button>
   `).join('');
