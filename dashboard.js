@@ -307,9 +307,10 @@ function renderTabs(counts) {
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }].concat(
     orderedStatuses.map((status) => ({ key: status, label: status, count: counts.get(status) || 0 }))
   );
+  const hasRejectTab = tabs.some((tab) => tab.key === 'ОТКАЗ');
 
   statusTabs.innerHTML = tabs.map((tab) => `
-    <button class="status-tab ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
+    <button class="status-tab ${hasRejectTab && (tab.key === ALL_TAB_KEY || tab.key === 'ОТКАЗ') ? 'status-tab--top-pair' : 'status-tab--full'} ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
       <span class="status-tab__label">${escapeHtml(tab.label)}</span>
       <span class="status-tab__count">${tab.count}</span>
     </button>
