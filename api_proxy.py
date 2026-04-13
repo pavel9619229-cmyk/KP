@@ -49,7 +49,7 @@ RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
-ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "20"))
+ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "60"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
@@ -677,6 +677,30 @@ def resolve_product_specified_for_ref(
     if not row:
         return None
 
+    # Some 1C endpoints return only a navigation link for goods rows.
+    # Try loading first goods line directly from the nav link.
+    goods_nav = str(row.get("Товары@navigationLinkUrl") or "").strip()
+    if goods_nav:
+        try:
+            nav_resp = requests.get(
+                f"{BASE}/{goods_nav}",
+                headers=headers,
+                params={"$top": "1", "$select": "Номенклатура_Key"},
+                timeout=NAV_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            if nav_resp.status_code == 200:
+                payload = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
+                values = payload.get("value") if isinstance(payload, dict) else None
+                if isinstance(values, list) and values:
+                    first_goods = values[0] if isinstance(values[0], dict) else {}
+                    nav_nomenclature_key = str(first_goods.get("Номенклатура_Key") or "").strip()
+                    if nav_nomenclature_key and nav_nomenclature_key != ZERO_GUID:
+                        _product_specified_cache[ref_key] = True
+                        return True
+        except Exception:
+            pass
+
     goods = row.get("Товары")
     if not isinstance(goods, list) or not goods:
         _product_specified_cache[ref_key] = False
@@ -1133,6 +1157,35 @@ def resolve_customer_name_for_ref(
             continue
 
     _customer_name_cache[ref_key] = best_description
+    if best_description:
+        return best_description
+
+    # Fallback: read customer by direct *_Key fields if nav-link scanning failed.
+    key_candidates = []
+    for key_name in ("Контрагент_Key", "Клиент_Key"):
+        key_value = str(row.get(key_name) or "").strip()
+        if key_value and key_value != ZERO_GUID:
+            key_candidates.append(key_value)
+
+    for key_value in key_candidates:
+        for catalog in ("Catalog_Контрагенты", "Catalog_Партнеры"):
+            try:
+                catalog_resp = requests.get(
+                    f"{BASE}/{catalog}(guid'{key_value}')",
+                    headers=headers,
+                    timeout=NAV_TIMEOUT_SECONDS,
+                    verify=False,
+                )
+                if catalog_resp.status_code != 200:
+                    continue
+                catalog_obj = catalog_resp.json() if isinstance(catalog_resp.json(), dict) else {}
+                description = str(catalog_obj.get("Description") or "").strip()
+                if description:
+                    _customer_name_cache[ref_key] = description
+                    return description
+            except Exception:
+                continue
+
     return best_description
 
 
