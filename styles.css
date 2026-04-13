@@ -168,9 +168,14 @@ th {
   font-size: 0.72rem;
 }
 
-th[title] {
-  cursor: help;
-  text-decoration: underline dotted var(--text-muted, #888);
+.th-rule {
+  display: block;
+  font-weight: 400;
+  font-size: 0.62rem;
+  color: var(--text-muted, #888);
+  white-space: normal;
+  line-height: 1.3;
+  margin-top: 2px;
 }
 
 td {
