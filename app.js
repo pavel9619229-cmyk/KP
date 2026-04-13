@@ -7,9 +7,9 @@ const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
 const rulesPanel = document.getElementById('rulesPanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
-const rulesList = document.getElementById('rulesList');
-const addRuleBtn = document.getElementById('addRuleBtn');
-const resetRulesBtn = document.getElementById('resetRulesBtn');
+const rulesTextInput = document.getElementById('rulesTextInput');
+const saveRulesBtn = document.getElementById('saveRulesBtn');
+const rulesSaveMsg = document.getElementById('rulesSaveMsg');
 
 (function initDark() {
   if (localStorage.getItem('darkMode') === '1') {
@@ -26,29 +26,36 @@ darkBtn.addEventListener('click', () => {
 
 const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
-const STATUS_RULES_STORAGE_KEY = 'kpStatusRulesV1';
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
-
-const RULE_FIELDS = [
-  { value: 'problem', label: 'Проблема' },
-  { value: 'rejected', label: 'Отказ' },
-  { value: 'invoiceCreated', label: 'Накладная создана' },
-  { value: 'paymentReceived', label: 'Оплата получена' },
-  { value: 'edoSent', label: 'В ЭДО отправлено' },
-  { value: 'shipmentPending', label: 'Нужно отгрузить' },
-  { value: 'receiptConfirmed', label: 'Получение подтверждено' },
-  { value: 'kpSent', label: 'КП отправлено' },
-  { value: 'clientFilled', label: 'Клиент заполнен' },
-  { value: 'managerFilled', label: 'Менеджер заполнен' },
-  { value: 'productSpecified', label: 'Товар указан' },
-];
-
-const RULE_OPERATORS = [
-  { value: 'is_true', label: 'равно Да' },
-  { value: 'is_false', label: 'равно Нет' },
-  { value: 'is_not_true', label: 'не равно Да' },
-  { value: 'is_not_false', label: 'не равно Нет' },
-];
+const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
+const RULE_FIELDS = new Set([
+  'problem',
+  'rejected',
+  'invoiceCreated',
+  'paymentReceived',
+  'edoSent',
+  'shipmentPending',
+  'receiptConfirmed',
+  'kpSent',
+  'clientFilled',
+  'managerFilled',
+  'productSpecified',
+]);
+const DEFAULT_STATUS_RULES_TEXT = [
+  '# Формат: условие AND условие -> СТАТУС',
+  '# Поля: problem, rejected, invoiceCreated, paymentReceived, edoSent, shipmentPending, receiptConfirmed, kpSent, clientFilled, managerFilled, productSpecified',
+  '# Операторы: = true|false или != true|false',
+  '',
+  'problem = true -> ПРОБЛЕМА',
+  'rejected = true -> ОТКАЗ',
+  'invoiceCreated = true AND paymentReceived = true AND edoSent = true -> ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
+  'invoiceCreated = true AND edoSent = true AND paymentReceived != true -> ЖДЕМ ОПЛАТУ',
+  'invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО',
+  'shipmentPending = true -> ОТГРУЗИТЬ',
+  'receiptConfirmed = true -> КЛИЕНТ ДУМАЕТ',
+  'kpSent = true -> ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
+  'clientFilled = true AND managerFilled = true AND productSpecified = true -> ОТПРАВИТЬ КЛИЕНТУ',
+].join('\n');
 
 let rows = [];
 let lastFingerprint = '';
@@ -56,7 +63,7 @@ let lastSyncAt = null;
 let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 15;
-let statusRules = loadStatusRules();
+let statusRules = createDefaultStatusRules();
 
 function escapeHtml(text) {
   return String(text)
@@ -85,23 +92,18 @@ function sortRowsByKpNumberDesc(data) {
 }
 
 function normalizeFlag(value) {
-  if (value === true || value === false) {
-    return value;
-  }
-
+  if (value === true || value === false) return value;
   if (typeof value === 'number') {
     if (value === 1) return true;
     if (value === 0) return false;
     return null;
   }
-
   if (typeof value === 'string') {
     const v = value.trim().toLowerCase();
     if (!v) return null;
     if (['true', '1', 'yes', 'y', 'да', 'заполнен'].includes(v)) return true;
     if (['false', '0', 'no', 'n', 'нет', 'не заполнен'].includes(v)) return false;
   }
-
   return null;
 }
 
@@ -109,16 +111,10 @@ function getFlag(row, keys, fallback = null) {
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(row, key)) {
       const flag = normalizeFlag(row[key]);
-      if (flag !== null) {
-        return flag;
-      }
+      if (flag !== null) return flag;
     }
   }
-
-  if (typeof fallback === 'function') {
-    return fallback(row);
-  }
-
+  if (typeof fallback === 'function') return fallback(row);
   return null;
 }
 
@@ -128,16 +124,11 @@ function formatFlag(flag) {
   return '—';
 }
 
-function createRuleId() {
-  return `rule-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
 function createDefaultStatusRules() {
   return [
-    { id: createRuleId(), label: 'ПРОБЛЕМА', conditions: [{ field: 'problem', operator: 'is_true' }] },
-    { id: createRuleId(), label: 'ОТКАЗ', conditions: [{ field: 'rejected', operator: 'is_true' }] },
+    { label: 'ПРОБЛЕМА', conditions: [{ field: 'problem', operator: 'is_true' }] },
+    { label: 'ОТКАЗ', conditions: [{ field: 'rejected', operator: 'is_true' }] },
     {
-      id: createRuleId(),
       label: 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
       conditions: [
         { field: 'invoiceCreated', operator: 'is_true' },
@@ -146,7 +137,6 @@ function createDefaultStatusRules() {
       ],
     },
     {
-      id: createRuleId(),
       label: 'ЖДЕМ ОПЛАТУ',
       conditions: [
         { field: 'invoiceCreated', operator: 'is_true' },
@@ -155,18 +145,16 @@ function createDefaultStatusRules() {
       ],
     },
     {
-      id: createRuleId(),
       label: 'ОТПРАВИТЬ В ЭДО',
       conditions: [
         { field: 'invoiceCreated', operator: 'is_true' },
         { field: 'edoSent', operator: 'is_not_true' },
       ],
     },
-    { id: createRuleId(), label: 'ОТГРУЗИТЬ', conditions: [{ field: 'shipmentPending', operator: 'is_true' }] },
-    { id: createRuleId(), label: 'КЛИЕНТ ДУМАЕТ', conditions: [{ field: 'receiptConfirmed', operator: 'is_true' }] },
-    { id: createRuleId(), label: 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП', conditions: [{ field: 'kpSent', operator: 'is_true' }] },
+    { label: 'ОТГРУЗИТЬ', conditions: [{ field: 'shipmentPending', operator: 'is_true' }] },
+    { label: 'КЛИЕНТ ДУМАЕТ', conditions: [{ field: 'receiptConfirmed', operator: 'is_true' }] },
+    { label: 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП', conditions: [{ field: 'kpSent', operator: 'is_true' }] },
     {
-      id: createRuleId(),
       label: 'ОТПРАВИТЬ КЛИЕНТУ',
       conditions: [
         { field: 'clientFilled', operator: 'is_true' },
@@ -177,56 +165,95 @@ function createDefaultStatusRules() {
   ];
 }
 
-function normalizeStoredCondition(condition) {
-  const field = RULE_FIELDS.some((item) => item.value === condition?.field)
-    ? condition.field
-    : 'problem';
-  const operator = RULE_OPERATORS.some((item) => item.value === condition?.operator)
-    ? condition.operator
-    : 'is_true';
-  return { field, operator };
+function setRulesMessage(text, type = '') {
+  if (!rulesSaveMsg) return;
+  rulesSaveMsg.textContent = text || '';
+  rulesSaveMsg.classList.remove('is-ok', 'is-error');
+  if (type === 'ok') rulesSaveMsg.classList.add('is-ok');
+  if (type === 'error') rulesSaveMsg.classList.add('is-error');
 }
 
-function normalizeStoredRule(rule, index) {
-  const conditions = Array.isArray(rule?.conditions) && rule.conditions.length
-    ? rule.conditions.map(normalizeStoredCondition)
-    : [{ field: 'problem', operator: 'is_true' }];
-
-  return {
-    id: typeof rule?.id === 'string' && rule.id ? rule.id : `rule-restored-${index}`,
-    label: String(rule?.label || '').trim() || `Правило ${index + 1}`,
-    conditions,
-  };
+function parseBooleanToken(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'да'].includes(v)) return true;
+  if (['false', '0', 'no', 'n', 'нет'].includes(v)) return false;
+  return null;
 }
 
-function loadStatusRules() {
-  try {
-    const raw = localStorage.getItem(STATUS_RULES_STORAGE_KEY);
-    if (!raw) {
-      return createDefaultStatusRules();
+function parseConditionToken(token) {
+  const match = String(token || '').trim().match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=)\s*(.+)$/);
+  if (!match) return { error: `Некорректное условие: ${token}` };
+
+  const field = String(match[1] || '').trim();
+  if (!RULE_FIELDS.has(field)) return { error: `Неизвестное поле: ${field}` };
+
+  const boolValue = parseBooleanToken(match[3]);
+  if (boolValue === null) return { error: `Значение должно быть true/false (или да/нет): ${match[3]}` };
+
+  let operator = 'is_true';
+  if (match[2] === '=' && boolValue === true) operator = 'is_true';
+  if (match[2] === '=' && boolValue === false) operator = 'is_false';
+  if (match[2] === '!=' && boolValue === true) operator = 'is_not_true';
+  if (match[2] === '!=' && boolValue === false) operator = 'is_not_false';
+
+  return { condition: { field, operator } };
+}
+
+function parseRulesText(text) {
+  const rawText = String(text || '').replace(/\r\n/g, '\n');
+  const lines = rawText.split('\n');
+  const rules = [];
+  const errors = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const parts = line.split('->');
+    if (parts.length < 2) {
+      errors.push(`Строка ${i + 1}: нет разделителя ->`);
+      continue;
     }
 
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || !parsed.length) {
-      return createDefaultStatusRules();
+    const left = parts[0].trim();
+    const label = parts.slice(1).join('->').trim();
+    if (!label) {
+      errors.push(`Строка ${i + 1}: пустой статус справа от ->`);
+      continue;
     }
 
-    return parsed.map(normalizeStoredRule);
-  } catch {
-    return createDefaultStatusRules();
+    const conditionTokens = left.split(/\s+(?:AND|И)\s+/i).map((x) => x.trim()).filter(Boolean);
+    if (!conditionTokens.length) {
+      errors.push(`Строка ${i + 1}: нет условий слева от ->`);
+      continue;
+    }
+
+    const conditions = [];
+    let hasError = false;
+    for (const token of conditionTokens) {
+      const parsed = parseConditionToken(token);
+      if (parsed.error) {
+        errors.push(`Строка ${i + 1}: ${parsed.error}`);
+        hasError = true;
+      } else {
+        conditions.push(parsed.condition);
+      }
+    }
+
+    if (!hasError && conditions.length) {
+      rules.push({ label, conditions });
+    }
   }
-}
 
-function persistStatusRules() {
-  localStorage.setItem(STATUS_RULES_STORAGE_KEY, JSON.stringify(statusRules));
+  if (!rules.length) {
+    return { rules: createDefaultStatusRules(), errors: errors.length ? errors : ['Не найдено ни одного корректного правила'] };
+  }
+
+  return { rules, errors };
 }
 
 function deriveStatusFacts(row) {
-  const commentText = [
-    row?.additionalInfoFirstLine,
-    row?.comment,
-    row?.Комментарий,
-  ]
+  const commentText = [row?.additionalInfoFirstLine, row?.comment, row?.Комментарий]
     .filter(Boolean)
     .map((value) => String(value).toUpperCase())
     .join(' ');
@@ -244,7 +271,6 @@ function deriveStatusFacts(row) {
     const normalized = manager.toLowerCase().replaceAll('ё', 'е');
     return normalized !== 'не определен' && normalized !== 'неопределен';
   });
-  const productSpecified = getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']);
 
   return {
     problem: getFlag(row, ['problem', 'hasProblem', 'проблема']),
@@ -257,7 +283,7 @@ function deriveStatusFacts(row) {
     kpSent: getFlag(row, ['kpSent', 'isKpSent', 'кпОтправлено']),
     clientFilled,
     managerFilled,
-    productSpecified,
+    productSpecified: getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']),
   };
 }
 
@@ -287,56 +313,83 @@ function computeKpStatus(row) {
   return DEFAULT_FALLBACK_STATUS;
 }
 
-function updateRulesAndRefresh() {
-  persistStatusRules();
-  renderRulesEditor();
-  fillStatuses(rows);
-  applyFilters();
+function renderRulesEditor(text) {
+  if (!rulesTextInput) return;
+  rulesTextInput.value = String(text || DEFAULT_STATUS_RULES_TEXT);
 }
 
-function renderRulesEditor() {
-  if (!statusRules.length) {
-    rulesList.innerHTML = '<div class="rule-empty">Правил пока нет.</div>';
+async function loadStatusRulesFromServer() {
+  let lastError = null;
+  for (const src of STATUS_RULES_SOURCES) {
+    try {
+      const response = await fetch(src, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const rulesText = String(payload?.rulesText || '').trim() || DEFAULT_STATUS_RULES_TEXT;
+      const parsed = parseRulesText(rulesText);
+      statusRules = parsed.rules;
+      renderRulesEditor(rulesText);
+      if (parsed.errors.length) {
+        setRulesMessage(`Загружено с предупреждениями: ${parsed.errors[0]}`, 'error');
+      } else {
+        setRulesMessage('Правила загружены с сервера.', 'ok');
+      }
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  statusRules = createDefaultStatusRules();
+  renderRulesEditor(DEFAULT_STATUS_RULES_TEXT);
+  setRulesMessage(`Серверные правила не загружены: ${lastError?.message || 'неизвестная ошибка'}`, 'error');
+}
+
+async function saveStatusRulesToServer(rulesText) {
+  let lastError = null;
+  for (const src of STATUS_RULES_SOURCES) {
+    try {
+      const response = await fetch(src, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rulesText }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Не удалось сохранить правила');
+}
+
+async function onSaveRulesClick() {
+  const rulesText = String(rulesTextInput?.value || '').trim();
+  if (!rulesText) {
+    setRulesMessage('Введите текст правил перед сохранением.', 'error');
     return;
   }
 
-  rulesList.innerHTML = statusRules.map((rule, index) => `
-    <article class="rule-card" data-rule-id="${escapeHtml(rule.id)}">
-      <div class="rule-card__header">
-        <div>
-          <div class="rule-card__priority">Приоритет ${index + 1}</div>
-          <input data-action="label" data-rule-index="${index}" type="text" value="${escapeHtml(rule.label)}" aria-label="Название статуса">
-        </div>
-        <div class="rule-card__actions">
-          <button data-action="move-up" data-rule-index="${index}" type="button" ${index === 0 ? 'disabled' : ''}>Выше</button>
-          <button data-action="move-down" data-rule-index="${index}" type="button" ${index === statusRules.length - 1 ? 'disabled' : ''}>Ниже</button>
-        </div>
-      </div>
-      <div class="rule-card__conditions">
-        ${rule.conditions.map((condition, conditionIndex) => `
-          <div class="rule-condition">
-            <select data-action="field" data-rule-index="${index}" data-condition-index="${conditionIndex}" aria-label="Поле условия">
-              ${RULE_FIELDS.map((field) => `<option value="${field.value}" ${field.value === condition.field ? 'selected' : ''}>${field.label}</option>`).join('')}
-            </select>
-            <select data-action="operator" data-rule-index="${index}" data-condition-index="${conditionIndex}" aria-label="Оператор условия">
-              ${RULE_OPERATORS.map((operator) => `<option value="${operator.value}" ${operator.value === condition.operator ? 'selected' : ''}>${operator.label}</option>`).join('')}
-            </select>
-            <button data-action="remove-condition" data-rule-index="${index}" data-condition-index="${conditionIndex}" type="button" ${rule.conditions.length === 1 ? 'disabled' : ''}>Удалить условие</button>
-          </div>
-        `).join('')}
-      </div>
-      <div class="rule-card__footer">
-        <button data-action="add-condition" data-rule-index="${index}" type="button">Добавить условие</button>
-        <button data-action="remove-rule" data-rule-index="${index}" type="button" ${statusRules.length === 1 ? 'disabled' : ''}>Удалить правило</button>
-      </div>
-    </article>
-  `).join('');
+  const parsed = parseRulesText(rulesText);
+  if (parsed.errors.length) {
+    setRulesMessage(`Ошибка в правилах: ${parsed.errors[0]}`, 'error');
+    return;
+  }
+
+  try {
+    await saveStatusRulesToServer(rulesText);
+    statusRules = parsed.rules;
+    fillStatuses(rows);
+    applyFilters();
+    setRulesMessage('Правила сохранены на сервере.', 'ok');
+  } catch (err) {
+    setRulesMessage(`Сохранение не удалось: ${err.message}`, 'error');
+  }
 }
 
 function openRulesPanel() {
   rulesPanel.hidden = false;
   rulesBtn.textContent = 'Скрыть правила';
-  renderRulesEditor();
 }
 
 function closeRulesPanel() {
@@ -345,9 +398,7 @@ function closeRulesPanel() {
 }
 
 function render(data) {
-  const synced = lastSyncAt
-    ? ` · обновлено ${lastSyncAt.toLocaleTimeString('ru-RU')}`
-    : '';
+  const synced = lastSyncAt ? ` · обновлено ${lastSyncAt.toLocaleTimeString('ru-RU')}` : '';
   countLabel.textContent = `Показано: ${data.length} из ${rows.length}${synced}`;
 
   if (!data.length) {
@@ -391,8 +442,9 @@ function applyFilters() {
   const status = statusFilter.value;
 
   const filtered = rows.filter((r) => {
-    const byStatus = !status || computeKpStatus(r) === status;
-    const text = `${r.number || ''} ${r.customerName || ''} ${computeKpStatus(r)} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
+    const rowStatus = computeKpStatus(r);
+    const byStatus = !status || rowStatus === status;
+    const text = `${r.number || ''} ${r.customerName || ''} ${rowStatus} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
     const byText = !q || text.includes(q);
     return byStatus && byText;
   });
@@ -417,19 +469,14 @@ function fillStatuses(data) {
 }
 
 async function loadRows() {
-  const sources = [
-    '/api/kp/all',
-    'https://onec-kp-realtime.onrender.com/api/kp/all',
-  ];
+  const sources = ['/api/kp/all', 'https://onec-kp-realtime.onrender.com/api/kp/all'];
 
   let response = null;
   let lastError = null;
   for (const src of sources) {
     try {
       const r = await fetch(src, { cache: 'no-store' });
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}`);
-      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       response = r;
       break;
     } catch (e) {
@@ -437,9 +484,7 @@ async function loadRows() {
     }
   }
 
-  if (!response) {
-    throw lastError || new Error('Нет доступного источника данных');
-  }
+  if (!response) throw lastError || new Error('Нет доступного источника данных');
 
   const data = await response.json();
   return sortRowsByKpNumberDesc(data);
@@ -474,9 +519,7 @@ async function refreshData(initial = false) {
 }
 
 function connectWebSocket() {
-  if (!window.location.origin.startsWith('http')) {
-    return;
-  }
+  if (!window.location.origin.startsWith('http')) return;
 
   const isLocalStatic = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const url = isLocalStatic
@@ -512,13 +555,11 @@ function connectWebSocket() {
 }
 
 async function init() {
+  await loadStatusRulesFromServer();
   await refreshData(true);
-  renderRulesEditor();
   connectWebSocket();
   setInterval(() => {
-    if (!wsActive) {
-      refreshData(false);
-    }
+    if (!wsActive) refreshData(false);
   }, REFRESH_INTERVAL_MS);
 }
 
@@ -531,106 +572,11 @@ resetBtn.addEventListener('click', () => {
 });
 
 rulesBtn.addEventListener('click', () => {
-  if (rulesPanel.hidden) {
-    openRulesPanel();
-  } else {
-    closeRulesPanel();
-  }
+  if (rulesPanel.hidden) openRulesPanel();
+  else closeRulesPanel();
 });
 
 closeRulesBtn.addEventListener('click', closeRulesPanel);
-
-addRuleBtn.addEventListener('click', () => {
-  statusRules.push({
-    id: createRuleId(),
-    label: `Новое правило ${statusRules.length + 1}`,
-    conditions: [{ field: 'problem', operator: 'is_true' }],
-  });
-  updateRulesAndRefresh();
-});
-
-resetRulesBtn.addEventListener('click', () => {
-  statusRules = createDefaultStatusRules();
-  updateRulesAndRefresh();
-});
-
-rulesList.addEventListener('change', (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
-    return;
-  }
-
-  const ruleIndex = Number(target.dataset.ruleIndex);
-  const rule = statusRules[ruleIndex];
-  if (!rule) {
-    return;
-  }
-
-  if (target instanceof HTMLInputElement && target.dataset.action === 'label') {
-    rule.label = target.value.trim() || `Правило ${ruleIndex + 1}`;
-    updateRulesAndRefresh();
-    return;
-  }
-
-  const conditionIndex = Number(target.dataset.conditionIndex);
-  const condition = rule.conditions?.[conditionIndex];
-  if (!condition) {
-    return;
-  }
-
-  if (target.dataset.action === 'field') {
-    condition.field = target.value;
-  }
-  if (target.dataset.action === 'operator') {
-    condition.operator = target.value;
-  }
-  updateRulesAndRefresh();
-});
-
-rulesList.addEventListener('click', (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
-    return;
-  }
-
-  const action = target.dataset.action;
-  const ruleIndex = Number(target.dataset.ruleIndex);
-  const conditionIndex = Number(target.dataset.conditionIndex);
-
-  if (!Number.isInteger(ruleIndex) || !statusRules[ruleIndex]) {
-    return;
-  }
-
-  if (action === 'move-up' && ruleIndex > 0) {
-    [statusRules[ruleIndex - 1], statusRules[ruleIndex]] = [statusRules[ruleIndex], statusRules[ruleIndex - 1]];
-    updateRulesAndRefresh();
-    return;
-  }
-
-  if (action === 'move-down' && ruleIndex < statusRules.length - 1) {
-    [statusRules[ruleIndex + 1], statusRules[ruleIndex]] = [statusRules[ruleIndex], statusRules[ruleIndex + 1]];
-    updateRulesAndRefresh();
-    return;
-  }
-
-  if (action === 'add-condition') {
-    statusRules[ruleIndex].conditions.push({ field: 'problem', operator: 'is_true' });
-    updateRulesAndRefresh();
-    return;
-  }
-
-  if (action === 'remove-condition') {
-    if (statusRules[ruleIndex].conditions.length > 1 && Number.isInteger(conditionIndex)) {
-      statusRules[ruleIndex].conditions.splice(conditionIndex, 1);
-      updateRulesAndRefresh();
-    }
-    return;
-  }
-
-  if (action === 'remove-rule' && statusRules.length > 1) {
-    statusRules.splice(ruleIndex, 1);
-    updateRulesAndRefresh();
-  }
-});
+saveRulesBtn.addEventListener('click', onSaveRulesClick);
 
 init();

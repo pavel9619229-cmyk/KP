@@ -35,15 +35,17 @@
     <section id="rulesPanel" class="rules-panel" hidden aria-label="Редактор правил статусов">
       <div class="rules-panel__header">
         <div>
-          <strong>Правила выбора статуса КП</strong>
-          <p>Правила применяются сверху вниз. Первое совпавшее правило задает итоговый статус.</p>
+          <strong>Правила выбора статуса КП (текст)</strong>
+          <p>Одна строка = одно правило. Формат: <code>условие AND условие -&gt; СТАТУС</code>.</p>
         </div>
         <button id="closeRulesBtn" type="button">Закрыть</button>
       </div>
-      <div id="rulesList" class="rules-list"></div>
+
+      <textarea id="rulesTextInput" class="rules-text-input" rows="12" spellcheck="false" placeholder="invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО"></textarea>
+      <p id="rulesSaveMsg" class="rules-save-msg" aria-live="polite"></p>
+
       <div class="rules-panel__footer">
-        <button id="addRuleBtn" type="button">Добавить правило</button>
-        <button id="resetRulesBtn" type="button">Сбросить по умолчанию</button>
+        <button id="saveRulesBtn" type="button">Сохранить</button>
       </div>
     </section>
 

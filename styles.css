@@ -362,6 +362,39 @@ body.dark .tag {
   margin-top: 16px;
 }
 
+.rules-text-input {
+  margin-top: 16px;
+  min-height: 260px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+
+.rules-save-msg {
+  min-height: 1.2em;
+  margin: 10px 2px 0;
+  color: var(--muted);
+}
+
+.rules-save-msg.is-ok {
+  color: #237a56;
+}
+
+.rules-save-msg.is-error {
+  color: #b34141;
+}
+
+body.dark .rules-text-input {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .rule-card {
   border: 1px solid var(--line);
   border-radius: 16px;

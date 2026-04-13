@@ -46,6 +46,7 @@ SEED_DATA_FILE = os.getenv(
 )
 RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
 RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
+STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
@@ -94,6 +95,28 @@ _shipment_pending_cache = {}
 _refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _render_status_lock = threading.Lock()
+_status_rules_lock = threading.Lock()
+
+DEFAULT_STATUS_RULES_TEXT = """# Формат: условие AND условие -> СТАТУС
+# Допустимые поля:
+# problem, rejected, invoiceCreated, paymentReceived, edoSent,
+# shipmentPending, receiptConfirmed, kpSent, clientFilled,
+# managerFilled, productSpecified
+#
+# Операторы:
+# = true|false (или да|нет)
+# != true|false (или да|нет)
+
+problem = true -> ПРОБЛЕМА
+rejected = true -> ОТКАЗ
+invoiceCreated = true AND paymentReceived = true AND edoSent = true -> ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО
+invoiceCreated = true AND edoSent = true AND paymentReceived != true -> ЖДЕМ ОПЛАТУ
+invoiceCreated = true AND edoSent != true -> ОТПРАВИТЬ В ЭДО
+shipmentPending = true -> ОТГРУЗИТЬ
+receiptConfirmed = true -> КЛИЕНТ ДУМАЕТ
+kpSent = true -> ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП
+clientFilled = true AND managerFilled = true AND productSpecified = true -> ОТПРАВИТЬ КЛИЕНТУ
+"""
 
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
 UNKNOWN_MANAGER_NAME = os.getenv("UNKNOWN_MANAGER_NAME", "НЕ ОПРЕДЕЛЕН")
@@ -141,6 +164,44 @@ def _build_headers() -> dict:
 
 class NewRequestPayload(BaseModel):
     requestText: str = Field(min_length=3, max_length=8000)
+
+
+class StatusRulesPayload(BaseModel):
+    rulesText: str = Field(min_length=1, max_length=40000)
+
+
+def _status_rules_path() -> Path:
+    return Path(STATUS_RULES_FILE)
+
+
+def load_status_rules_text() -> str:
+    path = _status_rules_path()
+    if not path.exists():
+        return DEFAULT_STATUS_RULES_TEXT
+
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        rules_text = str(payload.get("rulesText") or "").strip()
+        return rules_text or DEFAULT_STATUS_RULES_TEXT
+    except Exception as exc:
+        log(f"status rules read failed, using default: {exc}")
+        return DEFAULT_STATUS_RULES_TEXT
+
+
+def save_status_rules_text(rules_text: str) -> None:
+    clean_text = str(rules_text or "").strip()
+    if not clean_text:
+        raise ValueError("rulesText must not be empty")
+
+    path = _status_rules_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "rulesText": clean_text,
+        "updatedAt": datetime.now().isoformat(),
+    }
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 def _escape_odata_literal(value: str) -> str:
@@ -1857,6 +1918,45 @@ async def get_all_kp():
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
     return [format_row_for_client(row) for row in _cached_rows]
+
+
+@app.get("/api/status-rules")
+async def get_status_rules():
+    with _status_rules_lock:
+        rules_text = load_status_rules_text()
+
+    path = _status_rules_path()
+    updated_at = None
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                payload = json.load(f)
+            updated_at = str(payload.get("updatedAt") or "") or None
+    except Exception:
+        updated_at = None
+
+    return {
+        "rulesText": rules_text,
+        "updatedAt": updated_at,
+    }
+
+
+@app.put("/api/status-rules")
+async def put_status_rules(payload: StatusRulesPayload):
+    text = str(payload.rulesText or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="rulesText must not be empty")
+
+    try:
+        with _status_rules_lock:
+            save_status_rules_text(text)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save rules: {exc}")
+
+    return {
+        "ok": True,
+        "updatedAt": datetime.now().isoformat(),
+    }
 
 
 @app.post("/api/kp/new-request")
