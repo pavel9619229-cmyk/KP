@@ -398,3 +398,27 @@ body.light .kp-card__status {
     border-radius: 14px;
   }
 }
+
+@media (max-width: 720px) and (orientation: portrait) {
+  .kp-card__row {
+    grid-template-columns: minmax(88px, 112px) minmax(96px, 120px);
+    gap: 10px 12px;
+    align-items: center;
+  }
+
+  .kp-cell--number,
+  .kp-cell--date {
+    min-width: 0;
+  }
+
+  .kp-cell--date {
+    justify-content: flex-end;
+    text-align: right;
+  }
+
+  .kp-cell--customer,
+  .kp-cell--status,
+  .kp-cell--note {
+    grid-column: 1 / -1;
+  }
+}
