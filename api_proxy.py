@@ -271,32 +271,51 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
     now = datetime.now()
     now_iso = now.replace(microsecond=0).isoformat()
 
-    payload = {
+    status_prefixed_comment = f"{NEW_REQUEST_STATUS_TEXT}\n{normalized_request_text}" if normalized_request_text else NEW_REQUEST_STATUS_TEXT
+
+    base_payload = {
         "Date": now_iso,
         "ДействуетДо": now_iso,
         "ЦенаВключаетНДС": True,
-        "Комментарий": normalized_request_text,
+        "Комментарий": status_prefixed_comment,
         "Контрагент_Key": customer_key,
         "Менеджер_Key": manager_key,
         "Товары": [],
-        "ДополнительныеРеквизиты": [
-            {
-                "Свойство_Key": STATUS_KP_PROPERTY_KEY,
-                "ТекстоваяСтрока": NEW_REQUEST_STATUS_TEXT,
-            }
-        ],
+    }
+
+    payload_with_requisites = dict(base_payload)
+    payload_with_requisites["ДополнительныеРеквизиты"] = [
+        {
+            "Свойство_Key": STATUS_KP_PROPERTY_KEY,
+            "ТекстоваяСтрока": NEW_REQUEST_STATUS_TEXT,
+        }
+    ]
+
+    post_headers = {
+        **headers,
+        "Content-Type": "application/json; charset=utf-8",
     }
 
     resp = requests.post(
         f"{BASE}/{ENTITY}",
-        headers={
-            **headers,
-            "Content-Type": "application/json; charset=utf-8",
-        },
-        json=payload,
+        headers=post_headers,
+        json=payload_with_requisites,
         timeout=20,
         verify=False,
     )
+
+    status_kp_applied = True
+    if resp.status_code not in (200, 201):
+        # Some 1C bases reject writing ДополнительныеРеквизиты during create.
+        # Fallback: create document without requisites but keep NEW_REQUEST marker in comment.
+        status_kp_applied = False
+        resp = requests.post(
+            f"{BASE}/{ENTITY}",
+            headers=post_headers,
+            json=base_payload,
+            timeout=20,
+            verify=False,
+        )
 
     if resp.status_code not in (200, 201):
         raise HTTPException(
@@ -318,6 +337,7 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
         "recognizedCustomer": recognized,
         "manager": UNKNOWN_MANAGER_NAME,
         "statusKp": NEW_REQUEST_STATUS_TEXT,
+        "statusKpApplied": status_kp_applied,
     }
 
 

@@ -99,8 +99,11 @@ submitRequestBtn.addEventListener('click', async () => {
 
     const number = payload?.number ? ` № ${payload.number}` : '';
     const customer = payload?.resolvedCustomerName ? ` · Клиент: ${payload.resolvedCustomerName}` : '';
+    const statusHint = payload?.statusKpApplied === false
+      ? ' · Статус запроса отмечен в комментарии'
+      : '';
     requestStatusMsg.className = 'request-panel__status is-success';
-    requestStatusMsg.textContent = `КП успешно создано${number}${customer}.`;
+    requestStatusMsg.textContent = `КП успешно создано${number}${customer}${statusHint}.`;
     requestTextInput.value = '';
     await refreshData(false);
   } catch (error) {
