@@ -262,7 +262,7 @@ body.light .dashboard-board {
   border: 1px solid var(--line);
   background: var(--bg-soft);
   color: var(--text);
-  border-radius: 18px;
+  border-radius: 12px;
   padding: 14px 18px;
   display: flex;
   align-items: center;
