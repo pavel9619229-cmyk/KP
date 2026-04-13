@@ -1457,22 +1457,28 @@ def fetch_rows_from_odata() -> list:
             if row.get("paymentReceived") is None:
                 row["paymentReceived"] = known.get("paymentReceived")
 
-    enriched = 0
+    extra_enriched = 0
     for index, row in enumerate(rows):
         ref_key = row.get("refKey", "")
         if not ref_key:
             continue
 
-        should_refresh_info = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_customer = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_manager = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_product = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_kp_sent = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_receipt = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_edo = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_rejected = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_problem = index < FORCE_INFO_REFRESH_TOP_ROWS
-        should_refresh_shipment = index < FORCE_INFO_REFRESH_TOP_ROWS
+        in_forced_zone = index < FORCE_INFO_REFRESH_TOP_ROWS
+        # Forced zone: always re-enrich top N rows regardless of cached values.
+        # Beyond forced zone: limited to ENRICH_PER_REFRESH extra enrichments.
+        if not in_forced_zone and extra_enriched >= ENRICH_PER_REFRESH:
+            break
+
+        should_refresh_info = in_forced_zone
+        should_refresh_customer = in_forced_zone
+        should_refresh_manager = in_forced_zone
+        should_refresh_product = in_forced_zone
+        should_refresh_kp_sent = in_forced_zone
+        should_refresh_receipt = in_forced_zone
+        should_refresh_edo = in_forced_zone
+        should_refresh_rejected = in_forced_zone
+        should_refresh_problem = in_forced_zone
+        should_refresh_shipment = in_forced_zone
         # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
@@ -1484,8 +1490,6 @@ def fetch_rows_from_odata() -> list:
         need_rejected = should_refresh_rejected or row.get("rejected") is None
         need_problem = should_refresh_problem or row.get("problem") is None
         need_shipment = should_refresh_shipment or row.get("shipmentPending") is None
-        if enriched >= ENRICH_PER_REFRESH:
-            break
         if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
             continue
 
@@ -1595,7 +1599,8 @@ def fetch_rows_from_odata() -> list:
             if shipment_pending is not None:
                 row["shipmentPending"] = shipment_pending
 
-        enriched += 1
+        if not in_forced_zone:
+            extra_enriched += 1
 
     for row in rows:
         row.pop("refKey", None)
