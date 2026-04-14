@@ -1881,7 +1881,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_kp_sent,
+                use_cache=False,
             )
             if kp_sent is not None:
                 row["kpSent"] = kp_sent
@@ -1891,7 +1891,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_receipt,
+                use_cache=False,
             )
             if receipt_confirmed is not None:
                 row["receiptConfirmed"] = receipt_confirmed
@@ -1901,7 +1901,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_edo,
+                use_cache=False,
             )
             if edo_sent is not None:
                 row["edoSent"] = edo_sent
@@ -1911,7 +1911,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_rejected,
+                use_cache=False,
             )
             if rejected is not None:
                 row["rejected"] = rejected
@@ -1921,7 +1921,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_problem,
+                use_cache=False,
             )
             if problem is not None:
                 row["problem"] = problem
@@ -1931,7 +1931,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_shipment,
+                use_cache=False,
             )
             if shipment_pending is not None:
                 row["shipmentPending"] = shipment_pending
