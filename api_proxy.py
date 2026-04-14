@@ -80,6 +80,7 @@ LIGHT_SELECT_FIELDS = [
 _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
+_last_refresh_error = None
 _last_group_enrich = None
 _customer_name_cache = {}
 _additional_info_cache = {}
@@ -1761,7 +1762,7 @@ def fetch_rows_from_odata() -> list:
 
 
 def refresh_cache_and_file() -> None:
-    global _cached_rows, _cached_fp, _last_refresh
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
     with _refresh_lock:
         try:
@@ -1771,11 +1772,14 @@ def refresh_cache_and_file() -> None:
                 _cached_rows = fetched
                 _cached_fp = rows_fingerprint(fetched)
                 _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                _last_refresh_error = None
                 log(f"refresh success: {len(fetched)} rows")
                 return
 
+            _last_refresh_error = "refresh returned 0 rows"
             log("refresh returned 0 rows, keeping last successful live cache")
         except Exception as exc:
+            _last_refresh_error = str(exc)
             log(f"refresh failed, keeping last successful live cache: {exc}")
 
 
@@ -1844,6 +1848,7 @@ async def healthz():
         "ok": True,
         "rows": len(_cached_rows),
         "lastRefresh": _last_refresh,
+        "lastRefreshError": _last_refresh_error,
     }
 
 
