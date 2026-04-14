@@ -40,10 +40,7 @@ body {
   min-height: 100vh;
   font-family: "Manrope", sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(circle at top right, rgba(127, 146, 255, 0.22), transparent 26%),
-    radial-gradient(circle at left 20%, rgba(39, 156, 114, 0.12), transparent 24%),
-    linear-gradient(180deg, #161d29, var(--bg));
+  background: #000;
 }
 
 body.light {
