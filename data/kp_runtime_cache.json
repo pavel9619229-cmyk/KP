@@ -89,7 +89,7 @@
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
-    "rejected": false,
+    "rejected": true,
     "problem": false,
     "shipmentPending": false,
     "statusKp": "",
