@@ -1705,8 +1705,9 @@ def fetch_rows_from_odata() -> list:
                     status_kp = resolve_status_kp_from_requisites(requisites, headers)
 
                 previous_info = known_row.get("additionalInfoFirstLine", "")
-                if not previous_info:
-                    previous_info = first_line(comment)
+                current_info = first_line(comment)
+                if current_info:
+                    previous_info = current_info
 
                 comment_clean = strip_html(str(comment or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
                 comment_top_lines = comment_clean.split("\n")[:5]
