@@ -1399,7 +1399,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             order_ref = str(item.get("Ref_Key") or "")
             if (
                 order_ref
-                and base_type == "StandardODATA.Document_КоммерческоеПредложениеКлиенту"
+                and base_type.endswith("Document_КоммерческоеПредложениеКлиенту")
                 and base_ref in kp_ref_set
             ):
                 kp_to_orders[base_ref].add(order_ref)
@@ -1441,21 +1441,39 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     payment_pages, payments_complete = _collect_tail_pages(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
-        ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
+        [
+            "Ref_Key",
+            "Date",
+            "ОбъектРасчетов_Key",
+            "ОбъектРасчетов",
+            "ЗаказКлиента",
+            "ЗаказКлиента_Type",
+            "ДокументОснование",
+            "ДокументОснование_Type",
+            "НазначениеПлатежа",
+        ],
     )
     if not payments_complete:
         return
 
     for batch in payment_pages:
         for item in batch:
-            settlement_order = str(item.get("ОбъектРасчетов_Key") or "")
+            settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
             if settlement_order in target_order_refs:
                 payment_order_refs.add(settlement_order)
                 continue
 
+            direct_order = str(item.get("ЗаказКлиента") or "")
+            direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
+            if direct_order in target_order_refs and (
+                not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")
+            ):
+                payment_order_refs.add(direct_order)
+                continue
+
             base_type = str(item.get("ДокументОснование_Type") or "")
             base_ref = str(item.get("ДокументОснование") or "")
-            if base_type == "StandardODATA.Document_ЗаказКлиента" and base_ref in target_order_refs:
+            if base_ref in target_order_refs and base_type.endswith("Document_ЗаказКлиента"):
                 payment_order_refs.add(base_ref)
                 continue
 
@@ -1495,6 +1513,147 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         if kp_ref in kp_ref_set:
             row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
             row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+
+
+def _normalize_kp_number(value: str) -> str:
+    text = str(value or "")
+    text = text.replace("ПСУТ-", "").replace("PSUT-", "")
+    digits = "".join(ch for ch in text if ch.isdigit())
+    return digits.lstrip("0") or digits
+
+
+def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
+    trace: dict = {
+        "kpRef": kp_ref,
+        "orders": [],
+        "payments": [],
+    }
+
+    order_refs: set[str] = set()
+    order_numbers: dict[str, str] = {}
+    order_short_numbers: dict[str, str] = {}
+    order_compact_numbers: dict[str, str] = {}
+
+    order_pages, orders_complete = _collect_tail_pages(
+        "Document_ЗаказКлиента",
+        headers,
+        ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
+    )
+    trace["ordersScanComplete"] = bool(orders_complete)
+    if not orders_complete:
+        return trace
+
+    for batch in order_pages:
+        for item in batch:
+            base_type = str(item.get("ДокументОснование_Type") or "")
+            base_ref = str(item.get("ДокументОснование") or "")
+            order_ref = str(item.get("Ref_Key") or "")
+            if not order_ref:
+                continue
+            if base_ref == kp_ref and base_type.endswith("Document_КоммерческоеПредложениеКлиенту"):
+                order_refs.add(order_ref)
+                number = str(item.get("Number") or "")
+                order_numbers[order_ref] = number
+                digits_trim = "".join(ch for ch in number if ch.isdigit()).lstrip("0")
+                if digits_trim:
+                    order_short_numbers[order_ref] = digits_trim
+                compact = "".join(ch for ch in number.lower() if ch.isalnum())
+                if compact:
+                    order_compact_numbers[order_ref] = compact
+
+    trace["orders"] = [
+        {"ref": ref, "number": order_numbers.get(ref, "")}
+        for ref in sorted(order_refs)
+    ]
+
+    if not order_refs:
+        return trace
+
+    payment_pages, payments_complete = _collect_tail_pages(
+        "Document_ПоступлениеБезналичныхДенежныхСредств",
+        headers,
+        [
+            "Ref_Key",
+            "Date",
+            "Number",
+            "ОбъектРасчетов_Key",
+            "ОбъектРасчетов",
+            "ЗаказКлиента",
+            "ЗаказКлиента_Type",
+            "ДокументОснование",
+            "ДокументОснование_Type",
+            "НазначениеПлатежа",
+        ],
+    )
+    trace["paymentsScanComplete"] = bool(payments_complete)
+    if not payments_complete:
+        return trace
+
+    matched = []
+    for batch in payment_pages:
+        for item in batch:
+            pay_ref = str(item.get("Ref_Key") or "")
+            pay_number = str(item.get("Number") or "")
+            purpose = str(item.get("НазначениеПлатежа") or "")
+            purpose_lower = purpose.lower()
+            purpose_compact = "".join(ch for ch in purpose_lower if ch.isalnum())
+
+            matched_order = ""
+            matched_by = ""
+
+            settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
+            if settlement_order in order_refs:
+                matched_order = settlement_order
+                matched_by = "ОбъектРасчетов"
+
+            if not matched_order:
+                direct_order = str(item.get("ЗаказКлиента") or "")
+                direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
+                if direct_order in order_refs and (
+                    not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")
+                ):
+                    matched_order = direct_order
+                    matched_by = "ЗаказКлиента"
+
+            if not matched_order:
+                base_type = str(item.get("ДокументОснование_Type") or "")
+                base_ref = str(item.get("ДокументОснование") or "")
+                if base_ref in order_refs and base_type.endswith("Document_ЗаказКлиента"):
+                    matched_order = base_ref
+                    matched_by = "ДокументОснование"
+
+            if not matched_order:
+                for order_ref in order_refs:
+                    compact = order_compact_numbers.get(order_ref, "")
+                    if compact and compact in purpose_compact:
+                        matched_order = order_ref
+                        matched_by = "НазначениеПлатежа:compact"
+                        break
+
+            if not matched_order:
+                for order_ref in order_refs:
+                    digits_trim = order_short_numbers.get(order_ref, "")
+                    if not digits_trim:
+                        continue
+                    if re.search(rf"\b(?:[а-яa-z]*ут)[\s\-_/]*0*{re.escape(digits_trim)}\b", purpose_lower):
+                        matched_order = order_ref
+                        matched_by = "НазначениеПлатежа:ut-digits"
+                        break
+
+            if matched_order:
+                matched.append(
+                    {
+                        "paymentRef": pay_ref,
+                        "paymentNumber": pay_number,
+                        "matchedOrderRef": matched_order,
+                        "matchedOrderNumber": order_numbers.get(matched_order, ""),
+                        "matchedBy": matched_by,
+                    }
+                )
+
+    trace["payments"] = matched
+    trace["hasPayment"] = bool(matched)
+    return trace
 
 
 def resolve_customer_name_for_ref(
@@ -2248,6 +2407,42 @@ async def get_all_kp():
         formatted["statusKpComputed"] = _compute_status_for_row(formatted, rules)
         output.append(formatted)
     return output
+
+
+@app.get("/api/debug/kp/{kp_number}/payment-chain")
+async def debug_kp_payment_chain(kp_number: str):
+    normalized_input = _normalize_kp_number(kp_number)
+    if not normalized_input:
+        raise HTTPException(status_code=400, detail="kp_number is required")
+
+    if not _cached_rows:
+        await asyncio.to_thread(refresh_cache_and_file)
+    await trigger_refresh_if_stale()
+
+    target_row = None
+    for row in _cached_rows:
+        if _normalize_kp_number(row.get("number") or "") == normalized_input:
+            target_row = row
+            break
+
+    if not target_row:
+        raise HTTPException(status_code=404, detail=f"KP {kp_number} not found in cache")
+
+    headers = _build_headers()
+    trace = await asyncio.to_thread(_trace_kp_group_chain, str(target_row.get("refKey") or ""), headers)
+
+    return {
+        "ok": True,
+        "inputKpNumber": kp_number,
+        "kp": {
+            "refKey": target_row.get("refKey"),
+            "number": target_row.get("number"),
+            "invoiceCreated": target_row.get("invoiceCreated"),
+            "paymentReceived": target_row.get("paymentReceived"),
+            "statusKp": target_row.get("statusKp"),
+        },
+        "trace": trace,
+    }
 
 
 @app.get("/api/status-rules")
