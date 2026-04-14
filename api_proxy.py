@@ -235,7 +235,7 @@ def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
         log(f"GitHub SHA fetch failed: {exc}")
 
     body: dict = {
-        "message": f"Auto-sync status_rules.json ({updated_at})",
+        "message": f"Auto-sync status_rules.json ({updated_at}) [skip ci]",
         "content": content_b64,
         "branch": GITHUB_BRANCH,
     }
@@ -1532,15 +1532,12 @@ def load_fresh_runtime_rows() -> list:
         log(f"runtime snapshot skipped: cannot read runtime metadata: {exc}")
         return []
 
-    if age_seconds > SEED_MAX_AGE_SECONDS:
-        log(
-            "runtime snapshot skipped: data file is stale "
-            f"({int(age_seconds)}s old, limit {SEED_MAX_AGE_SECONDS}s)"
-        )
-        return []
-
+    # Always load the runtime snapshot regardless of age on startup.
+    # A stale-by-timestamp cache still has enriched flags that are far better
+    # than falling back to the seed file (which has all-null flags).
+    # The background refresh loop will update data immediately after startup.
     rows = load_rows_from_path(path)
-    log(f"runtime snapshot loaded: {len(rows)} rows from fresh cache ({int(age_seconds)}s old)")
+    log(f"runtime snapshot loaded: {len(rows)} rows (age {int(age_seconds)}s)")
     return rows
 
 
