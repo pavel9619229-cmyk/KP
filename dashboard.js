@@ -581,14 +581,16 @@ function renderTabs(counts) {
   const orderedStatuses = getOrderedStatuses(counts);
   const primaryTabs = [
     'ОТКАЗ',
-    'ПРОБЛЕМА',
-    'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
     'ОБРАБОТАТЬ',
     'ОТПРАВИТЬ КЛИЕНТУ',
     'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
     'КЛИЕНТ ДУМАЕТ',
     'ОТГРУЗИТЬ',
     'ОТПРАВИТЬ В ЭДО',
+  ];
+  const forcedTailTabs = [
+    'ПРОБЛЕМА',
+    'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
   ];
 
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
@@ -597,9 +599,13 @@ function renderTabs(counts) {
   }
 
   for (const status of orderedStatuses) {
-    if (!primaryTabs.includes(status)) {
+    if (!primaryTabs.includes(status) && !forcedTailTabs.includes(status)) {
       tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
     }
+  }
+
+  for (const status of forcedTailTabs) {
+    tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
   }
 
   statusTabs.innerHTML = tabs.map((tab) => `
