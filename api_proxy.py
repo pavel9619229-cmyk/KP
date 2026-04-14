@@ -1813,17 +1813,15 @@ def fetch_rows_from_odata() -> list:
         need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
         need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = should_refresh_manager or row.get("managerFilled") is None
-        # Re-check product for rows where it is still not confirmed.
-        # Otherwise False can become sticky for older rows outside forced top-N.
         need_product = should_refresh_product or row.get("productSpecified") is not True
-        need_kp_sent = should_refresh_kp_sent or row.get("kpSent") is not True
-        # Re-check receipt marker for rows where confirmation is still not true.
-        # Otherwise old False can remain stale for rows outside forced top-N.
-        need_receipt = should_refresh_receipt or row.get("receiptConfirmed") is not True
-        need_edo = should_refresh_edo or row.get("edoSent") is not True
-        need_rejected = should_refresh_rejected or row.get("rejected") is not True
-        need_problem = should_refresh_problem or row.get("problem") is not True
-        need_shipment = should_refresh_shipment or row.get("shipmentPending") is not True
+        # Comment-based flags can change in any direction (comment added or deleted),
+        # so always re-check them whenever this row is visited in the enrich cycle.
+        need_kp_sent = True
+        need_receipt = True
+        need_edo = True
+        need_rejected = True
+        need_problem = True
+        need_shipment = True
         if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
             continue
 
