@@ -1890,8 +1890,9 @@ async def on_startup() -> None:
         _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
-    # Always attempt one live refresh on startup so runtime snapshot does not stay authoritative.
-    await asyncio.to_thread(refresh_cache_and_file)
+    # Start refresh loop immediately — first iteration fires right away.
+    # Do NOT await refresh here: blocking startup prevents Render's health-check
+    # from reaching the app, causing the deploy to appear stuck.
     app.state.refresh_task = asyncio.create_task(refresh_loop())
 
 
