@@ -1381,6 +1381,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
     order_short_numbers: dict[str, str] = {}
+    order_compact_numbers: dict[str, str] = {}
 
     order_pages, orders_complete = _collect_tail_pages(
         "Document_ЗаказКлиента",
@@ -1407,6 +1408,9 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 digits_trim = "".join(ch for ch in order_number if ch.isdigit()).lstrip("0")
                 if digits_trim:
                     order_short_numbers[order_ref] = digits_trim
+                compact_number = "".join(ch for ch in order_number.lower() if ch.isalnum())
+                if compact_number:
+                    order_compact_numbers[order_ref] = compact_number
 
     target_order_refs = set(order_to_kp.keys())
     if not target_order_refs:
@@ -1456,14 +1460,20 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 continue
 
             # Fallback for 1C group documents: payment purpose often references short order number.
-            # Match only explicit "ут-<number>" style to avoid broad false positives.
+            # Match compact full order number first (e.g. "ПСУТ-000226" -> "псут000226"),
+            # then explicit "...ут-<number>" style to avoid broad false positives.
             purpose = str(item.get("НазначениеПлатежа") or "").lower()
             if not purpose:
                 continue
+            purpose_compact = "".join(ch for ch in purpose if ch.isalnum())
             for order_ref, digits_trim in order_short_numbers.items():
                 if order_ref in payment_order_refs:
                     continue
-                if re.search(rf"\bут-?0*{re.escape(digits_trim)}\b", purpose):
+                compact_order = order_compact_numbers.get(order_ref, "")
+                if compact_order and compact_order in purpose_compact:
+                    payment_order_refs.add(order_ref)
+                    break
+                if re.search(rf"\b(?:[а-яa-z]*ут)[\s\-_/]*0*{re.escape(digits_trim)}\b", purpose):
                     payment_order_refs.add(order_ref)
                     break
 
