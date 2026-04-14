@@ -585,8 +585,8 @@ function renderTabs(counts) {
     'ОТПРАВИТЬ КЛИЕНТУ',
     'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
     'КЛИЕНТ ДУМАЕТ',
-    'ОТПРАВИТЬ В ЭДО',
     'ОТГРУЗИТЬ',
+    'ОТПРАВИТЬ В ЭДО',
   ];
 
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
@@ -612,10 +612,11 @@ function getTabRowClass(tabKey) {
   if (tabKey === ALL_TAB_KEY || tabKey === 'ОТКАЗ') {
     return 'status-tab--top-pair';
   }
-  if (tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ') {
-    return 'status-tab--second-pair';
-  }
-  if (tabKey === 'КЛИЕНТ ДУМАЕТ' || tabKey === 'ОТПРАВИТЬ В ЭДО') {
+  if (
+    tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ' ||
+    tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП' || tabKey === 'КЛИЕНТ ДУМАЕТ' ||
+    tabKey === 'ОТГРУЗИТЬ' || tabKey === 'ОТПРАВИТЬ В ЭДО'
+  ) {
     return 'status-tab--second-pair';
   }
   return 'status-tab--full';
