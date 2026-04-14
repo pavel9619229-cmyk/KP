@@ -1522,6 +1522,27 @@ def _normalize_kp_number(value: str) -> str:
     return digits.lstrip("0") or digits
 
 
+def _find_kp_ref_by_number(kp_number: str, headers: dict) -> str:
+    target = _normalize_kp_number(kp_number)
+    if not target:
+        return ""
+
+    pages, complete = _collect_tail_pages(
+        ENTITY,
+        headers,
+        ["Ref_Key", "Number", "Date"],
+    )
+    if not complete:
+        return ""
+
+    for batch in pages:
+        for item in batch:
+            number = str(item.get("Number") or "")
+            if _normalize_kp_number(number) == target:
+                return str(item.get("Ref_Key") or "")
+    return ""
+
+
 def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
     trace: dict = {
         "kpRef": kp_ref,
@@ -2213,7 +2234,6 @@ def fetch_rows_from_odata() -> list:
                 row["shipmentPending"] = shipment_pending
 
     for row in rows:
-        row.pop("refKey", None)
         apply_runtime_defaults(row)
 
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
@@ -2429,13 +2449,24 @@ async def debug_kp_payment_chain(kp_number: str):
         raise HTTPException(status_code=404, detail=f"KP {kp_number} not found in cache")
 
     headers = _build_headers()
-    trace = await asyncio.to_thread(_trace_kp_group_chain, str(target_row.get("refKey") or ""), headers)
+    kp_ref = str(target_row.get("refKey") or "").strip()
+    if not kp_ref:
+        kp_ref = await asyncio.to_thread(
+            _find_kp_ref_by_number,
+            str(target_row.get("number") or kp_number),
+            headers,
+        )
+
+    if not kp_ref:
+        raise HTTPException(status_code=404, detail=f"KP {kp_number} refKey not found in 1C")
+
+    trace = await asyncio.to_thread(_trace_kp_group_chain, kp_ref, headers)
 
     return {
         "ok": True,
         "inputKpNumber": kp_number,
         "kp": {
-            "refKey": target_row.get("refKey"),
+            "refKey": kp_ref,
             "number": target_row.get("number"),
             "invoiceCreated": target_row.get("invoiceCreated"),
             "paymentReceived": target_row.get("paymentReceived"),
