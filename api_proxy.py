@@ -2064,7 +2064,8 @@ def refresh_cache_and_file() -> None:
                 _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 _last_refresh_error = None
                 log(f"refresh success: {len(fetched)} rows")
-                _push_runtime_cache_to_github(list(fetched))
+                # Disabled runtime cache auto-push to GitHub: it creates a deploy loop
+                # on Render (new commit -> new deploy -> new commit...).
                 return
 
             _last_refresh_error = "refresh returned 0 rows"
