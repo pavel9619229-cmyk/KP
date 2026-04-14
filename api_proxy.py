@@ -2000,8 +2000,8 @@ async def get_all_kp():
     if not _cached_rows:
         await asyncio.to_thread(refresh_cache_and_file)
     elif _last_refresh is None:
-        # First request after startup should try replacing snapshot data with live enrichment.
-        await asyncio.to_thread(refresh_cache_and_file)
+        # Snapshot is available, so return it immediately and refresh live data in background.
+        await trigger_refresh_if_stale()
     await trigger_refresh_if_stale()
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
