@@ -93,7 +93,7 @@ body {
   margin-top: 20px;
   display: grid;
   gap: 10px;
-  grid-template-columns: 1fr 220px 120px 160px;
+  grid-template-columns: minmax(240px, 1fr) 220px repeat(4, max-content);
 }
 
 .controls label {
@@ -121,6 +121,11 @@ button {
 
 button:hover {
   border-color: rgba(14, 139, 114, 0.35);
+}
+
+#rulesStorageBtn {
+  white-space: nowrap;
+  width: auto;
 }
 
 .panel {
@@ -312,6 +317,11 @@ body.dark .tag {
 @media (max-width: 860px) {
   .controls {
     grid-template-columns: 1fr;
+  }
+
+  #rulesStorageBtn {
+    white-space: normal;
+    width: 100%;
   }
 
   button {
