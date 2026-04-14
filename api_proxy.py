@@ -1040,31 +1040,83 @@ def _iterate_tail_pages(entity_name: str, headers: dict, select_fields: list[str
         skip = max(0, skip - page_size)
 
 
+def _collect_tail_pages(
+    entity_name: str,
+    headers: dict,
+    select_fields: list[str],
+    page_size: int = 200,
+) -> tuple[list[list], bool]:
+    pages: list[list] = []
+    try:
+        response = requests.get(
+            f"{BASE}/{entity_name}/$count",
+            headers=headers,
+            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            verify=False,
+        )
+        if response.status_code != 200:
+            return pages, False
+        total_count = int(response.text.strip())
+    except Exception:
+        return pages, False
+
+    if total_count <= 0:
+        return pages, True
+
+    skip = ((total_count - 1) // page_size) * page_size
+    select_expr = ",".join(select_fields)
+
+    while True:
+        payload, error = _get_json_with_retry(
+            f"{BASE}/{entity_name}",
+            headers,
+            params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
+            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            return pages, False
+
+        batch = payload.get("value", [])
+        if not isinstance(batch, list):
+            return pages, False
+        if not batch:
+            return pages, True
+
+        pages.append(batch)
+
+        batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch if isinstance(item, dict)]
+        batch_dates = [d for d in batch_dates if d is not None]
+        if batch_dates and max(batch_dates) < TARGET_START:
+            return pages, True
+
+        if skip == 0:
+            return pages, True
+        skip = max(0, skip - page_size)
+
+
 def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     target_refs = [str(r.get("refKey") or "") for r in rows]
     target_refs = [r for r in target_refs if r]
     if not target_refs:
         return
 
-    # Recompute flags for all visible KP rows on each group enrichment cycle.
-    # This avoids sticky stale values when links/payments change in 1C over time.
     kp_ref_set = set(target_refs)
-
-    # Start from a clean state each run; set True only when a live match is found.
-    for row in rows:
-        if row.get("refKey") in kp_ref_set:
-            row["invoiceCreated"] = False
-            row["paymentReceived"] = False
 
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
     order_short_numbers: dict[str, str] = {}
 
-    for batch in _iterate_tail_pages(
+    order_pages, orders_complete = _collect_tail_pages(
         "Document_ЗаказКлиента",
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
-    ) or []:
+    )
+    if not orders_complete:
+        # No confirmed fresh data from 1C: preserve current flags.
+        return
+
+    for batch in order_pages:
         for item in batch:
             base_type = str(item.get("ДокументОснование_Type") or "")
             base_ref = str(item.get("ДокументОснование") or "")
@@ -1083,6 +1135,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     target_order_refs = set(order_to_kp.keys())
     if not target_order_refs:
+        # Fresh scan confirmed that no linked orders exist in range.
         for row in rows:
             if row.get("refKey") in kp_ref_set:
                 row["invoiceCreated"] = False
@@ -1090,11 +1143,15 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         return
 
     invoice_order_refs: set[str] = set()
-    for batch in _iterate_tail_pages(
+    invoice_pages, invoices_complete = _collect_tail_pages(
         "Document_РеализацияТоваровУслуг",
         headers,
         ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
-    ) or []:
+    )
+    if not invoices_complete:
+        return
+
+    for batch in invoice_pages:
         for item in batch:
             order_type = str(item.get("ЗаказКлиента_Type") or "")
             order_ref = str(item.get("ЗаказКлиента") or "")
@@ -1102,11 +1159,15 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 invoice_order_refs.add(order_ref)
 
     payment_order_refs: set[str] = set()
-    for batch in _iterate_tail_pages(
+    payment_pages, payments_complete = _collect_tail_pages(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
         ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
-    ) or []:
+    )
+    if not payments_complete:
+        return
+
+    for batch in payment_pages:
         for item in batch:
             settlement_order = str(item.get("ОбъектРасчетов_Key") or "")
             if settlement_order in target_order_refs:
