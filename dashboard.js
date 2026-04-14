@@ -582,13 +582,13 @@ function renderTabs(counts) {
   const primaryTabs = [
     'ОТКАЗ',
     'ПРОБЛЕМА',
+    'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
     'ОБРАБОТАТЬ',
     'ОТПРАВИТЬ КЛИЕНТУ',
     'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
     'КЛИЕНТ ДУМАЕТ',
     'ОТГРУЗИТЬ',
     'ОТПРАВИТЬ В ЭДО',
-    'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
   ];
 
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
@@ -615,6 +615,7 @@ function getTabRowClass(tabKey) {
     return 'status-tab--top-pair';
   }
   if (
+    tabKey === 'ПРОБЛЕМА' || tabKey === 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО' ||
     tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ' ||
     tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП' || tabKey === 'КЛИЕНТ ДУМАЕТ' ||
     tabKey === 'ОТГРУЗИТЬ' || tabKey === 'ОТПРАВИТЬ В ЭДО'
