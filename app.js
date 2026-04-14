@@ -305,7 +305,18 @@ function parseHumanRuleLine(line) {
   const left = String(match[2] || '').trim();
   if (!label || !left) return { error: 'пустой статус или условие' };
 
-  const conditionTokens = left.split(/\s*,\s*|\s+(?:AND|И)\s+/i).map((x) => x.trim()).filter(Boolean);
+  let matchMode = 'all';
+  let conditionsExpr = left;
+  const anyOfMatch = left.match(/^(?:(?:выполнено|выполняется)\s+)?хотя\s*бы\s*одно\s+из\s+условий\s*(?::|-)?\s*(.+)$/i);
+  if (anyOfMatch) {
+    matchMode = 'any';
+    conditionsExpr = String(anyOfMatch[1] || '').trim();
+  }
+
+  const conditionTokens = conditionsExpr
+    .split(matchMode === 'any' ? /\s*,\s*|\s+(?:OR|ИЛИ|AND|И)\s+/i : /\s*,\s*|\s+(?:AND|И)\s+/i)
+    .map((x) => x.trim())
+    .filter(Boolean);
   if (!conditionTokens.length) return { error: 'нет условий после слова "если"' };
 
   const conditions = [];
@@ -315,7 +326,7 @@ function parseHumanRuleLine(line) {
     conditions.push(parsed.condition);
   }
 
-  return { rule: { label, conditions } };
+  return { rule: { label, conditions, matchMode } };
 }
 
 function parseRulesText(text) {
@@ -435,7 +446,11 @@ function matchesRuleCondition(facts, condition) {
 function computeKpStatus(row) {
   const facts = deriveStatusFacts(row);
   for (const rule of statusRules) {
-    if (rule.conditions.every((condition) => matchesRuleCondition(facts, condition))) {
+    const matchMode = rule.matchMode === 'any' ? 'any' : 'all';
+    const isRuleMatched = matchMode === 'any'
+      ? rule.conditions.some((condition) => matchesRuleCondition(facts, condition))
+      : rule.conditions.every((condition) => matchesRuleCondition(facts, condition));
+    if (isRuleMatched) {
       return rule.label;
     }
   }
