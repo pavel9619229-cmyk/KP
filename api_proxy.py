@@ -809,12 +809,13 @@ def _resolve_comment_flag_for_ref(
     if not row:
         return None
 
-    cleaned = strip_html(str(row.get("Комментарий") or "")).replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = strip_html(str(row.get("Комментарий") or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
+    marker_upper = marker.upper()
     if first_lines is not None:
         lines = cleaned.split("\n")[:first_lines]
-        result = any(marker in line for line in lines)
+        result = any(marker_upper in line for line in lines)
     else:
-        result = marker in cleaned
+        result = marker_upper in cleaned
 
     cache[ref_key] = result
     return result
