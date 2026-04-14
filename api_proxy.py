@@ -1708,6 +1708,14 @@ def fetch_rows_from_odata() -> list:
                 if not previous_info:
                     previous_info = first_line(comment)
 
+                comment_clean = strip_html(str(comment or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
+                comment_top_lines = comment_clean.split("\n")[:5]
+                kp_sent_from_comment = any("КП ОТПРАВЛЕНО" in line for line in comment_top_lines)
+                receipt_from_comment = any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top_lines)
+                edo_from_comment = "В ЭДО ОТПРАВЛЕНО" in comment_clean
+                problem_from_comment = "ПРОБЛЕМА" in comment_clean
+                shipment_from_comment = "ОТГРУЗИТЬ" in comment_clean
+
                 product_specified = known_row.get("productSpecified")
                 if product_specified is not True and looks_like_product_hint(previous_info):
                     product_specified = True
@@ -1715,6 +1723,10 @@ def fetch_rows_from_odata() -> list:
                 rejected_flag = known_row.get("rejected")
                 if has_reject_marker(comment, status_kp):
                     rejected_flag = True
+                elif "ОТКАЗ" in comment_clean:
+                    rejected_flag = True
+                else:
+                    rejected_flag = False
 
                 rows.append(
                     {
@@ -1725,12 +1737,12 @@ def fetch_rows_from_odata() -> list:
                         "status": status,
                         "managerFilled": known_row.get("managerFilled"),
                         "productSpecified": product_specified,
-                        "kpSent": known_row.get("kpSent"),
-                        "receiptConfirmed": known_row.get("receiptConfirmed"),
-                        "edoSent": known_row.get("edoSent"),
+                        "kpSent": kp_sent_from_comment,
+                        "receiptConfirmed": receipt_from_comment,
+                        "edoSent": edo_from_comment,
                         "rejected": rejected_flag,
-                        "problem": known_row.get("problem"),
-                        "shipmentPending": known_row.get("shipmentPending"),
+                        "problem": problem_from_comment,
+                        "shipmentPending": shipment_from_comment,
                         "statusKp": status_kp,
                         "additionalInfoFirstLine": previous_info,
                         "invoiceCreated": known_row.get("invoiceCreated"),
@@ -1762,12 +1774,12 @@ def fetch_rows_from_odata() -> list:
         need_info = not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = row.get("managerFilled") is None
         need_product = row.get("productSpecified") is not True
-        need_kp_sent = True
-        need_receipt = True
-        need_edo = True
-        need_rejected = True
-        need_problem = True
-        need_shipment = True
+        need_kp_sent = False
+        need_receipt = False
+        need_edo = False
+        need_rejected = False
+        need_problem = False
+        need_shipment = False
         if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
             continue
 
