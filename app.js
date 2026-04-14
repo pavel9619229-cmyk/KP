@@ -9,6 +9,7 @@ const rulesPanel = document.getElementById('rulesPanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
 const rulesTextInput = document.getElementById('rulesTextInput');
 const rulesStorageLocationsInput = document.getElementById('rulesStorageLocationsInput');
+const enrichStatusLabel = document.getElementById('enrichStatusLabel');
 const saveRulesBtn = document.getElementById('saveRulesBtn');
 const rulesSaveMsg = document.getElementById('rulesSaveMsg');
 
@@ -30,6 +31,19 @@ const WS_RECONNECT_MS = 5000;
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
 const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
 const RULES_STATUS_REPO_FILE_URL = 'https://github.com/pavel9619229-cmyk/KP/blob/main/data/status_rules.json';
+const ENRICHMENT_FLAG_KEYS = [
+  'managerFilled',
+  'productSpecified',
+  'kpSent',
+  'receiptConfirmed',
+  'edoSent',
+  'rejected',
+  'problem',
+  'shipmentPending',
+  'invoiceCreated',
+  'paymentReceived',
+];
+const PRESERVE_ON_NULL_KEYS = [...ENRICHMENT_FLAG_KEYS, 'customerName', 'additionalInfoFirstLine'];
 const RULE_FIELDS = new Set([
   'problem',
   'rejected',
@@ -106,6 +120,83 @@ let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 15;
 let statusRules = createDefaultStatusRules();
+
+function hasMeaningfulValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return true;
+}
+
+function mergeRowsPreservingKnown(nextRows, prevRows) {
+  if (!Array.isArray(nextRows) || !nextRows.length || !Array.isArray(prevRows) || !prevRows.length) {
+    return nextRows;
+  }
+
+  const prevByNumber = new Map(prevRows.map((row) => [String(row?.number || ''), row]));
+  return nextRows.map((row) => {
+    const key = String(row?.number || '');
+    const prev = prevByNumber.get(key);
+    if (!prev) return row;
+
+    const merged = { ...row };
+    for (const field of PRESERVE_ON_NULL_KEYS) {
+      if (!hasMeaningfulValue(merged[field]) && hasMeaningfulValue(prev[field])) {
+        merged[field] = prev[field];
+      }
+    }
+    return merged;
+  });
+}
+
+function getEnrichmentStats(data) {
+  const rowsList = Array.isArray(data) ? data : [];
+  if (!rowsList.length) {
+    return { percent: 100, readyRows: 0, totalRows: 0, unknownFlags: 0 };
+  }
+
+  let readyRows = 0;
+  let knownFlags = 0;
+  let unknownFlags = 0;
+
+  for (const row of rowsList) {
+    let rowReady = true;
+    for (const field of ENRICHMENT_FLAG_KEYS) {
+      const value = row?.[field];
+      if (value === true || value === false) {
+        knownFlags += 1;
+      } else {
+        unknownFlags += 1;
+        rowReady = false;
+      }
+    }
+    if (rowReady) readyRows += 1;
+  }
+
+  const totalFlags = knownFlags + unknownFlags;
+  const percent = totalFlags > 0 ? Math.round((knownFlags / totalFlags) * 100) : 100;
+  return { percent, readyRows, totalRows: rowsList.length, unknownFlags };
+}
+
+function renderEnrichmentStatus(data) {
+  if (!enrichStatusLabel) return;
+
+  const stats = getEnrichmentStats(data);
+  enrichStatusLabel.classList.remove('is-busy', 'is-ready');
+
+  if (!stats.totalRows) {
+    enrichStatusLabel.textContent = 'Ожидание данных...';
+    return;
+  }
+
+  if (stats.unknownFlags > 0) {
+    enrichStatusLabel.classList.add('is-busy');
+    enrichStatusLabel.textContent = `Дообогащение признаков: ${stats.percent}% (${stats.readyRows}/${stats.totalRows} строк готовы)`;
+    return;
+  }
+
+  enrichStatusLabel.classList.add('is-ready');
+  enrichStatusLabel.textContent = `Дообогащение завершено: ${stats.percent}% (${stats.readyRows}/${stats.totalRows} строк)`;
+}
 
 function escapeHtml(text) {
   return String(text)
@@ -662,14 +753,16 @@ function fingerprint(data) {
 }
 
 function setRows(nextRows, syncedAt = null) {
-  const nextFingerprint = fingerprint(nextRows);
+  const mergedRows = mergeRowsPreservingKnown(nextRows, rows);
+  const nextFingerprint = fingerprint(mergedRows);
   if (nextFingerprint !== lastFingerprint) {
-    rows = nextRows;
+    rows = mergedRows;
     lastFingerprint = nextFingerprint;
     fillStatuses(rows);
   }
 
   lastSyncAt = syncedAt || new Date();
+  renderEnrichmentStatus(rows);
   applyFilters();
 }
 

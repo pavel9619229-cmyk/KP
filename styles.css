@@ -138,6 +138,20 @@ button:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.enrich-status {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.enrich-status.is-busy {
+  color: #a66b00;
+}
+
+.enrich-status.is-ready {
+  color: #237a56;
+}
+
 .table-wrap {
   overflow: auto;
   max-width: 100%;

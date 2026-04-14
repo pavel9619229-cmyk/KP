@@ -142,14 +142,6 @@ STORAGE_DEFAULTS = {
 }
 
 RUNTIME_NONE_DEFAULTS = {
-    "managerFilled": True,
-    "productSpecified": False,
-    "kpSent": False,
-    "receiptConfirmed": False,
-    "edoSent": False,
-    "rejected": False,
-    "problem": False,
-    "shipmentPending": False,
 }
 
 
@@ -672,9 +664,6 @@ def apply_storage_defaults(row: dict) -> dict:
 
 def apply_runtime_defaults(row: dict) -> dict:
     row["clientFilled"] = is_client_filled(row.get("customerName"))
-    for key, default_value in RUNTIME_NONE_DEFAULTS.items():
-        if row.get(key) is None:
-            row[key] = default_value
     return row
 
 
