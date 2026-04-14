@@ -8,6 +8,7 @@ const rulesBtn = document.getElementById('rulesBtn');
 const rulesPanel = document.getElementById('rulesPanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
 const rulesTextInput = document.getElementById('rulesTextInput');
+const rulesStorageLocationsInput = document.getElementById('rulesStorageLocationsInput');
 const saveRulesBtn = document.getElementById('saveRulesBtn');
 const rulesSaveMsg = document.getElementById('rulesSaveMsg');
 
@@ -28,6 +29,7 @@ const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
 const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
+const RULES_STATUS_REPO_FILE_URL = 'https://github.com/pavel9619229-cmyk/KP/blob/main/data/status_rules.json';
 const RULE_FIELDS = new Set([
   'problem',
   'rejected',
@@ -235,6 +237,25 @@ function setRulesMessage(text, type = '') {
   rulesSaveMsg.classList.remove('is-ok', 'is-error');
   if (type === 'ok') rulesSaveMsg.classList.add('is-ok');
   if (type === 'error') rulesSaveMsg.classList.add('is-error');
+}
+
+function renderRulesStorageLocations() {
+  if (!rulesStorageLocationsInput) return;
+
+  const origin = window.location.origin;
+  const lines = [
+    '1) После нажатия "Сохранить" актуальная версия записывается сервером в файл:',
+    '   STATUS_RULES_FILE (по умолчанию: data/status_rules.json).',
+    '',
+    '2) API-адрес чтения/проверки актуальной версии после сохранения:',
+    `   ${origin}/api/status-rules`,
+    '   (резервный источник: https://onec-kp-realtime.onrender.com/api/status-rules).',
+    '',
+    '3) Адрес файла в GitHub (становится актуальным после commit + push):',
+    `   ${RULES_STATUS_REPO_FILE_URL}`,
+  ];
+
+  rulesStorageLocationsInput.value = lines.join('\n');
 }
 
 function parseBooleanToken(value) {
@@ -526,6 +547,7 @@ async function onSaveRulesClick() {
     statusRules = parsed.rules;
     fillStatuses(rows);
     applyFilters();
+    renderRulesStorageLocations();
     setRulesMessage('Правила сохранены на сервере.', 'ok');
   } catch (err) {
     setRulesMessage(`Сохранение не удалось: ${err.message}`, 'error');
@@ -700,6 +722,7 @@ function connectWebSocket() {
 }
 
 async function init() {
+  renderRulesStorageLocations();
   await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();

@@ -387,6 +387,26 @@ body.dark .tag {
   color: var(--text);
 }
 
+.rules-storage-block {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.rules-storage-input {
+  min-height: 150px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+}
+
 .rules-save-msg {
   min-height: 1.2em;
   margin: 10px 2px 0;
@@ -402,6 +422,10 @@ body.dark .tag {
 }
 
 body.dark .rules-text-input {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body.dark .rules-storage-input {
   background: rgba(255, 255, 255, 0.04);
 }
 
