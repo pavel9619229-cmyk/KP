@@ -342,7 +342,7 @@
   {
     "number": "ПСУТ-000364",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -362,7 +362,7 @@
   {
     "number": "ПСУТ-000365",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "Павел",
+    "customerName": "руб.",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -1029,7 +1029,7 @@
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
-    "rejected": true,
+    "rejected": false,
     "problem": false,
     "shipmentPending": false,
     "statusKp": "3. ОТКАЗ",
