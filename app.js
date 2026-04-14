@@ -5,7 +5,9 @@ const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
+const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const rulesPanel = document.getElementById('rulesPanel');
+const rulesStoragePanel = document.getElementById('rulesStoragePanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
 const rulesTextInput = document.getElementById('rulesTextInput');
 const rulesStorageLocationsInput = document.getElementById('rulesStorageLocationsInput');
@@ -655,6 +657,18 @@ function closeRulesPanel() {
   rulesBtn.textContent = 'Правила статусов';
 }
 
+function openRulesStoragePanel() {
+  if (!rulesStoragePanel || !rulesStorageBtn) return;
+  rulesStoragePanel.hidden = false;
+  rulesStorageBtn.textContent = 'СКРЫТЬ МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ';
+}
+
+function closeRulesStoragePanel() {
+  if (!rulesStoragePanel || !rulesStorageBtn) return;
+  rulesStoragePanel.hidden = true;
+  rulesStorageBtn.textContent = 'МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ';
+}
+
 function render(data) {
   const synced = lastSyncAt ? ` · обновлено ${lastSyncAt.toLocaleTimeString('ru-RU')}` : '';
   countLabel.textContent = `Показано: ${data.length} из ${rows.length}${synced}`;
@@ -835,6 +849,11 @@ resetBtn.addEventListener('click', () => {
 rulesBtn.addEventListener('click', () => {
   if (rulesPanel.hidden) openRulesPanel();
   else closeRulesPanel();
+});
+
+rulesStorageBtn?.addEventListener('click', () => {
+  if (rulesStoragePanel?.hidden) openRulesStoragePanel();
+  else closeRulesStoragePanel();
 });
 
 closeRulesBtn.addEventListener('click', closeRulesPanel);
