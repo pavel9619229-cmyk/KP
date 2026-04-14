@@ -581,12 +581,14 @@ function renderTabs(counts) {
   const orderedStatuses = getOrderedStatuses(counts);
   const primaryTabs = [
     'ОТКАЗ',
+    'ПРОБЛЕМА',
     'ОБРАБОТАТЬ',
     'ОТПРАВИТЬ КЛИЕНТУ',
     'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
     'КЛИЕНТ ДУМАЕТ',
     'ОТГРУЗИТЬ',
     'ОТПРАВИТЬ В ЭДО',
+    'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
   ];
 
   const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
