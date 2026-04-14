@@ -1320,13 +1320,14 @@ def _collect_tail_pages(
     headers: dict,
     select_fields: list[str],
     page_size: int = 200,
+    timeout: float = GROUP_CHECK_TIMEOUT_SECONDS,
 ) -> tuple[list[list], bool]:
     pages: list[list] = []
     try:
         response = requests.get(
             f"{BASE}/{entity_name}/$count",
             headers=headers,
-            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            timeout=timeout,
             verify=False,
         )
         if response.status_code != 200:
@@ -1346,7 +1347,7 @@ def _collect_tail_pages(
             f"{BASE}/{entity_name}",
             headers,
             params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
-            timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+            timeout=timeout,
             retries=2,
         )
         if error or not isinstance(payload, dict):
@@ -1368,6 +1369,33 @@ def _collect_tail_pages(
         if skip == 0:
             return pages, True
         skip = max(0, skip - page_size)
+
+
+def _collect_tail_pages_with_field_fallback(
+    entity_name: str,
+    headers: dict,
+    select_field_candidates: list[list[str]],
+    page_size: int = 200,
+    timeout: float = GROUP_CHECK_TIMEOUT_SECONDS,
+) -> tuple[list[list], bool, list[str]]:
+    best_pages: list[list] = []
+    best_fields: list[str] = []
+
+    for fields in select_field_candidates:
+        pages, complete = _collect_tail_pages(
+            entity_name,
+            headers,
+            fields,
+            page_size=page_size,
+            timeout=timeout,
+        )
+        if complete:
+            return pages, True, fields
+        if len(pages) > len(best_pages):
+            best_pages = pages
+            best_fields = fields
+
+    return best_pages, False, best_fields
 
 
 def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
@@ -1438,22 +1466,18 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 invoice_order_refs.add(order_ref)
 
     payment_order_refs: set[str] = set()
-    payment_pages, payments_complete = _collect_tail_pages(
+    payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
         [
-            "Ref_Key",
-            "Date",
-            "ОбъектРасчетов_Key",
-            "ОбъектРасчетов",
-            "ЗаказКлиента",
-            "ЗаказКлиента_Type",
-            "ДокументОснование",
-            "ДокументОснование_Type",
-            "НазначениеПлатежа",
+            ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
+            ["Ref_Key", "Date", "ОбъектРасчетов", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
+            ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
+            ["Ref_Key", "Date", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
         ],
+        timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
     )
-    if not payments_complete:
+    if not payments_complete and not payment_pages:
         return
 
     for batch in payment_pages:
@@ -1512,7 +1536,11 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         kp_ref = row.get("refKey")
         if kp_ref in kp_ref_set:
             row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
-            row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+            if payments_complete:
+                row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+            elif kp_payment_map.get(kp_ref, False):
+                # Partial payment scan: only upgrade to True; do not force False.
+                row["paymentReceived"] = True
 
 
 def _normalize_kp_number(value: str) -> str:
@@ -1590,24 +1618,52 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
     if not order_refs:
         return trace
 
-    payment_pages, payments_complete = _collect_tail_pages(
+    payment_pages, payments_complete, payment_select_fields = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
         [
-            "Ref_Key",
-            "Date",
-            "Number",
-            "ОбъектРасчетов_Key",
-            "ОбъектРасчетов",
-            "ЗаказКлиента",
-            "ЗаказКлиента_Type",
-            "ДокументОснование",
-            "ДокументОснование_Type",
-            "НазначениеПлатежа",
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ОбъектРасчетов_Key",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ОбъектРасчетов",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ЗаказКлиента",
+                "ЗаказКлиента_Type",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+            ],
         ],
+        timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
     )
     trace["paymentsScanComplete"] = bool(payments_complete)
-    if not payments_complete:
+    trace["paymentsSelectFields"] = payment_select_fields
+    if not payments_complete and not payment_pages:
         return trace
 
     matched = []
