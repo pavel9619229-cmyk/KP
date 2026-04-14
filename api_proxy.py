@@ -326,6 +326,155 @@ def save_status_rules_text(rules_text: str) -> None:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+DEFAULT_FALLBACK_STATUS = "ОБРАБОТАТЬ"
+RULE_FIELD_ALIASES = {
+    "проблема": "problem",
+    "отказ": "rejected",
+    "накладнаясоздана": "invoiceCreated",
+    "оплатаполучена": "paymentReceived",
+    "вэдоотправлено": "edoSent",
+    "отгрузить": "shipmentPending",
+    "клиенткпувидел": "receiptConfirmed",
+    "кпотправлено": "kpSent",
+    "клиентзаполнен": "clientFilled",
+    "менеджерзаполнен": "managerFilled",
+    "товаруказан": "productSpecified",
+}
+
+
+def _normalize_rule_field_name(value: str) -> str:
+    normalized = str(value or "").strip().lower().replace("ё", "е")
+    return re.sub(r"[^a-zа-я0-9]", "", normalized)
+
+
+def _parse_bool_token(value: str) -> bool | None:
+    v = str(value or "").strip().lower()
+    if v in {"true", "1", "yes", "y", "да"}:
+        return True
+    if v in {"false", "0", "no", "n", "нет"}:
+        return False
+    return None
+
+
+def _parse_condition_token(token: str) -> dict | None:
+    raw = str(token or "").strip()
+    human_match = re.match(r"^(.+?)\s*[-:=]\s*(.+)$", raw, flags=re.IGNORECASE)
+    if human_match:
+        field_name = _normalize_rule_field_name(human_match.group(1))
+        field = RULE_FIELD_ALIASES.get(field_name)
+        if not field:
+            return None
+        bool_value = _parse_bool_token(human_match.group(2))
+        if bool_value is None:
+            return None
+        return {"field": field, "operator": "is_true" if bool_value else "is_false"}
+
+    tech_match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=)\s*(.+)$", raw)
+    if not tech_match:
+        return None
+    field = RULE_FIELD_ALIASES.get(_normalize_rule_field_name(tech_match.group(1)))
+    if not field:
+        return None
+    bool_value = _parse_bool_token(tech_match.group(3))
+    if bool_value is None:
+        return None
+    if tech_match.group(2) == "=" and bool_value:
+        operator = "is_true"
+    elif tech_match.group(2) == "=" and not bool_value:
+        operator = "is_false"
+    elif tech_match.group(2) == "!=" and bool_value:
+        operator = "is_not_true"
+    else:
+        operator = "is_not_false"
+    return {"field": field, "operator": operator}
+
+
+def _parse_status_rules_text(rules_text: str) -> list[dict]:
+    rules: list[dict] = []
+    for raw_line in str(rules_text or "").replace("\r\n", "\n").split("\n"):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        match = re.match(r"^статус\s+(.+?)\s+устанавливается,\s*если\s+(.+)$", line, flags=re.IGNORECASE)
+        if match:
+            label = str(match.group(1) or "").strip()
+            left = str(match.group(2) or "").strip()
+            if not label or not left:
+                continue
+
+            match_mode = "all"
+            any_of = re.match(r"^(?:(?:выполнено|выполняется)\s+)?хотя\s*бы\s*одно\s+из\s+условий\s*(?::|-)?\s*(.+)$", left, flags=re.IGNORECASE)
+            if any_of:
+                match_mode = "any"
+                left = str(any_of.group(1) or "").strip()
+
+            splitter = r"\s*,\s*|\s+(?:OR|ИЛИ|AND|И)\s+" if match_mode == "any" else r"\s*,\s*|\s+(?:AND|И)\s+"
+            tokens = [x.strip() for x in re.split(splitter, left, flags=re.IGNORECASE) if x.strip()]
+            conditions = []
+            for token in tokens:
+                cond = _parse_condition_token(token)
+                if cond is not None:
+                    conditions.append(cond)
+            if conditions:
+                rules.append({"label": label, "conditions": conditions, "matchMode": match_mode})
+            continue
+
+        if "->" in line:
+            parts = line.split("->")
+            left = parts[0].strip()
+            label = "->".join(parts[1:]).strip()
+            tokens = [x.strip() for x in re.split(r"\s+(?:AND|И)\s+", left, flags=re.IGNORECASE) if x.strip()]
+            conditions = []
+            for token in tokens:
+                cond = _parse_condition_token(token)
+                if cond is not None:
+                    conditions.append(cond)
+            if label and conditions:
+                rules.append({"label": label, "conditions": conditions, "matchMode": "all"})
+
+    return rules
+
+
+def _matches_condition(facts: dict, condition: dict) -> bool:
+    value = facts.get(condition.get("field"))
+    operator = condition.get("operator")
+    if operator == "is_true":
+        return value is True
+    if operator == "is_false":
+        return value is False
+    if operator == "is_not_true":
+        return value is not True
+    if operator == "is_not_false":
+        return value is not False
+    return False
+
+
+def _compute_status_for_row(row: dict, rules: list[dict]) -> str:
+    facts = {
+        "problem": row.get("problem"),
+        "rejected": row.get("rejected"),
+        "invoiceCreated": row.get("invoiceCreated"),
+        "paymentReceived": row.get("paymentReceived"),
+        "edoSent": row.get("edoSent"),
+        "shipmentPending": row.get("shipmentPending"),
+        "receiptConfirmed": row.get("receiptConfirmed"),
+        "kpSent": row.get("kpSent"),
+        "clientFilled": row.get("clientFilled"),
+        "managerFilled": row.get("managerFilled"),
+        "productSpecified": row.get("productSpecified"),
+    }
+    for rule in rules:
+        conditions = rule.get("conditions") or []
+        if not conditions:
+            continue
+        match_mode = "any" if str(rule.get("matchMode") or "").lower() == "any" else "all"
+        is_matched = any(_matches_condition(facts, c) for c in conditions) if match_mode == "any" else all(_matches_condition(facts, c) for c in conditions)
+        if is_matched:
+            return str(rule.get("label") or "").strip() or DEFAULT_FALLBACK_STATUS
+    return DEFAULT_FALLBACK_STATUS
+
+
 def _escape_odata_literal(value: str) -> str:
     return str(value).replace("'", "''")
 
@@ -2077,7 +2226,17 @@ async def get_all_kp():
     await trigger_refresh_if_stale()
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
-    return [format_row_for_client(row) for row in _cached_rows]
+
+    with _status_rules_lock:
+        rules_text = load_status_rules_text()
+    rules = _parse_status_rules_text(rules_text)
+
+    output = []
+    for row in _cached_rows:
+        formatted = format_row_for_client(row)
+        formatted["statusKpComputed"] = _compute_status_for_row(formatted, rules)
+        output.append(formatted)
+    return output
 
 
 @app.get("/api/status-rules")

@@ -558,6 +558,8 @@ function matchesRuleCondition(facts, condition) {
 }
 
 function computeKpStatus(row) {
+  const serverComputed = String(row?.statusKpComputed || '').trim();
+  if (serverComputed) return serverComputed;
   const facts = deriveStatusFacts(row);
   for (const rule of statusRules) {
     const matchMode = rule.matchMode === 'any' ? 'any' : 'all';
