@@ -65,6 +65,15 @@ RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
+APP_COMMIT_SHA = (
+    os.getenv("RENDER_GIT_COMMIT", "").strip()
+    or os.getenv("GIT_COMMIT", "").strip()
+    or os.getenv("COMMIT_SHA", "").strip()
+)
+APP_BRANCH = (
+    os.getenv("RENDER_GIT_BRANCH", "").strip()
+    or os.getenv("GIT_BRANCH", "").strip()
+)
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
@@ -1910,6 +1919,16 @@ async def healthz():
         "rows": len(_cached_rows),
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
+    }
+
+
+@app.get("/version")
+async def version():
+    return {
+        "ok": True,
+        "commit": APP_COMMIT_SHA or None,
+        "branch": APP_BRANCH or None,
+        "startedAt": _last_refresh,
     }
 
 
