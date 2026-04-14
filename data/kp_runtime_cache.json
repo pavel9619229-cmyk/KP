@@ -47,7 +47,7 @@
     "managerFilled": true,
     "productSpecified": true,
     "kpSent": false,
-    "receiptConfirmed": false,
+    "receiptConfirmed": true,
     "edoSent": false,
     "rejected": false,
     "problem": false,
