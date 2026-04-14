@@ -104,7 +104,7 @@ body.light .updated-at-inline {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px 96px 14px 18px;
+  padding: 14px 212px 14px 18px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   outline: none;
@@ -119,9 +119,11 @@ body.light .updated-at-inline {
   background: rgba(255, 255, 255, 0.08);
   color: var(--muted);
   border-radius: 10px;
+  width: 180px;
   padding: 6px 10px;
-  font-size: 0.76rem;
+  font-size: 0.912rem;
   line-height: 1;
+  text-align: center;
   cursor: pointer;
 }
 
