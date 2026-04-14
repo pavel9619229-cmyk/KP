@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta
 from html import unescape
 from pathlib import Path
+from typing import Optional
 
 import requests
 import urllib3
@@ -109,6 +110,8 @@ _problem_cache = {}
 _shipment_pending_cache = {}
 _refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
+_last_cache_push: Optional[datetime] = None
+CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 _enrich_cursor = 0
@@ -250,6 +253,62 @@ def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
             log(f"GitHub push failed: HTTP {resp.status_code}: {resp.text[:300]}")
     except Exception as exc:
         log(f"GitHub push error: {exc}")
+
+
+def _push_runtime_cache_to_github(rows: list) -> None:
+    """Push kp_runtime_cache.json + kp_runtime_meta.json to GitHub so enriched
+    data survives the next Render deploy. Throttled to once per hour. [skip ci]."""
+    global _last_cache_push
+
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return
+
+    now = datetime.now()
+    if _last_cache_push and (now - _last_cache_push).total_seconds() < CACHE_PUSH_MIN_INTERVAL:
+        return  # throttled
+
+    gh_headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    def _push_one(file_path: str, content_bytes: bytes, label: str) -> None:
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+        content_b64 = base64.b64encode(content_bytes).decode("ascii")
+        current_sha = ""
+        try:
+            r = requests.get(api_url, headers=gh_headers, params={"ref": GITHUB_BRANCH}, timeout=10)
+            if r.status_code == 200:
+                current_sha = str(r.json().get("sha") or "")
+        except Exception as exc:
+            log(f"GitHub SHA fetch failed ({label}): {exc}")
+        ts = now.strftime("%Y-%m-%dT%H:%M:%S")
+        body: dict = {
+            "message": f"Auto-sync {label} ({ts}) [skip ci]",
+            "content": content_b64,
+            "branch": GITHUB_BRANCH,
+        }
+        if current_sha:
+            body["sha"] = current_sha
+        try:
+            r = requests.put(api_url, headers=gh_headers, json=body, timeout=20)
+            if r.status_code in (200, 201):
+                log(f"GitHub cache push OK: {label}")
+            else:
+                log(f"GitHub cache push failed ({label}): HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as exc:
+            log(f"GitHub cache push error ({label}): {exc}")
+
+    try:
+        cache_bytes = json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8")
+        _push_one("data/kp_runtime_cache.json", cache_bytes, "kp_runtime_cache.json")
+        meta = {"generatedAt": now.isoformat(), "rowCount": len(rows)}
+        meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode("utf-8")
+        _push_one("data/kp_runtime_meta.json", meta_bytes, "kp_runtime_meta.json")
+        _last_cache_push = now
+    except Exception as exc:
+        log(f"GitHub cache push unexpected error: {exc}")
 
 
 def save_status_rules_text(rules_text: str) -> None:
@@ -1898,6 +1957,7 @@ def refresh_cache_and_file() -> None:
                 _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 _last_refresh_error = None
                 log(f"refresh success: {len(fetched)} rows")
+                _push_runtime_cache_to_github(list(fetched))
                 return
 
             _last_refresh_error = "refresh returned 0 rows"
