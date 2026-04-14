@@ -65,6 +65,10 @@ RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+GITHUB_REPO = os.getenv("GITHUB_REPO", "pavel9619229-cmyk/KP").strip()
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main").strip()
+GITHUB_RULES_PATH = os.getenv("GITHUB_RULES_PATH", "data/status_rules.json").strip()
 APP_COMMIT_SHA = (
     os.getenv("RENDER_GIT_COMMIT", "").strip()
     or os.getenv("GIT_COMMIT", "").strip()
@@ -193,6 +197,59 @@ def load_status_rules_text() -> str:
     except Exception as exc:
         log(f"status rules read failed, using default: {exc}")
         return _effective_default_rules()
+
+
+def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
+    """Push data/status_rules.json to GitHub via Contents API so the file
+    survives the next Render deploy. Runs in a background thread."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        log("GitHub push skipped: GITHUB_TOKEN or GITHUB_REPO not set")
+        return
+
+    payload = {
+        "rulesText": rules_text,
+        "updatedAt": updated_at,
+    }
+    content_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    content_b64 = base64.b64encode(content_bytes).decode("ascii")
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_RULES_PATH}"
+    gh_headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    # Get current file SHA (required for update)
+    current_sha = ""
+    try:
+        resp = requests.get(
+            api_url,
+            headers=gh_headers,
+            params={"ref": GITHUB_BRANCH},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            current_sha = str(resp.json().get("sha") or "")
+    except Exception as exc:
+        log(f"GitHub SHA fetch failed: {exc}")
+
+    body: dict = {
+        "message": f"Auto-sync status_rules.json ({updated_at})",
+        "content": content_b64,
+        "branch": GITHUB_BRANCH,
+    }
+    if current_sha:
+        body["sha"] = current_sha
+
+    try:
+        resp = requests.put(api_url, headers=gh_headers, json=body, timeout=15)
+        if resp.status_code in (200, 201):
+            log(f"GitHub push OK: {GITHUB_REPO}/{GITHUB_RULES_PATH}")
+        else:
+            log(f"GitHub push failed: HTTP {resp.status_code}: {resp.text[:300]}")
+    except Exception as exc:
+        log(f"GitHub push error: {exc}")
 
 
 def save_status_rules_text(rules_text: str) -> None:
@@ -2035,15 +2092,19 @@ async def put_status_rules(payload: StatusRulesPayload):
     if not text:
         raise HTTPException(status_code=400, detail="rulesText must not be empty")
 
+    updated_at = datetime.now().isoformat()
     try:
         with _status_rules_lock:
             save_status_rules_text(text)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save rules: {exc}")
 
+    # Push to GitHub in background so it survives the next deploy
+    asyncio.create_task(asyncio.to_thread(_push_rules_to_github, text, updated_at))
+
     return {
         "ok": True,
-        "updatedAt": datetime.now().isoformat(),
+        "updatedAt": updated_at,
     }
 
 
