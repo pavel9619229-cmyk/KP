@@ -589,6 +589,7 @@ function renderTabs(counts) {
     'КЛИЕНТ ДУМАЕТ',
     'ОТГРУЗИТЬ',
     'ОТПРАВИТЬ В ЭДО',
+    'ЖДЕМ ОПЛАТУ',
   ];
   const forcedTailTabs = [
     'ПРОБЛЕМА',
@@ -622,11 +623,13 @@ function getTabRowClass(tabKey) {
   if (tabKey === ALL_TAB_KEY || tabKey === 'ОТКАЗ') {
     return 'status-tab--top-pair';
   }
+  if (tabKey === 'ОТГРУЗИТЬ' || tabKey === 'ОТПРАВИТЬ В ЭДО' || tabKey === 'ЖДЕМ ОПЛАТУ') {
+    return 'status-tab--triple';
+  }
   if (
     tabKey === 'ПРОБЛЕМА' || tabKey === 'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО' ||
     tabKey === 'ОБРАБОТАТЬ' || tabKey === 'ОТПРАВИТЬ КЛИЕНТУ' ||
-    tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП' || tabKey === 'КЛИЕНТ ДУМАЕТ' ||
-    tabKey === 'ОТГРУЗИТЬ' || tabKey === 'ОТПРАВИТЬ В ЭДО'
+    tabKey === 'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП' || tabKey === 'КЛИЕНТ ДУМАЕТ'
   ) {
     return 'status-tab--second-pair';
   }
