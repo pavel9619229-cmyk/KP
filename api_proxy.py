@@ -1635,7 +1635,6 @@ def get_total_count(headers: dict) -> int:
 
 
 def fetch_rows_from_odata() -> list:
-    global _enrich_cursor
     headers = _build_headers()
     known_rows = build_known_rows_lookup()
 
@@ -1754,68 +1753,15 @@ def fetch_rows_from_odata() -> list:
     _enrich_group_flags_bulk(rows, headers)
     _last_group_enrich = datetime.now()
 
-    forced_limit = min(FORCE_INFO_REFRESH_TOP_ROWS, len(rows))
-    priority_indices = []
-    regular_indices = []
-    for idx in range(forced_limit, len(rows)):
-        candidate = rows[idx]
-        if not (candidate.get("customerName") or "").strip():
-            priority_indices.append(idx)
-        else:
-            regular_indices.append(idx)
-
-    # Avoid starvation on either side: interleave newest and oldest empty-customer rows.
-    # This keeps both recent and older blanks progressing under fixed budget.
-    balanced_priority_indices = []
-    left = 0
-    right = len(priority_indices) - 1
-    while left <= right:
-        balanced_priority_indices.append(priority_indices[left])
-        if left != right:
-            balanced_priority_indices.append(priority_indices[right])
-        left += 1
-        right -= 1
-
-    # Always process empty-customer rows so missing clients are filled promptly.
-    # Keep ENRICH_PER_REFRESH budget only for regular (non-priority) rows.
-    selected_regular_indices = []
-    if regular_indices:
-        take = min(ENRICH_PER_REFRESH, len(regular_indices))
-        start = _enrich_cursor % len(regular_indices)
-        selected_regular_indices = [
-            regular_indices[(start + i) % len(regular_indices)] for i in range(take)
-        ]
-        _enrich_cursor = (start + take) % len(regular_indices)
-    else:
-        _enrich_cursor = 0
-
-    enrich_indices = list(range(forced_limit)) + balanced_priority_indices + selected_regular_indices
-
-    for index in enrich_indices:
-        row = rows[index]
+    for index, row in enumerate(rows):
         ref_key = row.get("refKey", "")
         if not ref_key:
             continue
 
-        in_forced_zone = index < FORCE_INFO_REFRESH_TOP_ROWS
-
-        should_refresh_info = in_forced_zone
-        should_refresh_customer = in_forced_zone or not (row.get("customerName") or "").strip()
-        should_refresh_manager = in_forced_zone
-        should_refresh_product = in_forced_zone
-        should_refresh_kp_sent = in_forced_zone
-        should_refresh_receipt = in_forced_zone
-        should_refresh_edo = in_forced_zone
-        should_refresh_rejected = in_forced_zone
-        should_refresh_problem = in_forced_zone
-        should_refresh_shipment = in_forced_zone
-        # Also re-enrich if requisites changed (customerName/additionalInfo were cleared above)
-        need_customer = should_refresh_customer or not (row.get("customerName") or "").strip()
-        need_info = should_refresh_info or not (row.get("additionalInfoFirstLine") or "").strip()
-        need_manager = should_refresh_manager or row.get("managerFilled") is None
-        need_product = should_refresh_product or row.get("productSpecified") is not True
-        # Comment-based flags can change in any direction (comment added or deleted),
-        # so always re-check them whenever this row is visited in the enrich cycle.
+        need_customer = not (row.get("customerName") or "").strip()
+        need_info = not (row.get("additionalInfoFirstLine") or "").strip()
+        need_manager = row.get("managerFilled") is None
+        need_product = row.get("productSpecified") is not True
         need_kp_sent = True
         need_receipt = True
         need_edo = True
@@ -1836,7 +1782,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_info,
+                use_cache=True,
             )
             if line:
                 row["additionalInfoFirstLine"] = line
@@ -1846,7 +1792,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_customer,
+                use_cache=True,
             )
             if customer:
                 row["customerName"] = customer
@@ -1856,7 +1802,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_manager,
+                use_cache=True,
             )
             if manager_filled is not None:
                 row["managerFilled"] = manager_filled
@@ -1866,7 +1812,7 @@ def fetch_rows_from_odata() -> list:
                 ref_key,
                 headers,
                 doc=doc,
-                use_cache=not should_refresh_product,
+                use_cache=True,
             )
             if product_specified is not True and looks_like_product_hint(
                 row.get("additionalInfoFirstLine") or doc.get("ДополнительнаяИнформация") or doc.get("Комментарий")
