@@ -184,7 +184,7 @@
     "createdAt": "2026-04-13 14:33:54",
     "customerName": "НЕ ОПРЕДЕЛЕН",
     "status": "Черновик",
-    "managerFilled": false,
+    "managerFilled": true,
     "productSpecified": false,
     "kpSent": false,
     "receiptConfirmed": false,
@@ -282,7 +282,7 @@
   {
     "number": "ПСУТ-000361",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -362,7 +362,7 @@
   {
     "number": "ПСУТ-000365",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
