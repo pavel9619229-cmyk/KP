@@ -322,7 +322,7 @@
   {
     "number": "ПСУТ-000364",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -382,7 +382,7 @@
   {
     "number": "ПСУТ-000367",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "Павел",
+    "customerName": "руб.",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -1002,10 +1002,10 @@
   {
     "number": "ПСУТ-000327",
     "createdAt": "2026-04-08 18:33:32",
-    "customerName": "",
+    "customerName": "АКРОН ХОЛДИНГ скидк (г.Тольятти)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1017,15 +1017,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "d9f7eb18a2",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000322",
     "createdAt": "2026-04-08 18:25:02",
-    "customerName": "",
+    "customerName": "СЕРВИС ПОГРУЗЧИКОВ парт (г.Лосино-Петровский)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1034,18 +1034,18 @@
     "shipmentPending": false,
     "statusKp": "1. ОБРАБОТАТЬ И ОТПРАВИТЬ КП",
     "additionalInfoFirstLine": "павел - 2026-04-09 - счет отправлен татьяне бирюковой",
-    "invoiceCreated": false,
+    "invoiceCreated": true,
     "paymentReceived": false,
     "statusHash": "acecf16456",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000326",
     "createdAt": "2026-04-08 17:55:51",
-    "customerName": "",
+    "customerName": "СТРОЙПРОЕКТСЕРВИС дил (Ленинградская обл.)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1057,15 +1057,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "81be330d86",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000325",
     "createdAt": "2026-04-08 17:49:44",
-    "customerName": "",
+    "customerName": "РСТ ГРУПП парт (г.Нижний Новгород)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1077,15 +1077,15 @@
     "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "9014f6ae18",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000324",
     "createdAt": "2026-04-08 17:42:39",
-    "customerName": "",
+    "customerName": "РК ТЕХ дил (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1097,15 +1097,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "7d59f30f97",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000323",
     "createdAt": "2026-04-08 15:54:00",
-    "customerName": "",
+    "customerName": "ПРОМАКТИВ ООО (Смоленск) конечник",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1117,15 +1117,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "33318b1aa5",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000318",
     "createdAt": "2026-04-08 13:07:46",
-    "customerName": "",
+    "customerName": "ПМЗ (Петербургский машиностроительный завод) (ГК ИнвестТехМаш )",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1137,15 +1137,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "06c8cac8b2",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000316",
     "createdAt": "2026-04-08 13:04:19",
-    "customerName": "",
+    "customerName": "АРМА ТАЙРС парт (г.Москва, г.Одинцово)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1157,15 +1157,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "fd9a360b7a",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000320",
     "createdAt": "2026-04-08 13:00:39",
-    "customerName": "",
+    "customerName": "Универсал-Коломна плюс  (Универсал Коломна)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1177,12 +1177,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "82717b60ba",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000319",
     "createdAt": "2026-04-08 12:49:08",
-    "customerName": "",
+    "customerName": "СПЕЦКАР СЕРВИС дил (г.Тула)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1197,15 +1197,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "3eff7c4ca3",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000321",
     "createdAt": "2026-04-08 12:44:21",
-    "customerName": "",
+    "customerName": "ИМСС (ИНЖМОНТАЖСПЕЦСТРОЙ, г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1217,17 +1217,17 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "394a39ff86",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000317",
     "createdAt": "2026-04-08 10:27:06",
-    "customerName": "",
+    "customerName": "ЕС-СЕРВИС (г. Екатеринбург)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
-    "receiptConfirmed": false,
+    "receiptConfirmed": true,
     "edoSent": false,
     "rejected": false,
     "problem": false,
@@ -1237,12 +1237,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000315",
     "createdAt": "2026-04-08 10:04:29",
-    "customerName": "",
+    "customerName": "ПКФ ВАЙЯ дил (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -1257,15 +1257,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "43253a5891",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000314",
     "createdAt": "2026-04-07 16:44:16",
-    "customerName": "",
+    "customerName": "МБВ (МБ ВОЛОГДА) дил (г. Вологда)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1277,15 +1277,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000313",
     "createdAt": "2026-04-07 16:10:21",
-    "customerName": "",
+    "customerName": "СТАВАВТОДОР ГБУ СК (торги)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1297,15 +1297,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "9cf21a3077",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000309",
     "createdAt": "2026-04-07 14:02:49",
-    "customerName": "",
+    "customerName": "ПЗТП (ПЕНЗЕНСКИЙ ЗАВОД ТОЧНЫХ ПРИБОРОВ)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1317,15 +1317,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000312",
     "createdAt": "2026-04-07 13:42:05",
-    "customerName": "",
+    "customerName": "ДОРХАН 21 ВЕК - НОВОСИБИРСК скидк",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1337,12 +1337,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "4449cc9300",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000311",
     "createdAt": "2026-04-07 12:45:55",
-    "customerName": "",
+    "customerName": "Прайдекс Констракшн  (Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1357,15 +1357,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "50deb15681",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000310",
     "createdAt": "2026-04-07 12:00:35",
-    "customerName": "",
+    "customerName": "АЭРОДОРСНАБ дил (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1377,15 +1377,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "a6db7ac183",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000308",
     "createdAt": "2026-04-06 16:55:54",
-    "customerName": "",
+    "customerName": "МОНТАЖ-ПРОЕКТ дил (Белоруссия)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1397,12 +1397,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "5bf7ae694c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000307",
     "createdAt": "2026-04-06 11:16:01",
-    "customerName": "",
+    "customerName": "УК ВОЛМА ( г. Волгоград)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -1417,12 +1417,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000306",
     "createdAt": "2026-04-06 10:26:02",
-    "customerName": "",
+    "customerName": "АГРО МЕНЕДЖМЕНТ дил (г.Москва) bidzaar.com",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1437,12 +1437,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "0207ad4f01",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000305",
     "createdAt": "2026-04-03 10:52:34",
-    "customerName": "",
+    "customerName": "НХТК (Москва, Казань,Тобольск, Кстово)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -1457,15 +1457,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "53707a7a18",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000304",
     "createdAt": "2026-04-02 17:59:56",
-    "customerName": "",
+    "customerName": "ИНТЕРАГРОСНАБ дил (Волгоградская область, г. Волжский)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1477,18 +1477,18 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "26798fc9e8",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000303",
     "createdAt": "2026-04-02 15:49:07",
-    "customerName": "",
+    "customerName": "ЛАГСТЕР",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
-    "edoSent": false,
+    "edoSent": true,
     "rejected": false,
     "problem": false,
     "shipmentPending": false,
@@ -1497,15 +1497,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000302",
     "createdAt": "2026-04-02 15:46:09",
-    "customerName": "",
+    "customerName": "МАДПРО (Смоленск) - поставка дорожной техники из Польши",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1517,15 +1517,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000301",
     "createdAt": "2026-04-02 14:22:23",
-    "customerName": "",
+    "customerName": "КОРВЕТ-М парт (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1537,15 +1537,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "117da745f4",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000300",
     "createdAt": "2026-04-02 12:53:25",
-    "customerName": "",
+    "customerName": "ЦЕМЕНТ ПЛЮС (г. Ставрополь)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1557,15 +1557,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000299",
     "createdAt": "2026-04-02 12:34:23",
-    "customerName": "",
+    "customerName": "Нефтегазпоставка дил (Мск)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1577,12 +1577,12 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000298",
     "createdAt": "2026-04-02 12:02:46",
-    "customerName": "",
+    "customerName": "ЛИДЕР С скидк (МО, г.Люберцы)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -1597,15 +1597,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "839a355e2f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000297",
     "createdAt": "2026-04-02 11:55:36",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1617,15 +1617,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "952e6a728c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000296",
     "createdAt": "2026-04-02 11:46:46",
-    "customerName": "",
+    "customerName": "ТЕПЛОМАШ ООО (СПб) (скидк)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1637,12 +1637,12 @@
     "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "ffa36e1a14",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000295",
     "createdAt": "2026-04-02 10:48:27",
-    "customerName": "",
+    "customerName": "МОНТАЖ-ПРОЕКТ дил (Белоруссия)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1650,22 +1650,22 @@
     "receiptConfirmed": false,
     "edoSent": false,
     "rejected": false,
-    "problem": false,
+    "problem": true,
     "shipmentPending": false,
     "statusKp": "1. ОБРАБОТАТЬ И ОТПРАВИТЬ КП",
     "additionalInfoFirstLine": "Звонил Монтаж-Проект, выяснилось, что по февральской отгрузке колес 6.50-10,",
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "13e14836a1",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000294",
     "createdAt": "2026-04-01 14:51:46",
-    "customerName": "",
+    "customerName": "РММП ООО (Ростовский морской мультимодальный порт) скидк (г.Ростов-на-Дону)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1677,15 +1677,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "c38c4daa9c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000293",
     "createdAt": "2026-04-01 14:43:47",
-    "customerName": "",
+    "customerName": "ТК КОБЛИК парт (г.Воронеж) ТОРГИ",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1697,12 +1697,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "f121da7b2b",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000291",
     "createdAt": "2026-04-01 13:41:24",
-    "customerName": "",
+    "customerName": "БАЛКАН-ТЕХСЕРВИС парт (Самарская область, г.Тольятти)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1717,15 +1717,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1c020d307f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000289",
     "createdAt": "2026-04-01 12:42:25",
-    "customerName": "",
+    "customerName": "КАМАЗ (Респ.Татарстан, г.Набережные Челны)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1737,12 +1737,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000292",
     "createdAt": "2026-04-01 11:50:08",
-    "customerName": "",
+    "customerName": "ПОГРУЗЧИК-ТВЕРЬ дил",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -1757,12 +1757,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000290",
     "createdAt": "2026-04-01 11:08:47",
-    "customerName": "",
+    "customerName": "ИНЕНИ дил (г.Омск)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1777,12 +1777,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "96af62a54b",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000288",
     "createdAt": "2026-03-31 18:27:13",
-    "customerName": "",
+    "customerName": "ИП Ефремова Алина Левоновна скидк (г.Санкт-Петербург)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1797,15 +1797,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "13498300af",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000285",
     "createdAt": "2026-03-31 17:40:50",
-    "customerName": "",
+    "customerName": "СК-ПЗ скидк (г.Находка)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1817,15 +1817,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "55c10ea245",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000283",
     "createdAt": "2026-03-31 15:36:51",
-    "customerName": "",
+    "customerName": "УК ТАВРОС скидк (г.Москва) bidzaar.com",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1837,15 +1837,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "db41675070",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000286",
     "createdAt": "2026-03-31 13:56:50",
-    "customerName": "",
+    "customerName": "НГМ-СЕРВИС скидк (Башкортостан, г.Нефтекамск)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1857,15 +1857,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "cf8457b4e9",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000287",
     "createdAt": "2026-03-31 11:45:00",
-    "customerName": "",
+    "customerName": "МОСИНЖПРОЕКТ скидк (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1877,12 +1877,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "93ec18d36f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000284",
     "createdAt": "2026-03-31 10:08:49",
-    "customerName": "",
+    "customerName": "АГК дил (г.Калуга) bidzaar.com",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -1897,15 +1897,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "f78df62c44",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000282",
     "createdAt": "2026-03-30 12:54:51",
-    "customerName": "",
+    "customerName": "АВТОШИНСНАБ дил (г.Екатеринбург)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1917,15 +1917,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "c3bac42934",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000281",
     "createdAt": "2026-03-27 17:52:54",
-    "customerName": "",
+    "customerName": "МУЛЬТИ-ФОРКЛИФТ парт (МО, г.Мытищи)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1937,15 +1937,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "b3245144ad",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000279",
     "createdAt": "2026-03-27 15:25:10",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1957,15 +1957,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000280",
     "createdAt": "2026-03-27 15:11:01",
-    "customerName": "",
+    "customerName": "ТД ИТС-СЕВЕР парт (МО, г. Хотьково)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1977,15 +1977,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000278",
     "createdAt": "2026-03-27 14:03:31",
-    "customerName": "",
+    "customerName": "ЧЛ (Ледовская)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -1997,15 +1997,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000277",
     "createdAt": "2026-03-26 17:42:09",
-    "customerName": "",
+    "customerName": "АО НП Подольсккабель (МО, г.Подольск)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2017,15 +2017,15 @@
     "invoiceCreated": true,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000273",
     "createdAt": "2026-03-25 18:20:15",
-    "customerName": "",
+    "customerName": "ЗАВОД СТРОПКОМПЛЕКТ скидк (Башкортостан, г.Белорецк)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2037,15 +2037,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e9f73b48dc",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000275",
     "createdAt": "2026-03-25 18:11:26",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2057,15 +2057,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "71a76c6d4f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000272",
     "createdAt": "2026-03-25 17:33:03",
-    "customerName": "",
+    "customerName": "КАМАЗ (Респ.Татарстан, г.Набережные Челны)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2077,15 +2077,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000276",
     "createdAt": "2026-03-25 17:29:40",
-    "customerName": "",
+    "customerName": "Руссбланкоиздат (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2097,12 +2097,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "feb2f7671d",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000267",
     "createdAt": "2026-03-25 17:20:34",
-    "customerName": "",
+    "customerName": "ГОРНЫЙ ОТДЫХ скидк (г.Сочи)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2117,12 +2117,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "be8a57284c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000274",
     "createdAt": "2026-03-25 15:11:38",
-    "customerName": "",
+    "customerName": "КАМАЗ (Респ.Татарстан, г.Набережные Челны)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -2137,12 +2137,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "50da8b3109",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000269",
     "createdAt": "2026-03-25 14:47:37",
-    "customerName": "",
+    "customerName": "ИП Хитров (АвтоШина 62; АВТОШИНА) (Рязанская обл., г.Рязань)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2157,12 +2157,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "a2ba1e1c8f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000268",
     "createdAt": "2026-03-25 14:47:17",
-    "customerName": "",
+    "customerName": "ИП Акопян Айк Ашотович (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2177,15 +2177,15 @@
     "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "c5a17d36ea",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000271",
     "createdAt": "2026-03-25 14:25:32",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2197,15 +2197,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "2ac92f1273",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000270",
     "createdAt": "2026-03-25 12:24:51",
-    "customerName": "",
+    "customerName": "ЛУЧ ПЛАНЕТЫ  парт (г.Набережные Челны)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2217,15 +2217,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "7ab5a7c7d6",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000266",
     "createdAt": "2026-03-24 22:12:06",
-    "customerName": "",
+    "customerName": "СКЛАДСКИЕ ТЕХНОЛОГИИ парт (г.Санкт-Петербург)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2237,12 +2237,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "6b926b23a3",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000265",
     "createdAt": "2026-03-24 22:07:21",
-    "customerName": "",
+    "customerName": "ИП Серебряков Алексей Александрович скидк (г.Владимир)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2257,15 +2257,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "20e2e9c9a0",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000262",
     "createdAt": "2026-03-24 21:42:34",
-    "customerName": "",
+    "customerName": "РУСИМПОРТ дил (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2277,15 +2277,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "dc80d9fe3e",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000261",
     "createdAt": "2026-03-24 20:12:34",
-    "customerName": "",
+    "customerName": "МАРК ФОРМЭЛЬ скидк (г.Москва, г.Тверь)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2297,15 +2297,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "102244ce6d",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000257",
     "createdAt": "2026-03-24 19:51:51",
-    "customerName": "",
+    "customerName": "КОМПЛЕКТСЕРВИС дил (г.Воронеж)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2317,15 +2317,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "4da1aabb92",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000259",
     "createdAt": "2026-03-24 18:54:46",
-    "customerName": "",
+    "customerName": "АВТОКАР (г.Москва, г.Орел)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2337,15 +2337,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "ec1232271a",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000264",
     "createdAt": "2026-03-24 18:54:17",
-    "customerName": "",
+    "customerName": "МОСКОВСКИЙ ЛРЗ АО скидка (Московский локомотиворемонтный завод) МЛРЗ",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2357,15 +2357,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "ce57804f6f",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000263",
     "createdAt": "2026-03-24 15:47:37",
-    "customerName": "",
+    "customerName": "ЧЛ (Ледовская)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2377,12 +2377,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "94ae373d25",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000260",
     "createdAt": "2026-03-24 12:51:23",
-    "customerName": "",
+    "customerName": "ЮМИС (КР) заполнение полиуретаном",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": false,
@@ -2397,12 +2397,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "c7586dd665",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000258",
     "createdAt": "2026-03-24 11:35:22",
-    "customerName": "",
+    "customerName": "СТРОЙЛОГИСТИКА скидк (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2417,12 +2417,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "ea2e5ed9e3",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000254",
     "createdAt": "2026-03-23 19:30:14",
-    "customerName": "",
+    "customerName": "АВАНС скидк (г. Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2437,12 +2437,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000252",
     "createdAt": "2026-03-23 18:31:51",
-    "customerName": "",
+    "customerName": "ВКТЕХ дил (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2457,12 +2457,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1f65504ac3",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000256",
     "createdAt": "2026-03-23 18:17:22",
-    "customerName": "",
+    "customerName": "ЮНИСНАБ парт (г.Санкт-Петербург)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2477,15 +2477,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000255",
     "createdAt": "2026-03-23 17:53:32",
-    "customerName": "",
+    "customerName": "АНТАРЕС дил (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2497,15 +2497,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "267090a25b",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000253",
     "createdAt": "2026-03-23 17:40:31",
-    "customerName": "",
+    "customerName": "ИП Волкова Елена Вячеславовна скидк (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2517,12 +2517,12 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000251",
     "createdAt": "2026-03-23 13:13:24",
-    "customerName": "",
+    "customerName": "АЭРОЗОЛЬ НОВОМОСКОВСК розн (Тульская область, г. Новомосковск)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2537,15 +2537,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "ee035aa93e",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000250",
     "createdAt": "2026-03-20 15:10:06",
-    "customerName": "",
+    "customerName": "ЦПТ АО (Центр перспективных технологий) (Москва, Псков)) (скидк)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2557,15 +2557,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "a530808080",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000249",
     "createdAt": "2026-03-20 12:34:34",
-    "customerName": "",
+    "customerName": "НПК Химстройэнерго скидк (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2577,12 +2577,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000248",
     "createdAt": "2026-03-20 10:28:23",
-    "customerName": "",
+    "customerName": "РК ТЕХ дил (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2597,12 +2597,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "16589436ae",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000247",
     "createdAt": "2026-03-19 18:02:39",
-    "customerName": "",
+    "customerName": "КЕРАЛИТ со скидк (МО, п.Новая Ольховка)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2617,15 +2617,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "a4026bc14d",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000241",
     "createdAt": "2026-03-19 17:48:26",
-    "customerName": "",
+    "customerName": "ДОРХАН 21 ВЕК - НОВОСИБИРСК скидк",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2637,12 +2637,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "df3dde89e0",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000246",
     "createdAt": "2026-03-19 16:56:43",
-    "customerName": "",
+    "customerName": "РГТ(РудГорТехника; Рудные горные Технологии  (Чувашкая Респ. г. Чебоксары))",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2657,12 +2657,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "99ca5767dc",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000245",
     "createdAt": "2026-03-19 15:13:21",
-    "customerName": "",
+    "customerName": "ПРОТОН скидк (Свердловская обл.)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2677,12 +2677,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000244",
     "createdAt": "2026-03-19 15:08:08",
-    "customerName": "",
+    "customerName": "МЕТАЛЛ-ЗАВОД скидк (Московская область, г. Кубинка)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2697,15 +2697,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "b92a7f13f6",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000243",
     "createdAt": "2026-03-19 14:51:07",
-    "customerName": "",
+    "customerName": "РКТЕХ (МО, м.о.Раменский, д. Шевлягино)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2717,15 +2717,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "9322f02ba2",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000242",
     "createdAt": "2026-03-19 14:50:04",
-    "customerName": "",
+    "customerName": "ТракРесурс-Регион дил.цена (партн. не давать) (НЧ) ПОКУП",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2737,12 +2737,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "13e876bb35",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000240",
     "createdAt": "2026-03-19 12:39:39",
-    "customerName": "",
+    "customerName": "АВТО-ЛИДЕР парт (г.Владимир)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2757,15 +2757,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "f43f8dc981",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000239",
     "createdAt": "2026-03-19 11:16:19",
-    "customerName": "",
+    "customerName": "СПЕЦ-ТРАНС скидк (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2777,12 +2777,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1f61c9de1c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000234",
     "createdAt": "2026-03-18 19:44:01",
-    "customerName": "",
+    "customerName": "БИТЦЕВСКИЙ ПРОЕЗД ТСЖ скидк (МО, г.Видное)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -2797,15 +2797,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "c14e7208ac",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000235",
     "createdAt": "2026-03-18 19:22:30",
-    "customerName": "",
+    "customerName": "МУРАЕВНЯ ГОК скидк (Рязанская обл.)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2817,12 +2817,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "d05df64232",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000238",
     "createdAt": "2026-03-18 18:08:51",
-    "customerName": "",
+    "customerName": "РУССКИЕ МАШИНЫ дил (Карелия, г.Петрозаводск)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2837,12 +2837,12 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "18c3fb21db",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000237",
     "createdAt": "2026-03-18 15:54:08",
-    "customerName": "",
+    "customerName": "РК ТЕХ дил (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2857,15 +2857,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "6db0857f84",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000236",
     "createdAt": "2026-03-18 15:48:45",
-    "customerName": "",
+    "customerName": "МИАЛ (МО, г.Ступино)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2877,12 +2877,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000229",
     "createdAt": "2026-03-18 15:06:38",
-    "customerName": "",
+    "customerName": "КЕРАЛИТ со скидк (МО, п.Новая Ольховка)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2897,12 +2897,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "b12d7cc54c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000232",
     "createdAt": "2026-03-18 13:34:25",
-    "customerName": "",
+    "customerName": "ЛАГСТЕР",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2917,12 +2917,12 @@
     "invoiceCreated": true,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000233",
     "createdAt": "2026-03-18 13:15:23",
-    "customerName": "",
+    "customerName": "ТД ТДС (Торговый дом Техника для склада) парт (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -2937,15 +2937,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "305a8e7a0a",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000231",
     "createdAt": "2026-03-18 11:34:48",
-    "customerName": "",
+    "customerName": "Европанорама (МО, д. Торбеево)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2957,15 +2957,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000230",
     "createdAt": "2026-03-18 11:26:07",
-    "customerName": "",
+    "customerName": "ИП Павлов Алексей Викторович (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2977,15 +2977,15 @@
     "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000228",
     "createdAt": "2026-03-17 16:23:26",
-    "customerName": "",
+    "customerName": "ДНПП ПАО (г. Долгопрудный, МО)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -2997,12 +2997,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000227",
     "createdAt": "2026-03-17 14:12:54",
-    "customerName": "",
+    "customerName": "ТЕХНОСТИЛЬ ПРЕМИУМ (отделение г.Самара )",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -3017,12 +3017,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1afe9dae3c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000226",
     "createdAt": "2026-03-17 13:51:39",
-    "customerName": "",
+    "customerName": "ХАРТИЯ скидк (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -3037,15 +3037,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "041fe99ef6",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000225",
     "createdAt": "2026-03-17 12:24:46",
-    "customerName": "",
+    "customerName": "БАЛТСНАБ дил (г.Санкт-Петербург)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3057,15 +3057,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "24c1af526b",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000224",
     "createdAt": "2026-03-17 11:41:22",
-    "customerName": "",
+    "customerName": "ЦПТ АО (Центр перспективных технологий) (Москва, Псков)) (скидк)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3077,15 +3077,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000221",
     "createdAt": "2026-03-16 22:40:29",
-    "customerName": "",
+    "customerName": "ЭКСПОРТЕР (ВЭД Партнер) (Новосибирск)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3097,15 +3097,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000223",
     "createdAt": "2026-03-16 18:04:22",
-    "customerName": "",
+    "customerName": "ДСТ-УРАЛ дил (г.Челябинск) https://bidzaar.com",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3117,15 +3117,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "5c6252ad08",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000218",
     "createdAt": "2026-03-16 17:44:46",
-    "customerName": "",
+    "customerName": "АВТОДЕТАЛЬ конечник (Красногорск)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3137,15 +3137,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "daa0d37bd1",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000222",
     "createdAt": "2026-03-16 15:01:17",
-    "customerName": "",
+    "customerName": "ИП Марков Руслан Евгеньевич  (г. Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3157,12 +3157,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e73bef6ffb",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000220",
     "createdAt": "2026-03-16 13:48:24",
-    "customerName": "",
+    "customerName": "МОСВОДОКАНАЛ (Москва)",
     "status": "Действует",
     "managerFilled": true,
     "productSpecified": true,
@@ -3177,12 +3177,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "103d13bb92",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000219",
     "createdAt": "2026-03-16 13:09:00",
-    "customerName": "",
+    "customerName": "КАМАЗ (Респ.Татарстан, г.Набережные Челны)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -3197,12 +3197,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "30ab615523",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000217",
     "createdAt": "2026-03-16 09:36:05",
-    "customerName": "",
+    "customerName": "ВОТКИНСКИЙ ЗАВОД скидк (Удмуртия, г.Вотскинск)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -3217,12 +3217,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "a245ee7afc",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000216",
     "createdAt": "2026-03-13 14:30:57",
-    "customerName": "",
+    "customerName": "ЮГ ИНТЕР-ПАК скидк (Крым, г.Керчь)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -3237,15 +3237,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "73433a3f9c",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000214",
     "createdAt": "2026-03-13 14:30:11",
-    "customerName": "",
+    "customerName": "ТД ИТС-СЕВЕР парт (МО, г. Хотьково)",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3257,15 +3257,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "9b06162337",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000215",
     "createdAt": "2026-03-13 14:15:48",
-    "customerName": "",
+    "customerName": "СеверРегионСнаб (ЧЛ Дмитрий) дил (Республика Коми, Сыктывдинский р-н, с.Выльгорт)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3277,12 +3277,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1254ebc62a",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000213",
     "createdAt": "2026-03-12 19:54:41",
-    "customerName": "",
+    "customerName": "ТЕРНЕЙЛЕС скидк (Приморский край) bidzaar.com",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": true,
@@ -3297,15 +3297,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e681a00e74",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000210",
     "createdAt": "2026-03-12 18:49:04",
-    "customerName": "",
+    "customerName": "СТАЛЬСОЮЗ ТПК (г.Воронеж)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3317,15 +3317,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "e3d270f00d",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000212",
     "createdAt": "2026-03-12 18:48:39",
-    "customerName": "",
+    "customerName": "ПАРК СКАЗКА (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3337,15 +3337,15 @@
     "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "b8af9103ef",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000211",
     "createdAt": "2026-03-12 17:56:38",
-    "customerName": "",
+    "customerName": "ФОСФОРЕЛЬ скидк (г.Воронеж)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3357,15 +3357,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "66e4b4c0e4",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000207",
     "createdAt": "2026-03-12 17:49:31",
-    "customerName": "",
+    "customerName": "АРС-ТЕХ парт (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3377,15 +3377,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "eb6da13c8e",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000208",
     "createdAt": "2026-03-12 17:22:25",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3397,12 +3397,12 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "1e3ca962f7",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000209",
     "createdAt": "2026-03-12 16:44:10",
-    "customerName": "",
+    "customerName": "ФОРК парт (г.Москва)",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -3417,15 +3417,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "0aa21458a1",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000206",
     "createdAt": "2026-03-11 16:50:10",
-    "customerName": "",
+    "customerName": "СПЕЦШИНА ЦЕНТР ТУЛА парт (г.Тула)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3437,15 +3437,15 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "b48d6c57a7",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000205",
     "createdAt": "2026-03-11 16:19:24",
-    "customerName": "",
+    "customerName": "ЧЛ Донцова (г.Москва)",
     "status": "Действует",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
     "edoSent": false,
@@ -3457,7 +3457,7 @@
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "7491c7eca4",
-    "clientFilled": false
+    "clientFilled": true
   },
   {
     "number": "ПСУТ-000204",
@@ -3588,7 +3588,7 @@
     "productSpecified": true,
     "kpSent": false,
     "receiptConfirmed": false,
-    "edoSent": false,
+    "edoSent": true,
     "rejected": false,
     "problem": false,
     "shipmentPending": false,
@@ -3950,7 +3950,7 @@
     "receiptConfirmed": false,
     "edoSent": false,
     "rejected": false,
-    "problem": false,
+    "problem": true,
     "shipmentPending": false,
     "statusKp": "1. ОБРАБОТАТЬ И ОТПРАВИТЬ КП",
     "additionalInfoFirstLine": "не использовать !!!!!!!!!!!!!!!!!",
