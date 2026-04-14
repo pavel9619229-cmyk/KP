@@ -1398,6 +1398,23 @@ def _collect_tail_pages_with_field_fallback(
     return best_pages, False, best_fields
 
 
+def _extract_order_refs_from_payment_breakdown(item: dict) -> set[str]:
+    refs: set[str] = set()
+    breakdown = item.get("РасшифровкаПлатежа")
+    if not isinstance(breakdown, list):
+        return refs
+
+    for line in breakdown:
+        if not isinstance(line, dict):
+            continue
+        basis_ref = str(line.get("ОснованиеПлатежа") or "")
+        basis_type = str(line.get("ОснованиеПлатежа_Type") or "")
+        if basis_ref and (not basis_type or basis_type.endswith("Document_ЗаказКлиента")):
+            refs.add(basis_ref)
+
+    return refs
+
+
 def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     target_refs = [str(r.get("refKey") or "") for r in rows]
     target_refs = [r for r in target_refs if r]
@@ -1470,6 +1487,42 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
         [
+            [
+                "Ref_Key",
+                "Date",
+                "ОбъектРасчетов_Key",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "ОбъектРасчетов",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "ЗаказКлиента",
+                "ЗаказКлиента_Type",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
             ["Ref_Key", "Date", "ОбъектРасчетов_Key", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
             ["Ref_Key", "Date", "ОбъектРасчетов", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
             ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type", "ДокументОснование", "ДокументОснование_Type", "НазначениеПлатежа"],
@@ -1500,6 +1553,13 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             if base_ref in target_order_refs and base_type.endswith("Document_ЗаказКлиента"):
                 payment_order_refs.add(base_ref)
                 continue
+
+            breakdown_order_refs = _extract_order_refs_from_payment_breakdown(item)
+            if breakdown_order_refs:
+                matched_breakdown_ref = next((ref for ref in breakdown_order_refs if ref in target_order_refs), "")
+                if matched_breakdown_ref:
+                    payment_order_refs.add(matched_breakdown_ref)
+                    continue
 
             # Fallback for 1C group documents: payment purpose often references short order number.
             # Match compact full order number first (e.g. "ПСУТ-000226" -> "псут000226"),
@@ -1630,6 +1690,46 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
                 "ДокументОснование",
                 "ДокументОснование_Type",
                 "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ОбъектРасчетов",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ЗаказКлиента",
+                "ЗаказКлиента_Type",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
+                "РасшифровкаПлатежа",
+            ],
+            [
+                "Ref_Key",
+                "Date",
+                "Number",
+                "ОбъектРасчетов_Key",
+                "ДокументОснование",
+                "ДокументОснование_Type",
+                "НазначениеПлатежа",
             ],
             [
                 "Ref_Key",
@@ -1698,6 +1798,14 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
                 if base_ref in order_refs and base_type.endswith("Document_ЗаказКлиента"):
                     matched_order = base_ref
                     matched_by = "ДокументОснование"
+
+            if not matched_order:
+                breakdown_order_refs = _extract_order_refs_from_payment_breakdown(item)
+                for order_ref in order_refs:
+                    if order_ref in breakdown_order_refs:
+                        matched_order = order_ref
+                        matched_by = "РасшифровкаПлатежа:ОснованиеПлатежа"
+                        break
 
             if not matched_order:
                 for order_ref in order_refs:
