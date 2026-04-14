@@ -1,5 +1,25 @@
 [
   {
+    "number": "ПСУТ-000378",
+    "createdAt": "2026-04-14 15:10:23",
+    "customerName": "СКС (САХАЛИНСКАЯ КОМПАНИЯ СНАБЖЕНИЯ) скидк (г. Южно-Сахалинск)",
+    "status": "Черновик",
+    "managerFilled": true,
+    "productSpecified": false,
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "shipmentPending": false,
+    "statusKp": "",
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------",
+    "invoiceCreated": false,
+    "paymentReceived": false,
+    "statusHash": "30ab615523",
+    "clientFilled": true
+  },
+  {
     "number": "ПСУТ-000376",
     "createdAt": "2026-04-13 19:32:11",
     "customerName": "ТЕПЛОКОМ скидк (г.Москва)",
@@ -242,7 +262,7 @@
   {
     "number": "ПСУТ-000360",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -282,7 +302,7 @@
   {
     "number": "ПСУТ-000362",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "Павел",
+    "customerName": "руб.",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -302,7 +322,7 @@
   {
     "number": "ПСУТ-000363",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "Павел",
+    "customerName": "руб.",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -362,7 +382,7 @@
   {
     "number": "ПСУТ-000366",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
@@ -382,7 +402,7 @@
   {
     "number": "ПСУТ-000367",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "руб.",
+    "customerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
     "productSpecified": false,
