@@ -143,6 +143,19 @@ button:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.panel-top__row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.last-refresh-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .enrich-status {
   margin-top: 6px;
   font-size: 0.85rem;

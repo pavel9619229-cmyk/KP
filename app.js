@@ -14,6 +14,7 @@ const rulesStorageLocationsInput = document.getElementById('rulesStorageLocation
 const enrichStatusLabel = document.getElementById('enrichStatusLabel');
 const saveRulesBtn = document.getElementById('saveRulesBtn');
 const rulesSaveMsg = document.getElementById('rulesSaveMsg');
+const lastRefreshLabel = document.getElementById('lastRefreshLabel');
 
 (function initDark() {
   if (localStorage.getItem('darkMode') === '1') {
@@ -830,6 +831,22 @@ function connectWebSocket() {
   };
 }
 
+async function pollLastRefresh() {
+  const urls = ['/healthz', 'https://onec-kp-realtime.onrender.com/healthz'];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.lastRefresh && lastRefreshLabel) {
+        const ts = d.lastRefresh.replace('T', ' ').slice(0, 19);
+        lastRefreshLabel.textContent = `Обновление из 1С: ${ts} MSK`;
+      }
+      return;
+    } catch { /* next source */ }
+  }
+}
+
 async function init() {
   renderRulesStorageLocations();
   await loadStatusRulesFromServer();
@@ -838,6 +855,8 @@ async function init() {
   setInterval(() => {
     if (!wsActive) refreshData(false);
   }, REFRESH_INTERVAL_MS);
+  pollLastRefresh();
+  setInterval(pollLastRefresh, 30000);
 }
 
 searchInput.addEventListener('input', applyFilters);

@@ -8,7 +8,6 @@ const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
-const serverRefreshLabel = document.getElementById('serverRefreshLabel');
 const boardContent = document.getElementById('boardContent');
 
 const REFRESH_INTERVAL_MS = 15000;
@@ -730,31 +729,10 @@ function setRows(nextRows, syncedAt = null) {
   renderBoard();
 }
 
-async function fetchServerRefresh() {
-  const sources = [
-    '/healthz',
-    'https://onec-kp-realtime.onrender.com/healthz',
-  ];
-  for (const src of sources) {
-    try {
-      const r = await fetch(src, { cache: 'no-store' });
-      if (!r.ok) continue;
-      const data = await r.json();
-      if (data.lastRefresh) {
-        const parts = data.lastRefresh.split(/[\s:-]+/);
-        const dt = new Date(Date.UTC(+parts[0], +parts[1]-1, +parts[2], +parts[3], +parts[4], +parts[5]||0));
-        const msk = new Date(dt.getTime() + 3*3600*1000);
-        serverRefreshLabel.textContent = '1С: ' + msk.toLocaleString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-      }
-      return;
-    } catch (_) { /* next source */ }
-  }
-}
-
 async function refreshData(initial = false) {
   try {
     await loadStatusRulesFromServer();
-    const [nextRows] = await Promise.all([loadRows(), fetchServerRefresh()]);
+    const nextRows = await loadRows();
     setRows(nextRows, new Date());
     // Clear any previous error state once data loads successfully
     if (boardContent.querySelector('.board-empty')) {
