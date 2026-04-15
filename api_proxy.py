@@ -57,6 +57,7 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
+COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 STATUS_KP_PROPERTY_KEY = os.getenv(
@@ -2267,8 +2268,10 @@ def get_total_count(headers: dict, odata_filter: str = "") -> int:
 
 
 def fetch_rows_from_odata() -> list:
+    global _last_refresh
     headers = _build_headers()
     known_rows = build_known_rows_lookup()
+    cold_start = _last_refresh is None
 
     rows = []
     page_size = 50
@@ -2416,10 +2419,19 @@ def fetch_rows_from_odata() -> list:
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
 
     global _last_group_enrich
-    _enrich_group_flags_bulk(rows, headers)
-    _last_group_enrich = datetime.now()
+    if cold_start:
+        log("fetch_rows_from_odata: cold start detected, skipping bulk group enrich for first fast refresh")
+    else:
+        enrich_started = time.time()
+        _enrich_group_flags_bulk(rows, headers)
+        _last_group_enrich = datetime.now()
+        log(f"fetch_rows_from_odata: bulk group enrich done in {time.time() - enrich_started:.1f}s")
 
     for index, row in enumerate(rows):
+        if cold_start and index >= COLD_START_DOC_ENRICH_LIMIT:
+            # First refresh should not stall on hundreds of per-doc roundtrips.
+            continue
+
         ref_key = row.get("refKey", "")
         if not ref_key:
             continue
