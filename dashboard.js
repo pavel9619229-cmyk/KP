@@ -489,6 +489,7 @@ function deriveStatusFacts(row) {
     clientFilled,
     managerFilled,
     productSpecified: getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']),
+    priceFilled: getFlag(row, ['priceFilled']),
   };
 }
 
