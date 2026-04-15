@@ -2143,14 +2143,20 @@ def fetch_rows_from_odata() -> list:
 
     rows = []
     page_size = 50
+    _fetch_pages = 0
+    _fetch_batches_empty = 0
+    _fetch_network_errors = 0
 
     total_count = get_total_count(headers)
     if total_count <= 0:
+        log(f"fetch_rows_from_odata: total_count={total_count}, aborting")
         return []
 
     skip = ((total_count - 1) // page_size) * page_size
+    log(f"fetch_rows_from_odata: total_count={total_count}, starting skip={skip}")
 
     while True:
+        _fetch_pages += 1
         params = {
             "$select": "Ref_Key," + ",".join(LIGHT_SELECT_FIELDS),
             "$top": str(page_size),
@@ -2169,15 +2175,21 @@ def fetch_rows_from_odata() -> list:
                 )
                 if resp.status_code == 200:
                     break
-            except requests.RequestException:
+            except requests.RequestException as req_exc:
+                _fetch_network_errors += 1
+                log(f"fetch_rows_from_odata: network error at skip={skip}: {req_exc}")
                 resp = None
             time.sleep(1)
 
         if resp is None or resp.status_code != 200:
+            sc = resp.status_code if resp else "None"
+            log(f"fetch_rows_from_odata: breaking at skip={skip}, status={sc}, pages={_fetch_pages}, net_errors={_fetch_network_errors}")
             break
 
         batch = resp.json().get("value", [])
         if not batch:
+            _fetch_batches_empty += 1
+            log(f"fetch_rows_from_odata: empty batch at skip={skip}")
             break
 
         batch_dates = []
@@ -2263,6 +2275,7 @@ def fetch_rows_from_odata() -> list:
 
         skip = max(0, skip - page_size)
 
+    log(f"fetch_rows_from_odata: {len(rows)} matched rows, {_fetch_pages} pages, {_fetch_network_errors} net errors")
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
 
     global _last_group_enrich
@@ -2496,6 +2509,67 @@ async def healthz():
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
     }
+
+
+@app.get("/api/debug/odata-test")
+async def debug_odata_test():
+    """Diagnostic endpoint: test OData connectivity step by step."""
+    result: dict = {"steps": []}
+    headers = _build_headers()
+
+    # Step 1: $count
+    try:
+        r = requests.get(
+            f"{BASE}/{ENTITY}/$count",
+            headers=headers,
+            timeout=30,
+            verify=False,
+        )
+        result["steps"].append({
+            "step": "$count",
+            "status": r.status_code,
+            "body": r.text[:200],
+        })
+        total_count = int(r.text.strip()) if r.status_code == 200 else 0
+    except Exception as exc:
+        result["steps"].append({"step": "$count", "error": str(exc)})
+        return result
+
+    # Step 2: fetch last page (same logic as fetch_rows_from_odata)
+    page_size = 50
+    skip = ((total_count - 1) // page_size) * page_size if total_count > 0 else 0
+    try:
+        r2 = requests.get(
+            f"{BASE}/{ENTITY}",
+            headers=headers,
+            params={
+                "$select": "Ref_Key,Number,Date",
+                "$top": str(page_size),
+                "$skip": str(skip),
+            },
+            timeout=45,
+            verify=False,
+        )
+        batch = r2.json().get("value", []) if r2.status_code == 200 else []
+        result["steps"].append({
+            "step": f"fetch skip={skip}",
+            "status": r2.status_code,
+            "batchLen": len(batch),
+            "firstNumber": batch[0].get("Number") if batch else None,
+            "lastNumber": batch[-1].get("Number") if batch else None,
+        })
+    except Exception as exc:
+        result["steps"].append({"step": f"fetch skip={skip}", "error": str(exc)})
+
+    # Step 3: report config
+    result["config"] = {
+        "BASE": BASE,
+        "ENTITY": ENTITY,
+        "TARGET_START": str(TARGET_START),
+        "TARGET_END": str(TARGET_END),
+        "totalCount": total_count,
+    }
+    return result
 
 
 @app.get("/version")
