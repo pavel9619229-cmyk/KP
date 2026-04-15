@@ -94,6 +94,12 @@ body.light .updated-at-inline {
   background: rgba(255, 255, 255, 0.9);
 }
 
+.updated-at-inline.server-refresh {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--accent, #4fc3f7);
+}
+
 .search-box {
   display: block;
   width: 100%;
