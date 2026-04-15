@@ -58,6 +58,8 @@ GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
+ODATA_PAGE_SIZE = int(os.getenv("ODATA_PAGE_SIZE", "20"))
+ODATA_PAGE_TIMEOUT_SECONDS = float(os.getenv("ODATA_PAGE_TIMEOUT_SECONDS", "180"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 STATUS_KP_PROPERTY_KEY = os.getenv(
@@ -2274,7 +2276,7 @@ def fetch_rows_from_odata() -> list:
     cold_start = _last_refresh is None
 
     rows = []
-    page_size = 50
+    page_size = max(5, ODATA_PAGE_SIZE)
     _fetch_pages = 0
     _fetch_batches_empty = 0
     _fetch_network_errors = 0
@@ -2302,7 +2304,7 @@ def fetch_rows_from_odata() -> list:
                     f"{BASE}/{ENTITY}",
                     headers=headers,
                     params=params,
-                    timeout=120,
+                    timeout=ODATA_PAGE_TIMEOUT_SECONDS,
                     verify=False,
                 )
                 if resp.status_code == 200:
