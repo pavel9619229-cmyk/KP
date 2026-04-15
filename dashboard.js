@@ -734,10 +734,16 @@ async function refreshData(initial = false) {
     await loadStatusRulesFromServer();
     const nextRows = await loadRows();
     setRows(nextRows, new Date());
+    // Clear any previous error state once data loads successfully
+    if (boardContent.querySelector('.board-empty')) {
+      renderBoard();
+    }
   } catch (error) {
     if (initial) {
-      boardContent.innerHTML = `<div class="board-empty">Не удалось загрузить данные: ${escapeHtml(error.message)}</div>`;
+      boardContent.innerHTML = `<div class="board-empty">Не удалось загрузить данные: ${escapeHtml(error.message)}<br><small>Повторная попытка через несколько секунд…</small></div>`;
       updatedAtLabel.textContent = 'Ошибка';
+      // Retry initial load after a delay (Render free tier may be waking up)
+      setTimeout(() => refreshData(true), 5000);
     }
   }
 }
