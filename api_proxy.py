@@ -9,7 +9,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
 from typing import Optional
@@ -97,6 +97,8 @@ _cached_fp = ""
 _last_refresh = None
 _last_refresh_error = None
 _last_group_enrich = None
+
+_TZ_MSK = timezone(timedelta(hours=3))
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
@@ -2428,7 +2430,7 @@ def refresh_cache_and_file() -> None:
                 save_rows(fetched)
                 _cached_rows = fetched
                 _cached_fp = rows_fingerprint(fetched)
-                _last_refresh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
                 _last_refresh_error = None
                 log(f"refresh success: {len(fetched)} rows")
                 # Disabled runtime cache auto-push to GitHub: it creates a deploy loop
