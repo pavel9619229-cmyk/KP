@@ -56,6 +56,9 @@ const RULE_FIELD_ALIASES = new Map([
   ['менеджерзаполнен', 'managerFilled'],
   ['productspecified', 'productSpecified'],
   ['товаруказан', 'productSpecified'],
+  ['pricefilled', 'priceFilled'],
+  ['ценазаполнена', 'priceFilled'],
+  ['ценавпервойстрокетоваразаполнена', 'priceFilled'],
 ]);
 const STATUS_ORDER = [
   'ПРОБЛЕМА',
