@@ -22,3 +22,5 @@ services:
         sync: false
       - key: RENDER_SERVICE_NAME
         value: onec-kp-realtime
+      - key: RENDER_EXTERNAL_URL
+        value: https://onec-kp-realtime.onrender.com
