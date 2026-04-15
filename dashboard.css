@@ -82,9 +82,10 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf2ff;
   outline: none;
+  appearance: none;
 }
 
 .manager-filter select option {
