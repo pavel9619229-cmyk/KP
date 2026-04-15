@@ -512,16 +512,8 @@ function matchesRuleCondition(facts, condition) {
 function computeKpStatus(row) {
   const serverComputed = String(row?.statusKpComputed || '').trim();
   if (serverComputed) return serverComputed;
-  const facts = deriveStatusFacts(row);
-  for (const rule of statusRules) {
-    const matchMode = rule.matchMode === 'any' ? 'any' : 'all';
-    const isRuleMatched = matchMode === 'any'
-      ? rule.conditions.some((condition) => matchesRuleCondition(facts, condition))
-      : rule.conditions.every((condition) => matchesRuleCondition(facts, condition));
-    if (isRuleMatched) {
-      return rule.label;
-    }
-  }
+  const statusKp = String(row?.statusKp || '').trim();
+  if (statusKp) return statusKp;
   return DEFAULT_FALLBACK_STATUS;
 }
 

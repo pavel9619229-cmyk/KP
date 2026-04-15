@@ -2824,6 +2824,19 @@ def format_row_for_client(row: dict) -> dict:
     return formatted
 
 
+def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
+    with _status_rules_lock:
+        rules_text = load_status_rules_text()
+    rules = _parse_status_rules_text(rules_text)
+
+    output = []
+    for row in rows:
+        formatted = format_row_for_client(row)
+        formatted["statusKpComputed"] = _compute_status_for_row(formatted, rules)
+        output.append(formatted)
+    return output
+
+
 @app.get("/api/kp/all")
 async def get_all_kp():
     if not _cached_rows:
@@ -2835,16 +2848,7 @@ async def get_all_kp():
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
 
-    with _status_rules_lock:
-        rules_text = load_status_rules_text()
-    rules = _parse_status_rules_text(rules_text)
-
-    output = []
-    for row in _cached_rows:
-        formatted = format_row_for_client(row)
-        formatted["statusKpComputed"] = _compute_status_for_row(formatted, rules)
-        output.append(formatted)
-    return output
+    return build_rows_with_computed_status(_cached_rows)
 
 
 @app.get("/api/debug/kp/{kp_number}/payment-chain")
@@ -2967,7 +2971,7 @@ async def ws_kp(websocket: WebSocket):
                     {
                         "type": "rows",
                         "updatedAt": _last_refresh,
-                        "rows": [format_row_for_client(row) for row in _cached_rows],
+                        "rows": build_rows_with_computed_status(_cached_rows),
                     }
                 )
             await asyncio.sleep(2)
