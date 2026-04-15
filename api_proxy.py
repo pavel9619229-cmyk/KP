@@ -3,6 +3,7 @@
 
 import asyncio
 import base64
+import collections
 import hashlib
 import json
 import os
@@ -163,8 +164,13 @@ STORAGE_DEFAULTS = {
 }
 
 
+_log_buffer: collections.deque = collections.deque(maxlen=200)
+
+
 def log(message: str) -> None:
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
+    line = f"[{datetime.now(_TZ_MSK).strftime('%Y-%m-%d %H:%M:%S')}] {message}"
+    _log_buffer.append(line)
+    print(line, flush=True)
 
 
 def _build_headers() -> dict:
@@ -2535,6 +2541,11 @@ async def healthz():
     }
 
 
+@app.get("/api/debug/logs")
+async def debug_logs():
+    return {"lines": list(_log_buffer)}
+
+
 @app.get("/api/debug/odata-test")
 async def debug_odata_test():
     """Diagnostic endpoint: test OData connectivity step by step."""
@@ -2585,13 +2596,55 @@ async def debug_odata_test():
     except Exception as exc:
         result["steps"].append({"step": f"fetch skip={skip}", "error": str(exc)})
 
-    # Step 3: report config
+    # Step 3: try full fetch with Cyrillic fields (same as fetch_rows_from_odata)
+    try:
+        r3 = requests.get(
+            f"{BASE}/{ENTITY}",
+            headers=headers,
+            params={
+                "$select": "Ref_Key," + ",".join(LIGHT_SELECT_FIELDS),
+                "$top": str(page_size),
+                "$skip": str(skip),
+            },
+            timeout=45,
+            verify=False,
+        )
+        if r3.status_code == 200:
+            batch3 = r3.json().get("value", [])
+            matched = 0
+            for it in batch3:
+                dt_raw = it.get("Date", "")
+                try:
+                    dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
+                    if TARGET_START <= dt <= TARGET_END:
+                        matched += 1
+                except Exception:
+                    pass
+            result["steps"].append({
+                "step": "fetch_full_fields",
+                "status": r3.status_code,
+                "batchLen": len(batch3),
+                "matchedInRange": matched,
+            })
+        else:
+            result["steps"].append({
+                "step": "fetch_full_fields",
+                "status": r3.status_code,
+                "body": r3.text[:300],
+            })
+    except Exception as exc:
+        result["steps"].append({"step": "fetch_full_fields", "error": str(exc)})
+
+    # Step 4: report config
     result["config"] = {
         "BASE": BASE,
         "ENTITY": ENTITY,
         "TARGET_START": str(TARGET_START),
         "TARGET_END": str(TARGET_END),
         "totalCount": total_count,
+        "REFRESH_SECONDS": REFRESH_SECONDS,
+        "lastRefresh": _last_refresh,
+        "lastRefreshError": _last_refresh_error,
     }
     return result
 
