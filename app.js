@@ -59,6 +59,7 @@ const RULE_FIELDS = new Set([
   'clientFilled',
   'managerFilled',
   'productSpecified',
+  'priceFilled',
 ]);
 const RULE_FIELD_ALIASES = new Map([
   ['problem', 'problem'],
@@ -86,6 +87,9 @@ const RULE_FIELD_ALIASES = new Map([
   ['менеджерзаполнен', 'managerFilled'],
   ['productspecified', 'productSpecified'],
   ['товаруказан', 'productSpecified'],
+  ['pricefilled', 'priceFilled'],
+  ['ценазаполнена', 'priceFilled'],
+  ['ценавпервойстрокетоваразаполнена', 'priceFilled'],
 ]);
 const HUMAN_FIELD_LABELS = {
   problem: 'Проблема',
@@ -99,6 +103,7 @@ const HUMAN_FIELD_LABELS = {
   clientFilled: 'Клиент заполнен',
   managerFilled: 'Менеджер заполнен',
   productSpecified: 'Товар указан',
+  priceFilled: 'Цена в первой строке товара заполнена',
 };
 const DEFAULT_STATUS_RULES_TEXT = [
   '# Формат 1 (простой): статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ',
