@@ -649,20 +649,20 @@ function getTabRowClass(tabKey) {
 }
 
 function renderBoard() {
-  const counts = getStatusCounts(rows);
   const query = searchInput.value.trim().toLowerCase();
   const manager = managerFilter.value;
-  const filtered = rows.filter((row) => {
-    const status = computeKpStatus(row);
+  const baseFiltered = rows.filter((row) => {
     const rowManager = getManagerName(row);
-    const matchesTab = activeTab === ALL_TAB_KEY || status === activeTab;
-    if (!matchesTab) {
-      return false;
-    }
-
     const byManager = !manager || rowManager === manager;
+    const status = computeKpStatus(row);
     const haystack = `${row.number || ''} ${row.customerName || ''} ${rowManager} ${row.additionalInfoFirstLine || ''} ${status}`.toLowerCase();
     return byManager && (!query || haystack.includes(query));
+  });
+
+  const counts = getStatusCounts(baseFiltered);
+  const filtered = baseFiltered.filter((row) => {
+    const status = computeKpStatus(row);
+    return activeTab === ALL_TAB_KEY || status === activeTab;
   });
 
   if (activeTab !== ALL_TAB_KEY && !counts.has(activeTab)) {
