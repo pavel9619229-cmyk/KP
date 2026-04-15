@@ -87,6 +87,11 @@ textarea {
   outline: none;
 }
 
+.manager-filter select option {
+  background: #ffffff;
+  color: #162033;
+}
+
 body.light .manager-filter select {
   background: rgba(255, 255, 255, 0.9);
 }
