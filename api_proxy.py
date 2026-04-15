@@ -3,7 +3,6 @@
 
 import asyncio
 import base64
-import collections
 import hashlib
 import json
 import os
@@ -164,12 +163,8 @@ STORAGE_DEFAULTS = {
 }
 
 
-_log_buffer: collections.deque = collections.deque(maxlen=200)
-
 def log(message: str) -> None:
-    line = f"[{datetime.now(_TZ_MSK).strftime('%Y-%m-%d %H:%M:%S')}] {message}"
-    _log_buffer.append(line)
-    print(line, flush=True)
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
 
 
 def _build_headers() -> dict:
@@ -2192,32 +2187,16 @@ def fetch_rows_from_odata() -> list:
 
         if resp is None or resp.status_code != 200:
             sc = resp.status_code if resp else "None"
-            body_snip = ""
-            if resp is not None:
-                try:
-                    body_snip = resp.text[:300]
-                except Exception:
-                    pass
-            log(f"fetch_rows_from_odata: breaking at skip={skip}, status={sc}, pages={_fetch_pages}, net_errors={_fetch_network_errors}, body={body_snip}")
+            log(f"fetch_rows_from_odata: breaking at skip={skip}, status={sc}, pages={_fetch_pages}, net_errors={_fetch_network_errors}")
             break
 
-        try:
-            jdata = resp.json()
-        except Exception as json_exc:
-            log(f"fetch_rows_from_odata: JSON parse error at skip={skip}: {json_exc}, body[:200]={resp.text[:200]}")
-            break
-
-        batch = jdata.get("value", [])
+        batch = resp.json().get("value", [])
         if not batch:
             _fetch_batches_empty += 1
-            log(f"fetch_rows_from_odata: empty batch at skip={skip}, keys={list(jdata.keys())[:5]}")
+            log(f"fetch_rows_from_odata: empty batch at skip={skip}")
             break
 
         batch_dates = []
-
-        if _fetch_pages == 1:
-            sample = batch[0] if batch else {}
-            log(f"fetch_rows_from_odata: first batch len={len(batch)}, sample keys={list(sample.keys())[:8]}, sample Number={sample.get('Number')}, sample Date={sample.get('Date')}")
 
         for item in batch:
             ref_key = item.get("Ref_Key") or ""
@@ -2554,11 +2533,6 @@ async def healthz():
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
     }
-
-
-@app.get("/api/debug/logs")
-async def debug_logs():
-    return {"lines": list(_log_buffer)}
 
 
 @app.get("/api/debug/odata-test")
