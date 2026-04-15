@@ -90,7 +90,7 @@ textarea {
 
 .manager-filter select option {
   background: #ffffff;
-  color: #162033;
+  color: #000;
 }
 
 body.light .manager-filter select {

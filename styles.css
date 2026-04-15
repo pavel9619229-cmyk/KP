@@ -113,6 +113,11 @@ button {
   font: inherit;
 }
 
+select option {
+  color: #000;
+  background: #fff;
+}
+
 button {
   align-self: end;
   font-weight: 700;
