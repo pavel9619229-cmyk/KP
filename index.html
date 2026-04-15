@@ -19,6 +19,11 @@
         <input id="searchInput" type="text" placeholder="Номер, статус или текст..." aria-label="Поиск">
       </label>
       <label>
+        <select id="managerFilter" aria-label="Менеджер">
+          <option value="">Все менеджеры</option>
+        </select>
+      </label>
+      <label>
         <select id="statusFilter" aria-label="Статус">
           <option value="">Все</option>
         </select>
@@ -69,6 +74,7 @@
               <th>№ КП</th>
               <th>Дата создания</th>
               <th>Клиент</th>
+              <th>Менеджер</th>
               <th>Клиент заполнен<br><span class="th-rule">(имя не пустое и не «НЕ ОПРЕДЕЛЕН»)</span></th>
               <th>Менеджер заполнен<br><span class="th-rule">(Менеджер_Key в 1С не нулевой)</span></th>
               <th>Товар указан<br><span class="th-rule">(табл. часть Товары в 1С не пуста)</span></th>

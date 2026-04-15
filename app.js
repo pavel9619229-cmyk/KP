@@ -1,6 +1,7 @@
 const tableBody = document.getElementById('tableBody');
 const countLabel = document.getElementById('countLabel');
 const searchInput = document.getElementById('searchInput');
+const managerFilter = document.getElementById('managerFilter');
 const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
@@ -126,7 +127,7 @@ let lastFingerprint = '';
 let lastSyncAt = null;
 let ws = null;
 let wsActive = false;
-const TABLE_COLUMN_COUNT = 15;
+const TABLE_COLUMN_COUNT = 17;
 let statusRules = createDefaultStatusRules();
 
 function hasMeaningfulValue(value) {
@@ -257,6 +258,11 @@ function getFlag(row, keys, fallback = null) {
   }
   if (typeof fallback === 'function') return fallback(row);
   return null;
+}
+
+function getManagerName(row) {
+  const manager = String(row?.managerName || row?.manager || row?.['Менеджер'] || '').trim();
+  return manager || 'НЕ ОПРЕДЕЛЕН';
 }
 
 function formatFlag(flag) {
@@ -692,6 +698,7 @@ function render(data) {
       <td>${escapeHtml(r.number || '')}</td>
       <td>${escapeHtml(r.createdAt || '')}</td>
       <td>${escapeHtml(r.customerName || '')}</td>
+      <td>${escapeHtml(getManagerName(r))}</td>
       <td>${formatFlag(getFlag(r, ['clientFilled', 'isClientFilled', 'клиентЗаполнен'], (row) => {
         const name = String(row.customerName || '').trim();
         if (!name) return false;
@@ -721,17 +728,37 @@ function render(data) {
 
 function applyFilters() {
   const q = searchInput.value.trim().toLowerCase();
+  const manager = managerFilter.value;
   const status = statusFilter.value;
 
   const filtered = rows.filter((r) => {
     const rowStatus = computeKpStatus(r);
+    const rowManager = getManagerName(r);
     const byStatus = !status || rowStatus === status;
-    const text = `${r.number || ''} ${r.customerName || ''} ${rowStatus} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
+    const byManager = !manager || rowManager === manager;
+    const text = `${r.number || ''} ${r.customerName || ''} ${rowManager} ${rowStatus} ${r.additionalInfoFirstLine || ''}`.toLowerCase();
     const byText = !q || text.includes(q);
-    return byStatus && byText;
+    return byStatus && byManager && byText;
   });
 
   render(filtered);
+}
+
+function fillManagers(data) {
+  const selectedManager = managerFilter.value;
+  managerFilter.innerHTML = '<option value="">Все менеджеры</option>';
+
+  const managers = [...new Set(data.map((r) => getManagerName(r)))].sort((a, b) => a.localeCompare(b, 'ru'));
+  for (const m of managers) {
+    const option = document.createElement('option');
+    option.value = m;
+    option.textContent = m;
+    managerFilter.appendChild(option);
+  }
+
+  if ([...managerFilter.options].some((o) => o.value === selectedManager)) {
+    managerFilter.value = selectedManager;
+  }
 }
 
 function fillStatuses(data) {
@@ -782,6 +809,7 @@ function setRows(nextRows, syncedAt = null) {
   if (nextFingerprint !== lastFingerprint) {
     rows = mergedRows;
     lastFingerprint = nextFingerprint;
+    fillManagers(rows);
     fillStatuses(rows);
   }
 
@@ -867,9 +895,11 @@ async function init() {
 }
 
 searchInput.addEventListener('input', applyFilters);
+managerFilter.addEventListener('change', applyFilters);
 statusFilter.addEventListener('change', applyFilters);
 resetBtn.addEventListener('click', () => {
   searchInput.value = '';
+  managerFilter.value = '';
   statusFilter.value = '';
   applyFilters();
 });

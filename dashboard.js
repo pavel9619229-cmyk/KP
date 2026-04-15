@@ -1,5 +1,6 @@
 const searchInput = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
+const managerFilter = document.getElementById('managerFilter');
 const newRequestBtn = document.getElementById('newRequestBtn');
 const newRequestPanel = document.getElementById('newRequestPanel');
 const closeRequestPanelBtn = document.getElementById('closeRequestPanelBtn');
@@ -114,6 +115,10 @@ clearSearchBtn.addEventListener('click', () => {
   updateClearSearchButton();
   renderBoard();
   searchInput.focus();
+});
+
+managerFilter.addEventListener('change', () => {
+  renderBoard();
 });
 function closeRequestPanel() {
   newRequestPanel.hidden = true;
@@ -259,6 +264,11 @@ function getFlag(row, keys, fallback = null) {
   }
 
   return null;
+}
+
+function getManagerName(row) {
+  const manager = String(row?.managerName || row?.manager || row?.['Менеджер'] || '').trim();
+  return manager || 'НЕ ОПРЕДЕЛЕН';
 }
 
 function hasRejectInComment(row) {
@@ -641,15 +651,18 @@ function getTabRowClass(tabKey) {
 function renderBoard() {
   const counts = getStatusCounts(rows);
   const query = searchInput.value.trim().toLowerCase();
+  const manager = managerFilter.value;
   const filtered = rows.filter((row) => {
     const status = computeKpStatus(row);
+    const rowManager = getManagerName(row);
     const matchesTab = activeTab === ALL_TAB_KEY || status === activeTab;
     if (!matchesTab) {
       return false;
     }
 
-    const haystack = `${row.number || ''} ${row.customerName || ''} ${row.additionalInfoFirstLine || ''} ${status}`.toLowerCase();
-    return !query || haystack.includes(query);
+    const byManager = !manager || rowManager === manager;
+    const haystack = `${row.number || ''} ${row.customerName || ''} ${rowManager} ${row.additionalInfoFirstLine || ''} ${status}`.toLowerCase();
+    return byManager && (!query || haystack.includes(query));
   });
 
   if (activeTab !== ALL_TAB_KEY && !counts.has(activeTab)) {
@@ -691,6 +704,23 @@ function renderBoard() {
   }).join('');
 }
 
+function fillManagers(data) {
+  const selectedManager = managerFilter.value;
+  managerFilter.innerHTML = '<option value="">Все менеджеры</option>';
+
+  const managers = [...new Set((data || []).map((row) => getManagerName(row)))].sort((a, b) => a.localeCompare(b, 'ru'));
+  for (const manager of managers) {
+    const option = document.createElement('option');
+    option.value = manager;
+    option.textContent = manager;
+    managerFilter.appendChild(option);
+  }
+
+  if ([...managerFilter.options].some((o) => o.value === selectedManager)) {
+    managerFilter.value = selectedManager;
+  }
+}
+
 async function loadRows() {
   const sources = [
     '/api/kp/all',
@@ -729,6 +759,7 @@ function setRows(nextRows, syncedAt = null) {
   if (nextFingerprint !== lastFingerprint) {
     rows = nextRows;
     lastFingerprint = nextFingerprint;
+    fillManagers(rows);
   }
   lastSyncAt = syncedAt || new Date();
   renderBoard();

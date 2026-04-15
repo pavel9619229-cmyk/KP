@@ -107,6 +107,7 @@ _additional_info_cache = {}
 _status_kp_value_cache = {}
 _status_kp_catalog_value_key_cache = {}
 _manager_filled_cache = {}
+_manager_name_cache = {}
 _product_specified_cache = {}
 _price_filled_cache = {}
 _kp_sent_cache = {}
@@ -153,6 +154,7 @@ NEW_REQUEST_STATUS_TEXT = os.getenv("NEW_REQUEST_STATUS_TEXT", "1. НОВЫЙ З
 
 STORAGE_DEFAULTS = {
     "statusKp": "",
+    "managerName": UNKNOWN_MANAGER_NAME,
     "managerFilled": None,
     "productSpecified": None,
     "priceFilled": None,
@@ -943,6 +945,8 @@ def is_manager_filled(manager_name: str | None) -> bool:
 def apply_storage_defaults(row: dict) -> dict:
     if "customerName" not in row:
         row["customerName"] = ""
+    if "managerName" not in row:
+        row["managerName"] = UNKNOWN_MANAGER_NAME
 
     row["clientFilled"] = is_client_filled(row.get("customerName"))
     for key, default_value in STORAGE_DEFAULTS.items():
@@ -953,7 +957,53 @@ def apply_storage_defaults(row: dict) -> dict:
 
 def apply_runtime_defaults(row: dict) -> dict:
     row["clientFilled"] = is_client_filled(row.get("customerName"))
+    if not str(row.get("managerName") or "").strip():
+        row["managerName"] = UNKNOWN_MANAGER_NAME
     return row
+
+
+def resolve_manager_name_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> str | None:
+    if not ref_key:
+        return None
+    if use_cache and ref_key in _manager_name_cache:
+        return _manager_name_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    manager_key = str(row.get("Менеджер_Key") or "").strip()
+    if not manager_key or manager_key == ZERO_GUID:
+        _manager_name_cache[ref_key] = UNKNOWN_MANAGER_NAME
+        return UNKNOWN_MANAGER_NAME
+
+    nav_link = str(row.get("Менеджер@navigationLinkUrl") or "").strip()
+    if not nav_link:
+        _manager_name_cache[ref_key] = UNKNOWN_MANAGER_NAME
+        return UNKNOWN_MANAGER_NAME
+
+    try:
+        nav_resp = requests.get(
+            f"{BASE}/{nav_link}",
+            headers=headers,
+            timeout=NAV_TIMEOUT_SECONDS,
+            verify=False,
+        )
+        if nav_resp.status_code == 200:
+            nav_obj = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
+            manager_name = str(nav_obj.get("Description") or "").strip() or UNKNOWN_MANAGER_NAME
+            _manager_name_cache[ref_key] = manager_name
+            return manager_name
+    except Exception:
+        pass
+
+    _manager_name_cache[ref_key] = UNKNOWN_MANAGER_NAME
+    return UNKNOWN_MANAGER_NAME
 
 
 def _resolve_comment_flag_for_ref(
@@ -1002,34 +1052,18 @@ def resolve_manager_filled_for_ref(
     if not row:
         return None
 
+    manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=row, use_cache=use_cache)
+    if manager_name is None:
+        return None
+
     manager_key = str(row.get("Менеджер_Key") or "").strip()
     if not manager_key or manager_key == ZERO_GUID:
         _manager_filled_cache[ref_key] = False
         return False
 
-    nav_link = str(row.get("Менеджер@navigationLinkUrl") or "").strip()
-    if not nav_link:
-        _manager_filled_cache[ref_key] = True
-        return True
-
-    try:
-        nav_resp = requests.get(
-            f"{BASE}/{nav_link}",
-            headers=headers,
-            timeout=NAV_TIMEOUT_SECONDS,
-            verify=False,
-        )
-        if nav_resp.status_code == 200:
-            nav_obj = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
-            manager_name = str(nav_obj.get("Description") or "").strip()
-            result = is_manager_filled(manager_name)
-            _manager_filled_cache[ref_key] = result
-            return result
-    except Exception:
-        pass
-
-    _manager_filled_cache[ref_key] = True
-    return True
+    result = is_manager_filled(manager_name)
+    _manager_filled_cache[ref_key] = result
+    return result
 
 
 def resolve_product_specified_for_ref(
@@ -2354,6 +2388,7 @@ def fetch_rows_from_odata() -> list:
                         "number": number,
                         "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
                         "customerName": "" if requisites_changed else known_row.get("customerName", ""),
+                        "managerName": known_row.get("managerName", UNKNOWN_MANAGER_NAME),
                         "status": status,
                         "managerFilled": known_row.get("managerFilled"),
                         "productSpecified": product_specified,
@@ -2402,6 +2437,7 @@ def fetch_rows_from_odata() -> list:
             continue
 
         need_customer = not (row.get("customerName") or "").strip()
+        need_manager_name = not (row.get("managerName") or "").strip() or str(row.get("managerName") or "").strip() == UNKNOWN_MANAGER_NAME
         need_info = not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = row.get("managerFilled") is None
         need_product = row.get("productSpecified") is not True
@@ -2412,13 +2448,13 @@ def fetch_rows_from_odata() -> list:
         need_rejected = False
         need_problem = False
         need_shipment = False
-        if not need_customer and not need_info and not need_manager and not need_product and not need_price and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
+        if not need_customer and not need_manager_name and not need_info and not need_manager and not need_product and not need_price and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
             continue
 
         doc = {}
-        if need_customer or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment:
+        if need_customer or need_manager_name or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment:
             doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment):
+            if not doc and (need_customer or need_manager_name or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment):
                 continue
 
         if need_info:
@@ -2450,6 +2486,16 @@ def fetch_rows_from_odata() -> list:
             )
             if manager_filled is not None:
                 row["managerFilled"] = manager_filled
+
+        if need_manager_name:
+            manager_name = resolve_manager_name_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=True,
+            )
+            if manager_name:
+                row["managerName"] = manager_name
 
         if need_product:
             product_specified = resolve_product_specified_for_ref(

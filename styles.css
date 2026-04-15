@@ -93,7 +93,7 @@ body {
   margin-top: 20px;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(240px, 1fr) 220px repeat(4, max-content);
+  grid-template-columns: minmax(240px, 1fr) 220px 220px repeat(4, max-content);
 }
 
 .controls label {
@@ -246,21 +246,21 @@ td:nth-child(3) {
   box-shadow: 2px 0 0 rgba(27, 33, 31, 0.08);
 }
 
-th:nth-child(n + 4):nth-child(-n + 13),
-td:nth-child(n + 4):nth-child(-n + 13) {
+th:nth-child(n + 5):nth-child(-n + 15),
+td:nth-child(n + 5):nth-child(-n + 15) {
   min-width: 102px;
   width: 102px;
   text-align: center;
 }
 
-th:nth-child(14),
-td:nth-child(14) {
+th:nth-child(16),
+td:nth-child(16) {
   min-width: 150px;
   width: 150px;
 }
 
-th:nth-child(15),
-td:nth-child(15) {
+th:nth-child(17),
+td:nth-child(17) {
   min-width: 280px;
 }
 
@@ -277,8 +277,8 @@ tbody tr:hover {
     min-width: 1280px;
   }
 
-  th:nth-child(15),
-  td:nth-child(15) {
+  th:nth-child(17),
+  td:nth-child(17) {
     display: none;
   }
 }
@@ -288,10 +288,10 @@ tbody tr:hover {
     min-width: 1120px;
   }
 
-  th:nth-child(12),
-  td:nth-child(12),
-  th:nth-child(13),
-  td:nth-child(13) {
+  th:nth-child(14),
+  td:nth-child(14),
+  th:nth-child(15),
+  td:nth-child(15) {
     display: none;
   }
 }
@@ -301,10 +301,10 @@ tbody tr:hover {
     min-width: 980px;
   }
 
-  th:nth-child(10),
-  td:nth-child(10),
-  th:nth-child(11),
-  td:nth-child(11) {
+  th:nth-child(12),
+  td:nth-child(12),
+  th:nth-child(13),
+  td:nth-child(13) {
     display: none;
   }
 }
