@@ -2171,13 +2171,8 @@ def fetch_rows_from_odata() -> list:
 
     date_filter = _build_date_filter()
 
-    total_count = get_total_count(headers, odata_filter=date_filter)
-    if total_count <= 0:
-        log(f"fetch_rows_from_odata: total_count={total_count}, aborting")
-        return []
-
     skip = 0
-    log(f"fetch_rows_from_odata: total_count={total_count} (filtered), page_size={page_size}")
+    log(f"fetch_rows_from_odata: using $filter, forward pagination, page_size={page_size}")
 
     while True:
         _fetch_pages += 1
@@ -2293,7 +2288,7 @@ def fetch_rows_from_odata() -> list:
                 )
 
         skip += page_size
-        if skip >= total_count:
+        if len(batch) < page_size:
             break
 
     log(f"fetch_rows_from_odata: {len(rows)} matched rows, {_fetch_pages} pages, {_fetch_network_errors} net errors")
