@@ -107,6 +107,7 @@ _status_kp_value_cache = {}
 _status_kp_catalog_value_key_cache = {}
 _manager_filled_cache = {}
 _product_specified_cache = {}
+_price_filled_cache = {}
 _kp_sent_cache = {}
 _receipt_confirmed_cache = {}
 _edo_sent_cache = {}
@@ -127,7 +128,7 @@ DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # Поля:
 # Проблема, Отказ, Накладная создана, Оплата получена,
 # В ЭДО отправлено, Отгрузить, Клиент КП увидел, КП отправлено,
-# Клиент заполнен, Менеджер заполнен, Товар указан
+# Клиент заполнен, Менеджер заполнен, Товар указан, Цена заполнена
 #
 # Формат 2 (технический, тоже поддерживается на фронтенде):
 # condition AND condition -> STATUS
@@ -140,6 +141,7 @@ DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 статус ОТГРУЗИТЬ устанавливается, если Отгрузить - ДА
 статус КЛИЕНТ ДУМАЕТ устанавливается, если Клиент КП увидел - ДА
 статус ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП устанавливается, если КП отправлено - ДА
+статус ОБРАБОТАТЬ устанавливается, если выполнено хотя бы одно из условий: Клиент заполнен - НЕТ, Менеджер заполнен - НЕТ, Цена заполнена - НЕТ
 статус ОТПРАВИТЬ КЛИЕНТУ устанавливается, если Клиент заполнен - ДА, Менеджер заполнен - ДА, Товар указан - ДА
 """
 
@@ -152,6 +154,7 @@ STORAGE_DEFAULTS = {
     "statusKp": "",
     "managerFilled": None,
     "productSpecified": None,
+    "priceFilled": None,
     "kpSent": None,
     "receiptConfirmed": None,
     "edoSent": None,
@@ -349,6 +352,7 @@ RULE_FIELD_ALIASES = {
     "клиентзаполнен": "clientFilled",
     "менеджерзаполнен": "managerFilled",
     "товаруказан": "productSpecified",
+    "ценазаполнена": "priceFilled",
 }
 
 
@@ -473,6 +477,7 @@ def _compute_status_for_row(row: dict, rules: list[dict]) -> str:
         "clientFilled": row.get("clientFilled"),
         "managerFilled": row.get("managerFilled"),
         "productSpecified": row.get("productSpecified"),
+        "priceFilled": row.get("priceFilled"),
     }
     for rule in rules:
         conditions = rule.get("conditions") or []
@@ -1086,6 +1091,73 @@ def resolve_product_specified_for_ref(
     nomenclature_text = str(top_row.get("Номенклатура") or "").strip()
     result = bool((nomenclature_key and nomenclature_key != ZERO_GUID) or nomenclature_text)
     _product_specified_cache[ref_key] = result
+    return result
+
+
+def resolve_price_filled_for_ref(
+    ref_key: str,
+    headers: dict,
+    doc: dict | None = None,
+    use_cache: bool = True,
+) -> bool | None:
+    """Check if the first product row has a valid price (not 0 and not 1)."""
+    if not ref_key:
+        return None
+    if use_cache and ref_key in _price_filled_cache:
+        return _price_filled_cache[ref_key]
+
+    row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
+    if not row:
+        return None
+
+    def _check_price(goods_row: dict) -> bool:
+        try:
+            price = float(goods_row.get("Цена") or 0)
+        except (ValueError, TypeError):
+            price = 0.0
+        return price > 1
+
+    # Try navigation link first
+    goods_nav = str(row.get("Товары@navigationLinkUrl") or "").strip()
+    if goods_nav:
+        try:
+            nav_resp = requests.get(
+                f"{BASE}/{goods_nav}",
+                headers=headers,
+                params={"$top": "1", "$select": "Цена,LineNumber"},
+                timeout=NAV_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            if nav_resp.status_code == 200:
+                payload = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
+                values = payload.get("value") if isinstance(payload, dict) else None
+                if isinstance(values, list) and values:
+                    result = _check_price(values[0])
+                    _price_filled_cache[ref_key] = result
+                    return result
+        except Exception:
+            pass
+
+    # Fallback: inline Товары array
+    goods = row.get("Товары")
+    if not isinstance(goods, list) or not goods:
+        _price_filled_cache[ref_key] = False
+        return False
+
+    dict_rows = [item for item in goods if isinstance(item, dict)]
+    if not dict_rows:
+        _price_filled_cache[ref_key] = False
+        return False
+
+    def line_no(item: dict) -> int:
+        try:
+            return int(str(item.get("LineNumber") or "0"))
+        except Exception:
+            return 0
+
+    top_row = min(dict_rows, key=line_no)
+    result = _check_price(top_row)
+    _price_filled_cache[ref_key] = result
     return result
 
 
@@ -2281,6 +2353,7 @@ def fetch_rows_from_odata() -> list:
                         "status": status,
                         "managerFilled": known_row.get("managerFilled"),
                         "productSpecified": product_specified,
+                        "priceFilled": known_row.get("priceFilled"),
                         "kpSent": kp_sent_from_comment,
                         "receiptConfirmed": receipt_from_comment,
                         "edoSent": edo_from_comment,
@@ -2319,19 +2392,20 @@ def fetch_rows_from_odata() -> list:
         need_info = not (row.get("additionalInfoFirstLine") or "").strip()
         need_manager = row.get("managerFilled") is None
         need_product = row.get("productSpecified") is not True
+        need_price = row.get("priceFilled") is None
         need_kp_sent = False
         need_receipt = False
         need_edo = False
         need_rejected = False
         need_problem = False
         need_shipment = False
-        if not need_customer and not need_info and not need_manager and not need_product and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
+        if not need_customer and not need_info and not need_manager and not need_product and not need_price and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
             continue
 
         doc = {}
-        if need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment:
+        if need_customer or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment:
             doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_info or need_manager or need_product or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment):
+            if not doc and (need_customer or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment):
                 continue
 
         if need_info:
@@ -2377,6 +2451,16 @@ def fetch_rows_from_odata() -> list:
                 product_specified = True
             if product_specified is not None:
                 row["productSpecified"] = product_specified
+
+        if need_price:
+            price_filled = resolve_price_filled_for_ref(
+                ref_key,
+                headers,
+                doc=doc,
+                use_cache=True,
+            )
+            if price_filled is not None:
+                row["priceFilled"] = price_filled
 
         if need_kp_sent:
             kp_sent = resolve_kp_sent_for_ref(
