@@ -29,6 +29,7 @@ const RULE_FIELDS = new Set([
   'clientFilled',
   'managerFilled',
   'productSpecified',
+  'priceFilled',
 ]);
 const RULE_FIELD_ALIASES = new Map([
   ['problem', 'problem'],
