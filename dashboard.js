@@ -2,6 +2,7 @@ const searchInput = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const newRequestBtn = document.getElementById('newRequestBtn');
 const newRequestPanel = document.getElementById('newRequestPanel');
+const closeRequestPanelBtn = document.getElementById('closeRequestPanelBtn');
 const requestTextInput = document.getElementById('requestTextInput');
 const submitRequestBtn = document.getElementById('submitRequestBtn');
 const requestStatusMsg = document.getElementById('requestStatusMsg');
@@ -110,6 +111,11 @@ clearSearchBtn.addEventListener('click', () => {
   renderBoard();
   searchInput.focus();
 });
+function closeRequestPanel() {
+  newRequestPanel.hidden = true;
+  newRequestBtn.textContent = 'НОВЫЙ ЗАПРОС';
+}
+
 newRequestBtn.addEventListener('click', () => {
   const isHidden = newRequestPanel.hidden;
   newRequestPanel.hidden = !isHidden;
@@ -120,6 +126,8 @@ newRequestBtn.addEventListener('click', () => {
     newRequestBtn.textContent = 'НОВЫЙ ЗАПРОС';
   }
 });
+
+closeRequestPanelBtn.addEventListener('click', closeRequestPanel);
 
 submitRequestBtn.addEventListener('click', async () => {
   const requestText = String(requestTextInput.value || '').trim();
