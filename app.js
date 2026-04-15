@@ -544,6 +544,7 @@ function deriveStatusFacts(row) {
     clientFilled,
     managerFilled,
     productSpecified: getFlag(row, ['productSpecified', 'isProductSpecified', 'товарУказан']),
+    priceFilled: getFlag(row, ['priceFilled']),
   };
 }
 
@@ -704,6 +705,7 @@ function render(data) {
         return normalized !== 'не определен' && normalized !== 'неопределен';
       }))}</td>
       <td>${formatFlag(getFlag(r, ['productSpecified', 'isProductSpecified', 'товарУказан']))}</td>
+      <td>${formatFlag(getFlag(r, ['priceFilled']))}</td>
       <td>${formatFlag(getFlag(r, ['kpSent', 'isKpSent', 'кпОтправлено']))}</td>
       <td>${formatFlag(getFlag(r, ['receiptConfirmed', 'isReceiptConfirmed', 'получениеПодтверждено']))}</td>
       <td>${formatFlag(getFlag(r, ['paymentReceived', 'isPaymentReceived', 'оплатаПолучена']))}</td>
