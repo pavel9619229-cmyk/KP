@@ -99,6 +99,7 @@ _last_refresh_error = None
 _last_group_enrich = None
 
 _TZ_MSK = timezone(timedelta(hours=3))
+_app_started_at = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
@@ -2601,7 +2602,7 @@ async def version():
         "ok": True,
         "commit": APP_COMMIT_SHA or None,
         "branch": APP_BRANCH or None,
-        "startedAt": _last_refresh,
+        "startedAt": _app_started_at,
     }
 
 
