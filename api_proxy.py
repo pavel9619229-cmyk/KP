@@ -2136,10 +2136,22 @@ def build_known_rows_lookup() -> dict:
     return known
 
 
-def get_total_count(headers: dict) -> int:
+def _build_date_filter() -> str:
+    """Build OData $filter for TARGET_START..TARGET_END date range."""
+    start_str = TARGET_START.strftime("%Y-%m-%dT%H:%M:%S")
+    end_str = TARGET_END.strftime("%Y-%m-%dT%H:%M:%S")
+    return f"Date ge datetime'{start_str}' and Date le datetime'{end_str}'"
+
+
+def get_total_count(headers: dict, odata_filter: str = "") -> int:
+    url = f"{BASE}/{ENTITY}/$count"
+    params = {}
+    if odata_filter:
+        params["$filter"] = odata_filter
     resp = requests.get(
-        f"{BASE}/{ENTITY}/$count",
+        url,
         headers=headers,
+        params=params,
         timeout=30,
         verify=False,
     )
@@ -2157,17 +2169,20 @@ def fetch_rows_from_odata() -> list:
     _fetch_batches_empty = 0
     _fetch_network_errors = 0
 
-    total_count = get_total_count(headers)
+    date_filter = _build_date_filter()
+
+    total_count = get_total_count(headers, odata_filter=date_filter)
     if total_count <= 0:
         log(f"fetch_rows_from_odata: total_count={total_count}, aborting")
         return []
 
-    skip = ((total_count - 1) // page_size) * page_size
-    log(f"fetch_rows_from_odata: total_count={total_count}, starting skip={skip}")
+    skip = 0
+    log(f"fetch_rows_from_odata: total_count={total_count} (filtered), page_size={page_size}")
 
     while True:
         _fetch_pages += 1
         params = {
+            "$filter": date_filter,
             "$select": "Ref_Key," + ",".join(LIGHT_SELECT_FIELDS),
             "$top": str(page_size),
             "$skip": str(skip),
@@ -2180,7 +2195,7 @@ def fetch_rows_from_odata() -> list:
                     f"{BASE}/{ENTITY}",
                     headers=headers,
                     params=params,
-                    timeout=45,
+                    timeout=120,
                     verify=False,
                 )
                 if resp.status_code == 200:
@@ -2189,7 +2204,7 @@ def fetch_rows_from_odata() -> list:
                 _fetch_network_errors += 1
                 log(f"fetch_rows_from_odata: network error at skip={skip}: {req_exc}")
                 resp = None
-            time.sleep(1)
+            time.sleep(2)
 
         if resp is None or resp.status_code != 200:
             sc = resp.status_code if resp else "None"
@@ -2199,7 +2214,7 @@ def fetch_rows_from_odata() -> list:
         batch = resp.json().get("value", [])
         if not batch:
             _fetch_batches_empty += 1
-            log(f"fetch_rows_from_odata: empty batch at skip={skip}")
+            log(f"fetch_rows_from_odata: empty batch at skip={skip}, done")
             break
 
         batch_dates = []
@@ -2277,13 +2292,9 @@ def fetch_rows_from_odata() -> list:
                     }
                 )
 
-        if batch_dates and max(batch_dates) < TARGET_START:
+        skip += page_size
+        if skip >= total_count:
             break
-
-        if skip == 0:
-            break
-
-        skip = max(0, skip - page_size)
 
     log(f"fetch_rows_from_odata: {len(rows)} matched rows, {_fetch_pages} pages, {_fetch_network_errors} net errors")
     rows.sort(key=lambda x: x["createdAt"], reverse=True)
