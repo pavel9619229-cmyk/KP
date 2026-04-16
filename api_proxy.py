@@ -11,6 +11,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from pathlib import Path
@@ -2788,13 +2789,18 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
         stage2_patch.append(patch)
     _save_stage_patch("stage2_comment_flags", stage2_patch)
 
-    # Stage 2.5: fetch docs once for per-doc stages.
-    for row in rows:
-        ref_key = str(row.get("refKey") or "")
+    # Stage 2.5: fetch docs in parallel for per-doc stages.
+    def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
-            docs_by_ref[ref_key] = {}
-            continue
-        docs_by_ref[ref_key] = _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
+            return ref_key, {}
+        return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
+
+    ref_keys = [str(row.get("refKey") or "") for row in rows]
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
+        for future in as_completed(futures):
+            rk, doc = future.result()
+            docs_by_ref[rk] = doc
 
     # Stage 3: customer.
     stage3_patch: list[dict] = []
