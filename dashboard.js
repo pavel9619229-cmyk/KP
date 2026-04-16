@@ -594,7 +594,7 @@ function buildMetaChips(row) {
   return chips;
 }
 
-function renderTabs(counts) {
+function renderTabs(counts, totalCount) {
   const orderedStatuses = getOrderedStatuses(counts);
   const primaryTabs = [
     'ОТКАЗ',
@@ -610,7 +610,7 @@ function renderTabs(counts) {
     'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
   ];
 
-  const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: rows.length }];
+  const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: totalCount }];
   for (const status of primaryTabs) {
     tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
   }
@@ -649,9 +649,13 @@ function getTabRowClass(tabKey) {
 }
 
 function renderBoard() {
-  const counts = getStatusCounts(rows);
   const query = searchInput.value.trim().toLowerCase();
   const manager = managerFilter.value;
+  const rowsForCounts = rows.filter((row) => {
+    if (!manager) return true;
+    return getManagerName(row) === manager;
+  });
+  const counts = getStatusCounts(rowsForCounts);
   const filtered = rows.filter((row) => {
     const status = computeKpStatus(row);
     const rowManager = getManagerName(row);
@@ -669,7 +673,7 @@ function renderBoard() {
     activeTab = ALL_TAB_KEY;
   }
 
-  renderTabs(counts);
+  renderTabs(counts, rowsForCounts.length);
 
   updatedAtLabel.textContent = formatUpdatedAt(lastSyncAt);
 
