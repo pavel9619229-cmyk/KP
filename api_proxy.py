@@ -2681,7 +2681,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
         f"{BASE}/{ENTITY}",
         headers=headers,
         params={
-            "$select": "Ref_Key,Number,Date,Статус,Комментарий",
+            "$select": "Ref_Key,Number,Date,Статус,Комментарий,СуммаДокумента",
             "$top": str(page_size),
             "$skip": str(skip),
         },

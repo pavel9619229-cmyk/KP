@@ -25,7 +25,7 @@ STATE_PATH = ROOT / "data" / "kp_watch_state.json"
 POLL_SECONDS = int(os.getenv("WATCH_POLL_SECONDS", "60"))
 HEAVY_EVERY_CHANGES = int(os.getenv("WATCH_HEAVY_EVERY_CHANGES", "6"))
 BASE_BATCH_SIZE = int(os.getenv("WATCH_BASE_BATCH_SIZE", "300"))
-FORCE_HEAVY_EVERY_MINUTES = int(os.getenv("WATCH_FORCE_HEAVY_EVERY_MINUTES", "30"))
+FORCE_HEAVY_EVERY_MINUTES = int(os.getenv("WATCH_FORCE_HEAVY_EVERY_MINUTES", "10"))
 
 
 def now() -> str:
@@ -61,6 +61,7 @@ def build_light_fingerprint(batch: list) -> str:
                     str(item.get("Date") or ""),
                     str(item.get("Статус") or ""),
                     str(item.get("Комментарий") or ""),
+                    str(item.get("СуммаДокумента") or ""),
                 ]
             )
         )
