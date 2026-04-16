@@ -2236,11 +2236,27 @@ def save_rows(rows: list) -> None:
 
 
 def build_known_rows_lookup() -> dict:
-    known = {}
-    for source_row in list(_cached_rows):
-        number = source_row.get("number")
-        if number and number not in known:
-            known[number] = source_row
+    known: dict = {}
+
+    def _append(rows: list) -> None:
+        for source_row in list(rows or []):
+            number = source_row.get("number")
+            if number and number not in known:
+                known[number] = source_row
+
+    # 1) In-memory cache (fast path for running API process)
+    _append(list(_cached_rows))
+
+    # 2) Disk snapshots (critical for standalone scripts like tools/refresh_seed.py)
+    # so flags do not reset when process memory starts empty.
+    for snapshot_path in (Path(RUNTIME_DATA_FILE), Path(SEED_DATA_FILE)):
+        if not snapshot_path.exists():
+            continue
+        try:
+            _append(load_rows_from_path(snapshot_path))
+        except Exception as exc:
+            log(f"known rows snapshot read failed ({snapshot_path}): {exc}")
+
     return known
 
 
