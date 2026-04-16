@@ -24,3 +24,9 @@ services:
         value: onec-kp-realtime
       - key: RENDER_EXTERNAL_URL
         value: https://onec-kp-realtime.onrender.com
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        value: pavel9619229-cmyk/KP
+      - key: GITHUB_BRANCH
+        value: main
