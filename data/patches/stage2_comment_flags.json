@@ -1,0 +1,2702 @@
+[
+  {
+    "refKey": "e3d4e0e5-396e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "8ee25daa-3961-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ПОДАНО НА ТОРГИ https://bidzaar.com/"
+  },
+  {
+    "refKey": "98af43c3-38ba-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Здравствуйте!"
+  },
+  {
+    "refKey": "5505480f-38ea-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "​​​​​​​Позиция КОЛЕСО в сборе Пнев. шина 23*9-10 PR16 обод 6.50-10 PCD6/180"
+  },
+  {
+    "refKey": "5e53b33f-38b2-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "13b24764-38c5-11f1-b563-bc97e15e6af5",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ДУБЛЬ_ЗАПРОС ОБРАБОТАН КП ПСУТ-000326"
+  },
+  {
+    "refKey": "685ce3dc-38ad-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ООО \"Нижегородский завод монтажных пен\"  1 шинокомлект 5,00-8-2шт  2 камеры 5,00-8-2шт"
+  },
+  {
+    "refKey": "d4793856-3894-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТОРГИ"
+  },
+  {
+    "refKey": "cf3c7eb1-3835-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "камера 17,5-25 20 шт"
+  },
+  {
+    "refKey": "f775fd14-3812-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Ждем заполненный опросник"
+  },
+  {
+    "refKey": "e48db0f5-37fa-11f1-8d55-bc97e15eb091",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "92c5c090-3738-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": true,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КЛИЕНТ КП УВИДЕЛ"
+  },
+  {
+    "refKey": "5e555801-372b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": true,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КЛИЕНТ КП УВИДЕЛ ?"
+  },
+  {
+    "refKey": "785d59e2-370b-11f1-b563-bc97e15e6af5",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО , выставлен счет."
+  },
+  {
+    "refKey": "c541fe22-373f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "0dd15bd7-3713-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Шина бандажная 645/300-410 - 2шт"
+  },
+  {
+    "refKey": "9b835060-3722-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТПРАВИЛА в МАХ"
+  },
+  {
+    "refKey": "22a3dc26-3718-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "6009 1878 2189 28915"
+  },
+  {
+    "refKey": "49422d43-371c-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ Тестовый новый запрос после фикса поиска GUID статуса, повторная проверка"
+  },
+  {
+    "refKey": "dffe0126-371b-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "f7d59aad-3714-11f1-b563-bc97e15e6af5",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ  надо 8 мм  и это посредник на тендер"
+  },
+  {
+    "refKey": "d597d1c7-3722-11f1-b563-bc97e15e6af5",
+    "kpSent": true,
+    "receiptConfirmed": true,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО         КЛИЕНТ КП УВИДЕЛ ?"
+  },
+  {
+    "refKey": "d6bfea76-3729-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b7b01cd8-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b7b01ce8-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b7b01cf8-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "cb37672b-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "test  ОТКАЗ"
+  },
+  {
+    "refKey": "cbbcd917-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "cbbcdc81-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "test  ОТКАЗ"
+  },
+  {
+    "refKey": "cddedb72-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "ce2ff461-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "ce85c198-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "d6ccfada-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "ee801ba4-3712-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ inspect-req-format"
+  },
+  {
+    "refKey": "275c26e1-3716-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "2ec828bd-3716-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ  field-inspect"
+  },
+  {
+    "refKey": "d70ad728-3719-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "d70ad729-3719-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "059d2c27-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "0e356559-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "5a1383d7-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "67f13535-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "69590dce-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "eb26f4d3-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ entity-post-probe-2"
+  },
+  {
+    "refKey": "eb26f4d4-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "entity-post-probe-1  ОТКАЗ"
+  },
+  {
+    "refKey": "fffe4a49-371a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "4dd5dceb-371b-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "4dd5dcec-371b-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "526374f8-371b-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "doc-create-status-guid-inline"
+  },
+  {
+    "refKey": "a24579db-357c-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ТОВАР 11  ОТКАЗ"
+  },
+  {
+    "refKey": "c3cf6022-35b8-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ТОВАР 10  ОТКАЗ"
+  },
+  {
+    "refKey": "cec91c5c-34c8-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "нет оплаты"
+  },
+  {
+    "refKey": "6fce022b-34dc-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП"
+  },
+  {
+    "refKey": "f3b38e7b-34bc-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "клиент получил КП ?"
+  },
+  {
+    "refKey": "3c6be368-34be-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ОЖИДАЕМ ОТВЕТ КЛИЕНТА ПО АРТИКУЛУ ВЕНТИЛЯ."
+  },
+  {
+    "refKey": "46a22d7c-33e2-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Елена, добрый день!"
+  },
+  {
+    "refKey": "3ebf9c96-3416-11f1-b563-bc97e15e6af5",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 4.00-8 (3.00) ROLLTAH G102\t\t14,000\t2,000\t16,000"
+  },
+  {
+    "refKey": "49502738-33f7-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Запрос срока поставки на Пневм. шина 560*140-12 TRELLEBORG Т528 100А4 TT;"
+  },
+  {
+    "refKey": "272850d3-33f1-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "2026-04-09 - татьяна должна отправить счет клиенту и добиться отгрузки"
+  },
+  {
+    "refKey": "8cf161d9-33eb-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "82c0335e-3360-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Сделайте счëт на камеры 4 шт 26.5х25"
+  },
+  {
+    "refKey": "63de48d7-335f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "АГРОМАСТ - всего 3 шт."
+  },
+  {
+    "refKey": "ae09bebf-3334-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "088f68f0-335b-11f1-8d55-bc97e15eb091",
+    "kpSent": true,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО."
+  },
+  {
+    "refKey": "2bf3813f-335a-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "КОГДА ОТГРУЗКА ?"
+  },
+  {
+    "refKey": "30a59c87-3359-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - им только атлас нужен, тк.до комплекта не хватает"
+  },
+  {
+    "refKey": "28a6fced-3344-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "49fc03e4-3320-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "26,5-25 НОРМ ободная лента"
+  },
+  {
+    "refKey": "d31fc3f1-3319-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Камера 20.8-38   TR218A (КНР):"
+  },
+  {
+    "refKey": "3af630d8-3326-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - максим получил КП обещал дать обр связь 10-04-2026"
+  },
+  {
+    "refKey": "f904a1ff-3322-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте)"
+  },
+  {
+    "refKey": "bf3c900c-3329-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "565f00cd-331c-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": true,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "2b1f1842-3319-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": true,
+    "additionalInfoFirstLine": "ПРОБЛЕМА"
+  },
+  {
+    "refKey": "58fa180d-3283-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТК ДЛ Ленинград-Вологда = 10 200/2 = 5 100, 5 дней"
+  },
+  {
+    "refKey": "21deb059-3275-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТОРГИ. НЕ МОЖЕМ УЧАСТВОВАТЬ по ПРИЧИНЕ ОТСУТСТВИЯ ЭЦП."
+  },
+  {
+    "refKey": "bae96472-324f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Елена, предлагайте наши"
+  },
+  {
+    "refKey": "628fa729-326e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ - берут рокбастер за 20900 р. со склада в НС"
+  },
+  {
+    "refKey": "922da311-3266-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "07.04.2026, 11:35, Борисов Михаил Александрович (mikhail.borisov@pridex.ru):"
+  },
+  {
+    "refKey": "79413c28-3250-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "предлагайте"
+  },
+  {
+    "refKey": "18512537-31bf-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день,"
+  },
+  {
+    "refKey": "d8e63226-3190-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "06.04.2026, 09:36, nurkanov@volma.ru (nurkanov@volma.ru):"
+  },
+  {
+    "refKey": "629354f0-317e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитое колесо, Типоразмер: 7.00-12, без бурта, 4 шт"
+  },
+  {
+    "refKey": "11004a64-2f32-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "9a5e02c6-2ea4-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - 03-04 - михаил обещал перезвонить 06-04 в ответ на предложение сделать шины с дисками дешевле чем конкурент"
+  },
+  {
+    "refKey": "4e8f4fa5-2e92-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "ec1c0f4f-2e91-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "в наличии 6 см + 4 тр"
+  },
+  {
+    "refKey": "37dbbcb1-2e86-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "ca1899a5-2e79-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "bb11204a-2e73-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "b3258b56-2e72-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b42f70fd-2e71-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ЗАПРОСИЛА АГРОМАСТ"
+  },
+  {
+    "refKey": "7a6f6aa2-2e70-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "15-04-2026 отгружены 4 шт 5008 в ДЛ рябиновая - почему нет УПД ?"
+  },
+  {
+    "refKey": "9fe58c57-2e67-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": true,
+    "additionalInfoFirstLine": "Звонил Монтаж-Проект, выяснилось, что по февральской отгрузке колес 6.50-10,"
+  },
+  {
+    "refKey": "287d1877-2dc1-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Ждем ответ дилера"
+  },
+  {
+    "refKey": "6a16c198-2db5-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Колесо большегрузное с полиуретановой шинкой С-4102-DUS поворотное с тормозом гп 1100 кг EURO-LIFT, 8 шт"
+  },
+  {
+    "refKey": "ac045b27-2da3-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 7.00-12 PR16 KENDA K610 KINETICS TTF (шинокомплект):"
+  },
+  {
+    "refKey": "a07d8927-2d9d-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "1."
+  },
+  {
+    "refKey": "c7e32cd9-2da7-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день! найдем у вас шины 6.00-15?"
+  },
+  {
+    "refKey": "160b8f17-2d9f-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 8.25-15 PR14 KENDA K610 157A5/149 TR75A TTF (шинокомплект)"
+  },
+  {
+    "refKey": "dbec759d-2cf6-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "1a547667-2cd4-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "татьяна, укажите в КП что можем предложить из пневматической шины"
+  },
+  {
+    "refKey": "433cac97-2cca-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - я уточнил - наши шины не подходят на МТЗ - только поливальные машины"
+  },
+  {
+    "refKey": "c1b623ac-2cdd-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Шина 10-16.5-10PR K192 WESTLAKE TL, 114 шт."
+  },
+  {
+    "refKey": "e6b96ff2-2cdd-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ROLLTA"
+  },
+  {
+    "refKey": "76ee876f-2cd0-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "1. Автошина для ричстакеров типаразмера 18.00-25 40PR, 32 шт."
+  },
+  {
+    "refKey": "fe0e2c6e-2c0f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ПОЗВОНИЛА. ЖДЕМ ОТВЕТ КЛИЕНТА."
+  },
+  {
+    "refKey": "7c43db9a-29dc-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "компания мульти форклифт"
+  },
+  {
+    "refKey": "2a236d42-29d3-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "3c8a1b7e-29d3-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, добрый день!"
+  },
+  {
+    "refKey": "92598c31-29cc-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "клиент - ООО МИР ТЕХ"
+  },
+  {
+    "refKey": "0d37386e-291c-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "6b28fad5-283d-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Здравствуйте, у нас есть предложение аналога с учетом доставки 69 тр за ед."
+  },
+  {
+    "refKey": "0af4c8cc-2856-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Ищет мин цены для работы."
+  },
+  {
+    "refKey": "ab744918-283b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "утилизация в МС    необходим акт утилизации с указанием марки и размера, а также причины утилизации (порезы, грыжи, истирание протектора и т.п.)"
+  },
+  {
+    "refKey": "0ec7b5da-2857-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "3ba54d0e-2813-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "отправила клиенту разъяснение по поводу варианта колеса 6.50-10."
+  },
+  {
+    "refKey": "c63927d1-2843-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "тендер на 5 лет"
+  },
+  {
+    "refKey": "3130bc70-2825-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "сс8 117,65 10600"
+  },
+  {
+    "refKey": "4952d10f-2821-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день, прошу дать предложение, необходимы шины суперэластик 5,50-15 (4,50) - 4 шт."
+  },
+  {
+    "refKey": "8f3b69d1-2830-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "750/65р26"
+  },
+  {
+    "refKey": "cf7dc089-2826-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел предложил из китая"
+  },
+  {
+    "refKey": "58693928-27b5-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "RUB Z/343/140/203 (13 1/2x5 1/2x8) бандажное колесо SM (без протектора)"
+  },
+  {
+    "refKey": "ae0d5552-27b4-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 10-16.5 PR12 ADVANCE L4A STEELBELT TL\t\t4,000\t4,000"
+  },
+  {
+    "refKey": "5de38445-2769-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Здравствуйте. Если собрать диск и шину первую за 42000 рублей. То сколько выйдет по цене?"
+  },
+  {
+    "refKey": "21982c9a-2768-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Клиент купил шины нэксен в Белоруссии."
+  },
+  {
+    "refKey": "fb8be948-274d-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "25 км/ч"
+  },
+  {
+    "refKey": "38bb3796-2757-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день!"
+  },
+  {
+    "refKey": "b604c749-2799-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "524e6c7b-277e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Козлов Олег"
+  },
+  {
+    "refKey": "022afec3-2767-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b4341951-2751-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "24.03.2026, 08:15, Калинкин Виктор (v.kalinkin@stroylogistika.info):"
+  },
+  {
+    "refKey": "9746061f-26bf-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 18*7-8 (4.33) KATOCHI YY109\t13,000\t9,000\t\t22,000"
+  },
+  {
+    "refKey": "6ec66773-26b9-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Диск (обод) 6.50-15 PCD8/278 HUB220 сварной без колец, 4 шт"
+  },
+  {
+    "refKey": "5eab6223-26cb-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 15*4.5-8 (3.00) CST C8904 NM"
+  },
+  {
+    "refKey": "0bacb128-26c8-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Шина 11.2-20 PR8 NORTEC F-35 114A6 TT (с камерой):"
+  },
+  {
+    "refKey": "0eca8d80-26bb-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "b8c387dc-2685-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 5.00-8 PR10 CST С352 TTF (шинокомплект)"
+  },
+  {
+    "refKey": "312acd51-ab21-11f0-b55f-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день Елена !"
+  },
+  {
+    "refKey": "00b3dfec-2440-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день. Диски и шины в наличии."
+  },
+  {
+    "refKey": "e531415b-2429-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "спасибо! хорошие цены на 5.50-15, на 6.00-9 TRACKSTAR дали по 8200."
+  },
+  {
+    "refKey": "ab87f783-23a4-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Диск (обод) 7.00-15   сварной с кольцами"
+  },
+  {
+    "refKey": "c17881b7-237d-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "добрый день, прошу сделать скидку по счету"
+  },
+  {
+    "refKey": "7595c892-239b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Шина 5.00-8(усиленная) 4 шт"
+  },
+  {
+    "refKey": "04bb9c59-238d-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Диск (обод) 5.00F-10 ET7 PCD5/145 HUB110  сварной с кольцами:"
+  },
+  {
+    "refKey": "45b0e921-238c-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 18*7-8 PR16 ADVANCE OB502 TTF (шинокомплект)\t\t2,000\t\t2,000"
+  },
+  {
+    "refKey": "cd0a3523-2380-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "0be74cf3-237e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - 19-03-2026 - нататья обещала уточнит по дикам и брендам и сообщить"
+  },
+  {
+    "refKey": "6e7392da-2361-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "18.00-25, 32 слоя камерная, 2 шт."
+  },
+  {
+    "refKey": "e979005b-235e-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день! Просим выставить счет   с учетом доставки ( адрес Москва, ул. Верхние поля, 54с12)"
+  },
+  {
+    "refKey": "90776fec-22bf-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "26.02.2026, 17:26, raduga 5mkr (raduga.5mkr@yandex.ru):"
+  },
+  {
+    "refKey": "343029d1-22c5-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день!"
+  },
+  {
+    "refKey": "0e52ca4c-22d2-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "8849da37-22c9-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "24.03.2026"
+  },
+  {
+    "refKey": "ccc2cfbf-22c8-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - 19-03-2026 - это посредник - сказали звонить не ранее апреля"
+  },
+  {
+    "refKey": "6c133ed3-2290-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 355/50-15 (9.75) CST C8904 EASIFIT"
+  },
+  {
+    "refKey": "06313a75-22a8-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "сс 6 468,45+3%= 6662,50 руб."
+  },
+  {
+    "refKey": "a7c6c2ed-22b2-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Бандажная шина 18*9-12 1/8 (457*229-308)  ROLLTAH SMOOTH\t6,000\t2,000\t4,000\t12,000"
+  },
+  {
+    "refKey": "5274dea4-22a5-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "1ad4e44b-22a4-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": true,
+    "additionalInfoFirstLine": "ОТГРУЗКА ЕСТЬ - ЭТО АКТ НА ТФ   ПРОБЛЕМА"
+  },
+  {
+    "refKey": "7981598a-2204-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - 07-04 - клиент должен подтвердить вызом механика чтобы он снял размер"
+  },
+  {
+    "refKey": "3cbb46bc-21f2-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": true,
+    "additionalInfoFirstLine": "Татьяна, почему вы не стали обрабатывать КП 227 ?  Это же конечник - вероятность продать - большая."
+  },
+  {
+    "refKey": "440c8769-21ef-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "5c162638-21dd-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "cf02034e-21d4-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день Елена !"
+  },
+  {
+    "refKey": "c5ec8e88-212b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "С уважением к Вам и Вашему делу"
+  },
+  {
+    "refKey": "6994f248-2149-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Доброе утро, Татьяна"
+  },
+  {
+    "refKey": "44d1ded5-211b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "d36da747-212f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Клиент  находится в Домодедово."
+  },
+  {
+    "refKey": "a4060257-2125-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Диск (обод) 6.50-15 PCD8/278 HUB220 сварной без колец"
+  },
+  {
+    "refKey": "27254e9c-2120-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ШИНА    10.00Х16.5 – 12 шт."
+  },
+  {
+    "refKey": "68cd1c19-2102-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ  работают напрямую с импортерами"
+  },
+  {
+    "refKey": "15b66251-1ed0-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 11.00-20 (11.00R20) ADVANCE/SAMSON GLR07 STEEL TTF (шинокомплект) (КНР):"
+  },
+  {
+    "refKey": "0c7b749c-1ecb-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, добрый день!"
+  },
+  {
+    "refKey": "fc82eda0-1ecd-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "23.5-25 leadway"
+  },
+  {
+    "refKey": "e3f2d691-1e2d-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Вес, кг\t37.41 х 6 = 225"
+  },
+  {
+    "refKey": "bf0667ee-1e1a-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "прошу сделать КП и сообщить"
+  },
+  {
+    "refKey": "74ddad5c-1e2a-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "г. Москва, ул. Крылатская, д.18"
+  },
+  {
+    "refKey": "a783378a-1e23-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ЖДЕМ СЧЕТ из ВИЛМЫ"
+  },
+  {
+    "refKey": "ef54d4f9-1de3-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 11.2-24 PR8 ADVANCE R1 TTF (ободная лента не в комплекте), 2 шт."
+  },
+  {
+    "refKey": "225d288b-1df3-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "800-225, тележка, 10 шт. (800-225 шины на тележку модель 12А)"
+  },
+  {
+    "refKey": "8c50b808-1e19-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "89b5068f-1d4d-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Диск 9х18 на 8 отв на экскаватор-погрузчик Terex TLB 815-RM, 2 шт."
+  },
+  {
+    "refKey": "3fd295a1-1d4b-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "УЖЕ ПЕРЕОБУЛ."
+  },
+  {
+    "refKey": "2b3e1527-1d40-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "37149bd7-1d38-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Интересует наличие и стоимость + доставка до г. Красноярск    2 шт:"
+  },
+  {
+    "refKey": "c61db716-1ca3-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "00-00000674\tспарка 10.00-20/7.00 Achiever (2 шины, 2 диска, 1 проставка)\t1\t2\t157500.00"
+  },
+  {
+    "refKey": "a9aa2987-1c9a-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Дмитрий"
+  },
+  {
+    "refKey": "84bd8db8-1c96-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "1427cbc8-1c78-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "89055178001"
+  },
+  {
+    "refKey": "f9137683-1c6f-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "32aa9f1f-1926-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ООО КамТехКом (kamtehkom@mail.ru):"
+  },
+  {
+    "refKey": "fa08052d-1953-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "d0075914-1952-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "Повторно отправляла КП ПСУТ-000216"
+  },
+  {
+    "refKey": "d2a5d948-194c-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "06.03.2026, 10:05, Мещанкин Евгений (meo@tdbate.ru):"
+  },
+  {
+    "refKey": "f4b2faee-1882-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "05.03.2026, 10:49, m.sholin@csvt.ru (m.sholin@csvt.ru):"
+  },
+  {
+    "refKey": "7e9305cf-1862-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте) - в наличии 1 шт."
+  },
+  {
+    "refKey": "033fbc76-187b-11f1-8d55-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 12-16.5 PR14 MAXAM MS907 TL:"
+  },
+  {
+    "refKey": "116bd3f8-17d4-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 18*7-8 (4.33) ADVANCE OB503 EASIFIT NM (белая с бортом):"
+  },
+  {
+    "refKey": "b343e6ae-17d1-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "4ebe544e-17ba-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "18*7-8, без борта, 4 шт."
+  },
+  {
+    "refKey": "b5924f1c-17a1-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "293ccec1-1799-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 12-16.5 PR12 ADVANCE L2B TL:"
+  },
+  {
+    "refKey": "e7bb0b9a-17a0-11f1-b563-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "04.03.2026, 06:33, Svetlana (svetlana.naumova@eastdelivery.com):"
+  },
+  {
+    "refKey": "3fde690b-16fa-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "c97ec7fe-16eb-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "клиент перепутал"
+  },
+  {
+    "refKey": "d9fad92c-16d2-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "5a18b1ce-16c8-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "c25e1d24-1661-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "bbe1f60a-164b-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "6fa8548f-161e-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "b64b63e6-1610-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "aede4486-1600-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": true,
+    "additionalInfoFirstLine": "ПРОБЛЕМА  почему выбрали не нас при условии что наша цена ниже ?"
+  },
+  {
+    "refKey": "15786c29-1614-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗ"
+  },
+  {
+    "refKey": "dfd79ea6-13de-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Камера 28*9-15 (8.15-15) (8.15-15, 8.25-15, 250-15, 300-15)  TR177A"
+  },
+  {
+    "refKey": "b7f0e7a1-13e1-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": true,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "В ЭДО ОТПРАВЛЕНО"
+  },
+  {
+    "refKey": "8e1079e5-139f-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "26.02.2026, 16:32, Юрий Алексанян (ykaav00@list.ru):"
+  },
+  {
+    "refKey": "d740e62a-13e1-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день!"
+  },
+  {
+    "refKey": "16975519-13c4-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Дмитрий"
+  },
+  {
+    "refKey": "2386f123-13c7-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Валерий Зуев"
+  },
+  {
+    "refKey": "14a4ea59-13c7-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел предложил ольге +6 т.р. за отверстия - она обещали дать обратную связь"
+  },
+  {
+    "refKey": "587225cf-13a7-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "1. Шина 10.0/75-15.3 14 PR, 4 шт."
+  },
+  {
+    "refKey": "6156691a-13a7-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, добрый день!"
+  },
+  {
+    "refKey": "61e865ce-12da-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Предложите ДЕШЕВЛЕ конкурентов."
+  },
+  {
+    "refKey": "108a6c0d-131d-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Василий"
+  },
+  {
+    "refKey": "8ad98aa2-1301-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "d.karpan@bkruslogistic.ru"
+  },
+  {
+    "refKey": "045cbea1-1301-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Николаев Илья"
+  },
+  {
+    "refKey": "65397933-12fd-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "26.02.2026"
+  },
+  {
+    "refKey": "088cc919-12ee-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "\"Автошина18.00R25 TUL580 PRO L-5S *3 C1 206A2 CR1"
+  },
+  {
+    "refKey": "6e632e6f-12d6-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, доброе утро!"
+  },
+  {
+    "refKey": "79a96870-126a-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "847fd271-1244-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Кольцо уплотнительное OR225 - 30 шт по 1000 руб"
+  },
+  {
+    "refKey": "b1104935-123d-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 33*15.50-16.5 PR12 ADVANCE L2E TL:"
+  },
+  {
+    "refKey": "18765940-1199-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Спарка 10.00-20/7,00 Achiever (2 шины, 2 диска,1 проставка)"
+  },
+  {
+    "refKey": "06c737e5-118e-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневматическая шина ROADHIKER 405/70-24 (16.0/70-24) 14PR TL R-4/I-3 INTR4 155 A8"
+  },
+  {
+    "refKey": "ae13a2ce-117b-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "павел - 03-2026 - поставить белые 4 шт. можем - считаем цену доставки"
+  },
+  {
+    "refKey": "a1fe0f82-1180-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "14-17.5, 1 шина"
+  },
+  {
+    "refKey": "ee6facb5-1184-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": true,
+    "problem": false,
+    "additionalInfoFirstLine": "ОТКАЗАЛСЯ"
+  },
+  {
+    "refKey": "88f57a2f-1171-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "·        Шина бандажная черная 18x9-12 1/8 (457*229-308) – 8 шт."
+  },
+  {
+    "refKey": "239f8970-115e-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день!"
+  },
+  {
+    "refKey": "14b63074-1157-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "монтаж можем сделать в гермесе, если диски берем в максикоме, а не в емг"
+  },
+  {
+    "refKey": "833fe59e-1164-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Уважаемый Михаил,"
+  },
+  {
+    "refKey": "91c28b0e-115c-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Андрей Владимирович"
+  },
+  {
+    "refKey": "e44373cb-114a-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Илья сидит в офисе, собирает данные."
+  },
+  {
+    "refKey": "81353acd-114c-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 33*15.50-16.5 PR12 ADVANCE L2E TL:"
+  },
+  {
+    "refKey": "72868b74-0e5a-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 10-16.5 PR12 ADVANCE L4A STEELBELT TL\t\t8,000\t8,000"
+  },
+  {
+    "refKey": "f39123a2-0d70-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Ольга - 04-03-2026 - Интересует возможность поставки, сроки и входная цена Шина цельнолитая 315/45-12/10.00 AW NEXEN SOLIDPRO 700 ALL WHITE QUICK белая - 2 шт"
+  },
+  {
+    "refKey": "48ab3a32-0d8d-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "540/80R38"
+  },
+  {
+    "refKey": "bb35d039-0d85-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 8.25-15 (6.50) ROLLTAH G102 (без борта):"
+  },
+  {
+    "refKey": "9c2d82ce-0cd9-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "-------- Пересылаемое сообщение --------"
+  },
+  {
+    "refKey": "ca092ff9-0cbd-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день."
+  },
+  {
+    "refKey": "a53a2269-0cbd-11f1-8d54-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "вилма ответила:"
+  },
+  {
+    "refKey": "fe994009-0bfd-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день!"
+  },
+  {
+    "refKey": "c952d60a-0bec-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, сообщите пож. номер КП, чтобы согласовать со мной мин цены."
+  },
+  {
+    "refKey": "bc2846d6-0be8-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "17.02.2026, 13:00, ООО Хоббика (mechanic@hobbyka.ru):"
+  },
+  {
+    "refKey": "90279a2a-0bd0-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "клиент говорит, что шины 12165 с заполнением дороже, чем купить литые колеса. ему предложили по 58 т.р."
+  },
+  {
+    "refKey": "40e75f9a-0b29-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "18-02 павел - по дискам клиент думает, шины - есть предложение на эдванс по 35 - мы предложили по 34"
+  },
+  {
+    "refKey": "ef90e824-0b55-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Юлия Шолохова (juliyaborisova95@gmail.com):"
+  },
+  {
+    "refKey": "ac5577dc-0b41-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цепь противоскольжения 300-15 (315/70-15)   (комплект 2 шт., лесенка)\t\t2,000\t2,000\t3,000\t7,000"
+  },
+  {
+    "refKey": "1c987d00-0b38-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "сс 8 009,15 + 3%= 8250,00"
+  },
+  {
+    "refKey": "5c043ad7-0b17-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": ""
+  },
+  {
+    "refKey": "144734ed-0b2d-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Это посредник."
+  },
+  {
+    "refKey": "0c0a65e9-0b1d-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Никто из производителей в указанном размере не производит аналогов."
+  },
+  {
+    "refKey": "aec3d0e8-0b19-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цельнолитая шина 200/50-10 (6.50) KATOCHI YY109 EASIFIT NM\t12,000"
+  },
+  {
+    "refKey": "a022b776-0b19-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Просим направить КП  нашему предприятию на"
+  },
+  {
+    "refKey": "15c56d0d-0aa7-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "АТТИКО"
+  },
+  {
+    "refKey": "6794c97a-0aa3-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 27*10-12 PR14 ADVANCE OB502 TTF (шинокомплект)\t1,000\t2,000\t3,000"
+  },
+  {
+    "refKey": "f1ceaedd-0903-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Прошу предложить по цене черных"
+  },
+  {
+    "refKey": "8583e3e4-08bd-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "23.5/70-16"
+  },
+  {
+    "refKey": "ce69315e-08b0-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Доброе утро. Есть ли в наличии — Шина 18x9-121/8 (457x229x308) Rolltah Smooth"
+  },
+  {
+    "refKey": "81f48edf-0806-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Александр 8 999 501 35 39"
+  },
+  {
+    "refKey": "a4d33a30-0848-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день."
+  },
+  {
+    "refKey": "00a2a2c5-082f-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Снабжение СКЛАДСКИЕ ТЕХНОЛОГИИ (snab@sklad-tehno.ru):"
+  },
+  {
+    "refKey": "e150786e-081e-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Кому: 'el@10-16-5.ru' (el@10-16-5.ru);"
+  },
+  {
+    "refKey": "29c48d56-080b-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ПартнерПромсервис"
+  },
+  {
+    "refKey": "8a68454d-07e1-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ема: (Без темы);"
+  },
+  {
+    "refKey": "ce49b8c9-0750-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "parts@dst-import.ru"
+  },
+  {
+    "refKey": "4a5aa5d5-0742-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": ""
+  },
+  {
+    "refKey": "4a67dfab-0730-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТОРГИ"
+  },
+  {
+    "refKey": "b8a6a669-073c-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 400/80R24 (15.5/80R24)   BKT MULTIMAX MP 527 162A8/162B TL"
+  },
+  {
+    "refKey": "20c53b04-0712-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": ""
+  },
+  {
+    "refKey": "549f7b37-068a-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, прошу зарегистрировать КП и сообщить номер."
+  },
+  {
+    "refKey": "7e9fb653-0682-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Пневм. шина 10-16.5 PR12 ADVANCE L4A STEELBELT TL:"
+  },
+  {
+    "refKey": "33fd9dbd-0649-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "кто-то предложил за 145000 с доставкой !"
+  },
+  {
+    "refKey": "d1c9b12d-0661-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Бандажная шина 500*160-375  УРАЛШИНА"
+  },
+  {
+    "refKey": "ef0e09f2-062f-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Добрый день Татьяна,"
+  },
+  {
+    "refKey": "a90859c2-058b-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "2 шт. пнев 65010 конти"
+  },
+  {
+    "refKey": "b3bce541-0597-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТК ДЛ Ваш заказ № 60614895 от 18.02.2026 - ЗАВТРА 19.02. НА ТЕРМИНАЛ ПРИВЕЗТИ ШИНЫ"
+  },
+  {
+    "refKey": "2aa3cbff-05a1-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "УКПД ПАО \"ЧМК\""
+  },
+  {
+    "refKey": "11efeb65-0588-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Лена, добрый день!"
+  },
+  {
+    "refKey": "6faa2074-058a-11f1-b562-bc97e15e6af5",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Шина СЕ 16х6-8 (280В4-42101), кол-во 10 шт.   ШИНА    ПН.8,25Х15, кол-во 4 шт."
+  },
+  {
+    "refKey": "7fecbb76-0359-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Стрельникова С.И"
+  },
+  {
+    "refKey": "2ba982b0-02b9-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "От кого: Гриценко Андрей <snab3@unservice.ru>"
+  },
+  {
+    "refKey": "fb6315e4-02b2-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Доброго вам дня, прошу сообщить о возможности поставки :"
+  },
+  {
+    "refKey": "57d61899-0291-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "17525 6 шт. на грейдер."
+  },
+  {
+    "refKey": "a8be8a8e-029c-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Цепь противоскольжения 300-15 (315/70-15) - клиент купил в другом месте - надо было дать скидку"
+  },
+  {
+    "refKey": "9e4b72f2-0294-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Коллеги , добрый день. Есть острая потребность в шинах"
+  },
+  {
+    "refKey": "79d9919d-028e-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Татьяна, день добрый!"
+  },
+  {
+    "refKey": "01fbffb3-028d-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "ТК ДЛ Ваш заказ № 60887116 от 03.03.2026 ОТ ВАДИМА"
+  },
+  {
+    "refKey": "6c9ff720-027e-11f1-8d53-bc97e15eb091",
+    "kpSent": false,
+    "receiptConfirmed": false,
+    "edoSent": false,
+    "rejected": false,
+    "problem": false,
+    "additionalInfoFirstLine": "Бандажная шина 500*160-375  УРАЛШИНА"
+  }
+]
