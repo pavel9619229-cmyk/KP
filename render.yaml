@@ -30,3 +30,9 @@ services:
         value: pavel9619229-cmyk/KP
       - key: GITHUB_BRANCH
         value: main
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false

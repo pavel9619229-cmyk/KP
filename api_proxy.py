@@ -5,6 +5,7 @@ import asyncio
 import base64
 import collections
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -17,9 +18,9 @@ from typing import Optional
 
 import requests
 import urllib3
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -73,6 +74,13 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 GITHUB_REPO = os.getenv("GITHUB_REPO", "pavel9619229-cmyk/KP").strip()
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main").strip()
 GITHUB_RULES_PATH = os.getenv("GITHUB_RULES_PATH", "data/status_rules.json").strip()
+ACCESS_RIGHTS_FILE = os.getenv("ACCESS_RIGHTS_FILE", "data/access_rights.json").strip()
+ADMIN_USER = os.getenv("ADMIN_USER", "admin").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip().lower()
+ADMIN_SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET", "change-me-admin-secret").strip()
+ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "43200"))
+ADMIN_SESSION_COOKIE = "kp_admin_session"
 APP_COMMIT_SHA = (
     os.getenv("RENDER_GIT_COMMIT", "").strip()
     or os.getenv("GIT_COMMIT", "").strip()
@@ -195,8 +203,156 @@ class StatusRulesPayload(BaseModel):
     rulesText: str = Field(min_length=1, max_length=40000)
 
 
+class AdminLoginPayload(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class AccessRightsPayload(BaseModel):
+    users: list[dict] = Field(default_factory=list)
+
+
 def _status_rules_path() -> Path:
     return Path(STATUS_RULES_FILE)
+
+
+def _access_rights_path() -> Path:
+    return Path(ACCESS_RIGHTS_FILE)
+
+
+def _sha256_hex(value: str) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()
+
+
+def _admin_password_ok(password: str) -> bool:
+    candidate_hash = _sha256_hex(password)
+    if ADMIN_PASSWORD_HASH:
+        return hmac.compare_digest(candidate_hash, ADMIN_PASSWORD_HASH)
+    if ADMIN_PASSWORD:
+        return hmac.compare_digest(str(password or ""), ADMIN_PASSWORD)
+    return False
+
+
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(data: str) -> bytes:
+    raw = str(data or "")
+    padding = "=" * (-len(raw) % 4)
+    return base64.urlsafe_b64decode((raw + padding).encode("ascii"))
+
+
+def _sign_admin_payload(payload_b64: str) -> str:
+    signature = hmac.new(
+        ADMIN_SESSION_SECRET.encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return _b64url_encode(signature)
+
+
+def _issue_admin_token(username: str) -> str:
+    payload = {
+        "u": username,
+        "exp": int(time.time()) + max(300, ADMIN_SESSION_TTL_SECONDS),
+    }
+    payload_b64 = _b64url_encode(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    signature = _sign_admin_payload(payload_b64)
+    return f"{payload_b64}.{signature}"
+
+
+def _read_admin_token(token: str) -> dict | None:
+    value = str(token or "").strip()
+    if "." not in value:
+        return None
+    payload_b64, signature = value.split(".", 1)
+    expected = _sign_admin_payload(payload_b64)
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        payload_raw = _b64url_decode(payload_b64).decode("utf-8")
+        payload = json.loads(payload_raw)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if int(payload.get("exp") or 0) < int(time.time()):
+        return None
+    username = str(payload.get("u") or "").strip()
+    if not username:
+        return None
+    return payload
+
+
+def _get_admin_username(request: Request) -> str | None:
+    token = request.cookies.get(ADMIN_SESSION_COOKIE)
+    payload = _read_admin_token(token or "")
+    if not payload:
+        return None
+    return str(payload.get("u") or "").strip() or None
+
+
+def _require_admin(request: Request) -> str:
+    username = _get_admin_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Admin auth required")
+    return username
+
+
+def load_access_rights() -> dict:
+    path = _access_rights_path()
+    if not path.exists():
+        return {"users": [], "updatedAt": None}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        users = payload.get("users")
+        if not isinstance(users, list):
+            users = []
+        updated_at = str(payload.get("updatedAt") or "") or None
+        return {"users": users, "updatedAt": updated_at}
+    except Exception as exc:
+        log(f"access rights read failed: {exc}")
+        return {"users": [], "updatedAt": None}
+
+
+def save_access_rights(users: list[dict]) -> dict:
+    cleaned_users: list[dict] = []
+    for item in list(users or []):
+        if not isinstance(item, dict):
+            continue
+        username = str(item.get("username") or "").strip()
+        role = str(item.get("role") or "manager").strip().lower()
+        if not username:
+            continue
+        if role not in {"admin", "manager"}:
+            role = "manager"
+        allowed = item.get("allowedManagers")
+        if allowed == "*":
+            allowed_managers = "*"
+        elif isinstance(allowed, list):
+            values = sorted({str(v).strip() for v in allowed if str(v).strip()})
+            allowed_managers = values
+        else:
+            allowed_managers = []
+        cleaned_users.append(
+            {
+                "username": username,
+                "role": role,
+                "allowedManagers": allowed_managers,
+            }
+        )
+
+    payload = {
+        "users": cleaned_users,
+        "updatedAt": datetime.now().isoformat(),
+    }
+    path = _access_rights_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return payload
 
 
 def _effective_default_rules() -> str:
@@ -2613,6 +2769,11 @@ async def dashboard():
     return FileResponse("dashboard.html", media_type="text/html")
 
 
+@app.get("/admin/rights")
+async def admin_rights():
+    return FileResponse("admin_rights.html", media_type="text/html")
+
+
 @app.get("/healthz")
 async def healthz():
     return {
@@ -2896,6 +3057,52 @@ async def get_status_rules():
         "rulesText": rules_text,
         "updatedAt": updated_at,
     }
+
+
+@app.post("/api/admin/login")
+async def admin_login(payload: AdminLoginPayload):
+    username = str(payload.username or "").strip()
+    password = str(payload.password or "")
+    if username != ADMIN_USER or not _admin_password_ok(password):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+
+    token = _issue_admin_token(username)
+    response = JSONResponse({"ok": True, "username": username})
+    response.set_cookie(
+        key=ADMIN_SESSION_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=max(300, ADMIN_SESSION_TTL_SECONDS),
+    )
+    return response
+
+
+@app.post("/api/admin/logout")
+async def admin_logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(ADMIN_SESSION_COOKIE)
+    return response
+
+
+@app.get("/api/admin/session")
+async def admin_session(request: Request):
+    username = _get_admin_username(request)
+    return {"ok": bool(username), "username": username}
+
+
+@app.get("/api/admin/rights")
+async def admin_get_rights(request: Request):
+    _require_admin(request)
+    return load_access_rights()
+
+
+@app.put("/api/admin/rights")
+async def admin_put_rights(payload: AccessRightsPayload, request: Request):
+    _require_admin(request)
+    saved = save_access_rights(payload.users)
+    return {"ok": True, **saved}
 
 
 @app.put("/api/status-rules")
