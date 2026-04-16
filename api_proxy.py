@@ -2274,7 +2274,7 @@ def fetch_rows_from_odata() -> list:
     cold_start = _last_refresh is None
 
     rows = []
-    page_size = 50
+    page_size = 300
     _fetch_pages = 0
     _fetch_batches_empty = 0
     _fetch_network_errors = 0
@@ -2302,7 +2302,7 @@ def fetch_rows_from_odata() -> list:
                     f"{BASE}/{ENTITY}",
                     headers=headers,
                     params=params,
-                    timeout=120,
+                    timeout=400,
                     verify=False,
                 )
                 if resp.status_code == 200:
@@ -2732,7 +2732,7 @@ async def debug_odata_test():
         return result
 
     # Step 2: fetch last page (same logic as fetch_rows_from_odata)
-    page_size = 50
+    page_size = 300
     skip = ((total_count - 1) // page_size) * page_size if total_count > 0 else 0
     try:
         r2 = requests.get(
@@ -2743,7 +2743,7 @@ async def debug_odata_test():
                 "$top": str(page_size),
                 "$skip": str(skip),
             },
-            timeout=45,
+            timeout=400,
             verify=False,
         )
         batch = r2.json().get("value", []) if r2.status_code == 200 else []
@@ -2767,7 +2767,7 @@ async def debug_odata_test():
                 "$top": str(page_size),
                 "$skip": str(skip),
             },
-            timeout=45,
+            timeout=400,
             verify=False,
         )
         if r3.status_code == 200:
