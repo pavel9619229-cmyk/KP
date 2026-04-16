@@ -598,6 +598,55 @@ def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
         log(f"GitHub push error: {exc}")
 
 
+def _push_access_rights_to_github(payload: dict) -> None:
+    """Push data/access_rights.json to GitHub via Contents API so rights
+    survive the next Render deploy. Runs in a background thread."""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        log("GitHub push skipped for access rights: GITHUB_TOKEN or GITHUB_REPO not set")
+        return
+
+    content_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    content_b64 = base64.b64encode(content_bytes).decode("ascii")
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{ACCESS_RIGHTS_FILE}"
+    gh_headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    current_sha = ""
+    try:
+        resp = requests.get(
+            api_url,
+            headers=gh_headers,
+            params={"ref": GITHUB_BRANCH},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            current_sha = str(resp.json().get("sha") or "")
+    except Exception as exc:
+        log(f"GitHub SHA fetch failed for access rights: {exc}")
+
+    updated_at = str(payload.get("updatedAt") or datetime.now().isoformat())
+    body: dict = {
+        "message": f"Auto-sync access_rights.json ({updated_at}) [skip ci]",
+        "content": content_b64,
+        "branch": GITHUB_BRANCH,
+    }
+    if current_sha:
+        body["sha"] = current_sha
+
+    try:
+        resp = requests.put(api_url, headers=gh_headers, json=body, timeout=15)
+        if resp.status_code in (200, 201):
+            log(f"GitHub push OK: {GITHUB_REPO}/{ACCESS_RIGHTS_FILE}")
+        else:
+            log(f"GitHub push failed for access rights: HTTP {resp.status_code}: {resp.text[:300]}")
+    except Exception as exc:
+        log(f"GitHub push error for access rights: {exc}")
+
+
 def _push_runtime_cache_to_github(rows: list) -> None:
     """Push kp_runtime_cache.json + kp_runtime_meta.json to GitHub so enriched
     data survives the next Render deploy. Throttled to once per hour. [skip ci]."""
@@ -3338,6 +3387,7 @@ async def admin_get_rights(request: Request):
 async def admin_put_rights(payload: AccessRightsPayload, request: Request):
     _require_admin(request)
     saved = save_access_rights(payload.users)
+    asyncio.create_task(asyncio.to_thread(_push_access_rights_to_github, saved))
     return {"ok": True, **saved}
 
 
