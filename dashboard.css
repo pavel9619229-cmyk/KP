@@ -130,6 +130,12 @@ body.light .updated-at-inline {
   outline: none;
 }
 
+.search-box input::placeholder {
+  color: #fff;
+  font-weight: 800;
+  opacity: 1;
+}
+
 .search-clear-btn {
   position: absolute;
   top: 50%;
