@@ -2267,324 +2267,212 @@ def get_total_count(headers: dict, odata_filter: str = "") -> int:
     return int(resp.text.strip())
 
 
-def fetch_rows_from_odata() -> list:
-    global _last_refresh
-    headers = _build_headers()
-    known_rows = build_known_rows_lookup()
-    cold_start = _last_refresh is None
+def _save_stage_patch(stage_name: str, rows: list) -> None:
+    """Persist stage deltas for diagnostics/replay without touching deploy flow."""
+    try:
+        patches_dir = Path("data") / "patches"
+        patches_dir.mkdir(parents=True, exist_ok=True)
+        patch_path = patches_dir / f"{stage_name}.json"
+        with patch_path.open("w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        log(f"stage patch save failed ({stage_name}): {exc}")
 
-    rows = []
-    page_size = 300
-    _fetch_pages = 0
-    _fetch_batches_empty = 0
-    _fetch_network_errors = 0
 
+def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[int, int, list]:
     total_count = get_total_count(headers)
     if total_count <= 0:
-        log(f"fetch_rows_from_odata: total_count={total_count}, aborting")
-        return []
+        return total_count, 0, []
 
     skip = max(0, total_count - page_size)
-    log(f"fetch_rows_from_odata: total_count={total_count}, starting skip={skip}, page_size={page_size}")
-
-    while True:
-        _fetch_pages += 1
-        params = {
-            "$select": "Ref_Key," + ",".join(LIGHT_SELECT_FIELDS),
+    resp = requests.get(
+        f"{BASE}/{ENTITY}",
+        headers=headers,
+        params={
+            "$select": "Ref_Key,Number,Date,Статус,Комментарий",
             "$top": str(page_size),
             "$skip": str(skip),
+        },
+        timeout=400,
+        verify=False,
+    )
+    resp.raise_for_status()
+    batch = resp.json().get("value", [])
+    return total_count, skip, batch if isinstance(batch, list) else []
+
+
+def fetch_rows_from_odata() -> list:
+    """Staged refresh pipeline.
+
+    Old legacy path (multi-page backward scan with large skip loop) is removed.
+    """
+    headers = _build_headers()
+    known_rows = build_known_rows_lookup()
+    rows = []
+    total_count = 0
+    skip = 0
+
+    try:
+        total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=300)
+    except Exception as exc:
+        log(f"stage1_base failed: {type(exc).__name__}: {exc}")
+        return []
+
+    if total_count <= 0:
+        log(f"stage1_base: total_count={total_count}, aborting")
+        return []
+
+    log(f"stage1_base: total_count={total_count}, skip={skip}, rows={len(base_batch)}")
+
+    docs_by_ref: dict[str, dict] = {}
+    stage1_patch: list[dict] = []
+    for item in base_batch:
+        ref_key = str(item.get("Ref_Key") or "")
+        number = str(item.get("Number") or "")
+        dt_raw = item.get("Date") or ""
+        status = str(item.get("Статус") or "")
+        comment = str(item.get("Комментарий") or "")
+
+        try:
+            dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            continue
+
+        known_row = known_rows.get(number, {})
+        row = {
+            "refKey": ref_key,
+            "number": number,
+            "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "customerName": known_row.get("customerName", ""),
+            "managerName": known_row.get("managerName", UNKNOWN_MANAGER_NAME),
+            "status": status,
+            "managerFilled": known_row.get("managerFilled"),
+            "productSpecified": known_row.get("productSpecified"),
+            "priceFilled": known_row.get("priceFilled"),
+            "kpSent": known_row.get("kpSent"),
+            "receiptConfirmed": known_row.get("receiptConfirmed"),
+            "edoSent": known_row.get("edoSent"),
+            "rejected": known_row.get("rejected"),
+            "problem": known_row.get("problem"),
+            "shipmentPending": known_row.get("shipmentPending"),
+            "statusKp": known_row.get("statusKp", ""),
+            "additionalInfoFirstLine": first_line(comment) or known_row.get("additionalInfoFirstLine", ""),
+            "invoiceCreated": known_row.get("invoiceCreated"),
+            "paymentReceived": known_row.get("paymentReceived"),
+            "statusHash": known_row.get("statusHash", ""),
         }
+        apply_storage_defaults(row)
+        rows.append(row)
 
-        resp = None
-        for _ in range(3):
-            try:
-                resp = requests.get(
-                    f"{BASE}/{ENTITY}",
-                    headers=headers,
-                    params=params,
-                    timeout=400,
-                    verify=False,
-                )
-                if resp.status_code == 200:
-                    break
-            except Exception as exc:
-                _fetch_network_errors += 1
-                log(f"fetch_rows_from_odata: error at skip={skip}: {type(exc).__name__}: {exc}")
-                resp = None
-            time.sleep(2)
+        stage1_patch.append(
+            {
+                "refKey": ref_key,
+                "number": number,
+                "createdAt": row["createdAt"],
+                "status": status,
+                "additionalInfoFirstLine": row["additionalInfoFirstLine"],
+            }
+        )
 
-        if resp is None or resp.status_code != 200:
-            sc = resp.status_code if resp else "None"
-            body_hint = ""
-            if resp is not None:
-                try:
-                    body_hint = f" body={resp.text[:200]}"
-                except Exception:
-                    pass
-            log(f"fetch_rows_from_odata: breaking at skip={skip}, status={sc}{body_hint}, pages={_fetch_pages}, net_errors={_fetch_network_errors}")
-            break
+    _save_stage_patch("stage1_base", stage1_patch)
 
-        batch = resp.json().get("value", [])
-        if not batch:
-            _fetch_batches_empty += 1
-            log(f"fetch_rows_from_odata: empty batch at skip={skip}, done")
-            break
+    # Stage 2: quick flags from base comment payload.
+    stage2_patch: list[dict] = []
+    by_ref = {str(item.get("Ref_Key") or ""): item for item in base_batch}
+    for row in rows:
+        base_item = by_ref.get(row.get("refKey") or "", {})
+        comment_clean = strip_html(str(base_item.get("Комментарий") or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
+        comment_top = comment_clean.split("\n")[:5]
+        patch = {
+            "refKey": row.get("refKey"),
+            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top),
+            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top),
+            "edoSent": "В ЭДО ОТПРАВЛЕНО" in comment_clean,
+            "rejected": "ОТКАЗ" in comment_clean,
+            "problem": "ПРОБЛЕМА" in comment_clean,
+            "shipmentPending": "ОТГРУЗИТЬ" in comment_clean,
+        }
+        row.update(patch)
+        stage2_patch.append(patch)
+    _save_stage_patch("stage2_comment_flags", stage2_patch)
 
-        batch_dates = []
-
-        for item in batch:
-            ref_key = item.get("Ref_Key") or ""
-            values = [item.get(f) or "" for f in LIGHT_SELECT_FIELDS]
-            number, dt_raw, status, requisites, comment = values[0], values[1], values[2], values[3], values[4]
-            try:
-                dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
-            except Exception:
-                continue
-
-            batch_dates.append(dt)
-
-            if TARGET_START <= dt <= TARGET_END:
-                known_row = known_rows.get(number, {})
-
-                # Detect changes in 1C requisites by hashing Статус + ДополнительныеРеквизиты.
-                # If the hash changed compared to what we cached, force re-enrich this row.
-                current_hash = hashlib.md5(
-                    (str(status) + str(requisites)).encode("utf-8")
-                ).hexdigest()[:10]
-                requisites_changed = current_hash != known_row.get("statusHash", "")
-
-                status_kp = known_row.get("statusKp", "")
-                if not status_kp or requisites_changed:
-                    status_kp = resolve_status_kp_from_requisites(requisites, headers)
-
-                previous_info = known_row.get("additionalInfoFirstLine", "")
-                current_info = first_line(comment)
-                if current_info:
-                    previous_info = current_info
-
-                comment_clean = strip_html(str(comment or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
-                comment_top_lines = comment_clean.split("\n")[:5]
-                kp_sent_from_comment = any("КП ОТПРАВЛЕНО" in line for line in comment_top_lines)
-                receipt_from_comment = any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top_lines)
-                edo_from_comment = "В ЭДО ОТПРАВЛЕНО" in comment_clean
-                problem_from_comment = "ПРОБЛЕМА" in comment_clean
-                shipment_from_comment = "ОТГРУЗИТЬ" in comment_clean
-
-                product_specified = known_row.get("productSpecified")
-                if product_specified is not True and looks_like_product_hint(previous_info):
-                    product_specified = True
-
-                rejected_flag = known_row.get("rejected")
-                if has_reject_marker(comment, status_kp):
-                    rejected_flag = True
-                elif "ОТКАЗ" in comment_clean:
-                    rejected_flag = True
-                else:
-                    rejected_flag = False
-
-                rows.append(
-                    {
-                        "refKey": str(ref_key),
-                        "number": number,
-                        "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
-                        "customerName": "" if requisites_changed else known_row.get("customerName", ""),
-                        "managerName": known_row.get("managerName", UNKNOWN_MANAGER_NAME),
-                        "status": status,
-                        "managerFilled": known_row.get("managerFilled"),
-                        "productSpecified": product_specified,
-                        "priceFilled": known_row.get("priceFilled"),
-                        "kpSent": kp_sent_from_comment,
-                        "receiptConfirmed": receipt_from_comment,
-                        "edoSent": edo_from_comment,
-                        "rejected": rejected_flag,
-                        "problem": problem_from_comment,
-                        "shipmentPending": shipment_from_comment,
-                        "statusKp": status_kp,
-                        "additionalInfoFirstLine": previous_info,
-                        "invoiceCreated": known_row.get("invoiceCreated"),
-                        "paymentReceived": known_row.get("paymentReceived"),
-                        "statusHash": current_hash,
-                    }
-                )
-
-        if batch_dates and min(batch_dates) < TARGET_START:
-            break
-
-        if skip == 0:
-            break
-
-        skip = max(0, skip - page_size)
-
-    log(f"fetch_rows_from_odata: {len(rows)} matched rows, {_fetch_pages} pages, {_fetch_network_errors} net errors")
-    rows.sort(key=lambda x: x["createdAt"], reverse=True)
-
-    global _last_group_enrich
-    if cold_start:
-        log("fetch_rows_from_odata: cold start detected, skipping bulk group enrich for first fast refresh")
-    else:
-        enrich_started = time.time()
-        _enrich_group_flags_bulk(rows, headers)
-        _last_group_enrich = datetime.now()
-        log(f"fetch_rows_from_odata: bulk group enrich done in {time.time() - enrich_started:.1f}s")
-
-    for index, row in enumerate(rows):
-        if cold_start and index >= COLD_START_DOC_ENRICH_LIMIT:
-            # First refresh should not stall on hundreds of per-doc roundtrips.
-            continue
-
-        ref_key = row.get("refKey", "")
+    # Stage 2.5: fetch docs once for per-doc stages.
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
         if not ref_key:
+            docs_by_ref[ref_key] = {}
             continue
+        docs_by_ref[ref_key] = _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
 
-        need_customer = not (row.get("customerName") or "").strip()
-        need_manager_name = not (row.get("managerName") or "").strip() or str(row.get("managerName") or "").strip() == UNKNOWN_MANAGER_NAME
-        need_info = not (row.get("additionalInfoFirstLine") or "").strip()
-        need_manager = row.get("managerFilled") is None
-        need_product = row.get("productSpecified") is not True
-        need_price = row.get("priceFilled") is None
-        need_kp_sent = False
-        need_receipt = False
-        need_edo = False
-        need_rejected = False
-        need_problem = False
-        need_shipment = False
-        if not need_customer and not need_manager_name and not need_info and not need_manager and not need_product and not need_price and not need_kp_sent and not need_receipt and not need_edo and not need_rejected and not need_problem and not need_shipment:
-            continue
+    # Stage 3: customer.
+    stage3_patch: list[dict] = []
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        patch = {
+            "refKey": ref_key,
+            "customerName": customer_name,
+            "clientFilled": is_client_filled(customer_name),
+        }
+        row.update(patch)
+        stage3_patch.append(patch)
+    _save_stage_patch("stage3_customer", stage3_patch)
 
-        doc = {}
-        if need_customer or need_manager_name or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment:
-            doc = _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
-            if not doc and (need_customer or need_manager_name or need_info or need_manager or need_product or need_price or need_kp_sent or need_receipt or need_edo or need_rejected or need_problem or need_shipment):
-                continue
+    # Stage 4: manager.
+    stage4_patch: list[dict] = []
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or UNKNOWN_MANAGER_NAME
+        manager_key = str(doc.get("Менеджер_Key") or "").strip()
+        patch = {
+            "refKey": ref_key,
+            "managerName": manager_name,
+            "managerFilled": bool(manager_key) and manager_key != ZERO_GUID,
+        }
+        row.update(patch)
+        stage4_patch.append(patch)
+    _save_stage_patch("stage4_manager", stage4_patch)
 
-        if need_info:
-            line = resolve_additional_info_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if line:
-                row["additionalInfoFirstLine"] = line
+    # Stage 5: goods/price.
+    stage5_patch: list[dict] = []
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        patch = {
+            "refKey": ref_key,
+            "productSpecified": bool(product_specified),
+            "priceFilled": bool(price_filled),
+        }
+        row.update(patch)
+        stage5_patch.append(patch)
+    _save_stage_patch("stage5_product_price", stage5_patch)
 
-        if need_customer:
-            customer = resolve_customer_name_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if customer:
-                row["customerName"] = customer
+    # Stage 6: heavy group flags (orders/invoices/payments).
+    stage6_patch: list[dict] = []
+    try:
+        _enrich_group_flags_bulk(rows, headers)
+    except Exception as exc:
+        log(f"stage6_group_flags failed: {type(exc).__name__}: {exc}")
 
-        if need_manager:
-            manager_filled = resolve_manager_filled_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if manager_filled is not None:
-                row["managerFilled"] = manager_filled
-
-        if need_manager_name:
-            manager_name = resolve_manager_name_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if manager_name:
-                row["managerName"] = manager_name
-
-        if need_product:
-            product_specified = resolve_product_specified_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if product_specified is not True and looks_like_product_hint(
-                row.get("additionalInfoFirstLine") or doc.get("ДополнительнаяИнформация") or doc.get("Комментарий")
-            ):
-                product_specified = True
-            if product_specified is not None:
-                row["productSpecified"] = product_specified
-
-        if need_price:
-            price_filled = resolve_price_filled_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=True,
-            )
-            if price_filled is not None:
-                row["priceFilled"] = price_filled
-
-        if need_kp_sent:
-            kp_sent = resolve_kp_sent_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if kp_sent is not None:
-                row["kpSent"] = kp_sent
-
-        if need_receipt:
-            receipt_confirmed = resolve_receipt_confirmed_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if receipt_confirmed is not None:
-                row["receiptConfirmed"] = receipt_confirmed
-
-        if need_edo:
-            edo_sent = resolve_edo_sent_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if edo_sent is not None:
-                row["edoSent"] = edo_sent
-
-        if need_rejected:
-            rejected = resolve_rejected_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if rejected is not None:
-                row["rejected"] = rejected
-
-        if need_problem:
-            problem = resolve_problem_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if problem is not None:
-                row["problem"] = problem
-
-        if need_shipment:
-            shipment_pending = resolve_shipment_pending_for_ref(
-                ref_key,
-                headers,
-                doc=doc,
-                use_cache=False,
-            )
-            if shipment_pending is not None:
-                row["shipmentPending"] = shipment_pending
+    for row in rows:
+        stage6_patch.append(
+            {
+                "refKey": row.get("refKey"),
+                "invoiceCreated": bool(row.get("invoiceCreated")),
+                "paymentReceived": bool(row.get("paymentReceived")),
+            }
+        )
+    _save_stage_patch("stage6_group_flags", stage6_patch)
 
     for row in rows:
         apply_runtime_defaults(row)
 
-    rows.sort(key=lambda x: x["createdAt"], reverse=True)
+    rows.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    log(f"staged refresh success: {len(rows)} rows")
     return rows
 
 
