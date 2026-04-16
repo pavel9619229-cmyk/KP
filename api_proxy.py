@@ -83,7 +83,7 @@ APP_BRANCH = (
     or os.getenv("GIT_BRANCH", "").strip()
 )
 
-TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
+TARGET_START = datetime(2026, 4, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
 
 LIGHT_SELECT_FIELDS = [
