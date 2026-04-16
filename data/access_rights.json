@@ -1,4 +1,25 @@
 {
-  "users": [],
-  "updatedAt": null
+  "users": [
+    {
+      "username": "info@10-16-5.ru",
+      "role": "admin",
+      "allowedManagers": "*",
+      "passwordHash": "eb99c5060761aba8cba693fe5cb1acd56fef8a71537c2ff793ad5effbffc1d85"
+    },
+    {
+      "username": "td@10-16-5.ru",
+      "role": "manager",
+      "allowedManagers": [
+        "Татьяна"
+      ],
+      "passwordHash": "c236e701ecdc476791eeaa654707b5cad9f1796fe491fc6d3a3215c9e4b6fa99"
+    },
+    {
+      "username": "el@10-16-5.ru",
+      "role": "manager",
+      "allowedManagers": "*",
+      "passwordHash": "bdeb7e5069624c8c5e454b082100f443e9e80e0a71b9e56867f33d9fadea0ef5"
+    }
+  ],
+  "updatedAt": "2026-04-16T20:09:20.971552"
 }
