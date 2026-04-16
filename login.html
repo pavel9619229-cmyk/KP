@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Вход в Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #101827;
+      --line: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #2563eb;
+      --err: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 20% 20%, #1e293b, var(--bg));
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      padding: 24px;
+    }
+    .card {
+      width: min(440px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .field { margin-bottom: 10px; }
+    input {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0b1220;
+      color: var(--text);
+      outline: none;
+      font-size: 15px;
+    }
+    button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid #1d4ed8;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .msg {
+      min-height: 20px;
+      margin-top: 8px;
+      font-size: 14px;
+      color: var(--err);
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Вход</h1>
+    <p class="hint">Введите логин и пароль менеджера.</p>
+
+    <div class="field">
+      <input id="username" type="text" placeholder="Логин" autocomplete="username" />
+    </div>
+    <div class="field">
+      <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+    </div>
+    <button id="loginBtn" type="button">Войти в dashboard</button>
+    <div id="msg" class="msg"></div>
+  </main>
+
+  <script src="/login.js"></script>
+</body>
+</html>

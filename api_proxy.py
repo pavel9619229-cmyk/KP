@@ -20,7 +20,7 @@ import requests
 import urllib3
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -81,6 +81,8 @@ ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip().lower()
 ADMIN_SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET", "change-me-admin-secret").strip()
 ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "43200"))
 ADMIN_SESSION_COOKIE = "kp_admin_session"
+USER_SESSION_TTL_SECONDS = int(os.getenv("USER_SESSION_TTL_SECONDS", "43200"))
+USER_SESSION_COOKIE = "kp_user_session"
 APP_COMMIT_SHA = (
     os.getenv("RENDER_GIT_COMMIT", "").strip()
     or os.getenv("GIT_COMMIT", "").strip()
@@ -208,6 +210,11 @@ class AdminLoginPayload(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class UserLoginPayload(BaseModel):
+    username: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
 class AccessRightsPayload(BaseModel):
     users: list[dict] = Field(default_factory=list)
 
@@ -262,12 +269,54 @@ def _issue_admin_token(username: str) -> str:
     return f"{payload_b64}.{signature}"
 
 
+def _sign_user_payload(payload_b64: str) -> str:
+    signature = hmac.new(
+        f"{ADMIN_SESSION_SECRET}:user".encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return _b64url_encode(signature)
+
+
+def _issue_user_token(username: str) -> str:
+    payload = {
+        "u": username,
+        "exp": int(time.time()) + max(300, USER_SESSION_TTL_SECONDS),
+    }
+    payload_b64 = _b64url_encode(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    signature = _sign_user_payload(payload_b64)
+    return f"{payload_b64}.{signature}"
+
+
 def _read_admin_token(token: str) -> dict | None:
     value = str(token or "").strip()
     if "." not in value:
         return None
     payload_b64, signature = value.split(".", 1)
     expected = _sign_admin_payload(payload_b64)
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        payload_raw = _b64url_decode(payload_b64).decode("utf-8")
+        payload = json.loads(payload_raw)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if int(payload.get("exp") or 0) < int(time.time()):
+        return None
+    username = str(payload.get("u") or "").strip()
+    if not username:
+        return None
+    return payload
+
+
+def _read_user_token(token: str) -> dict | None:
+    value = str(token or "").strip()
+    if "." not in value:
+        return None
+    payload_b64, signature = value.split(".", 1)
+    expected = _sign_user_payload(payload_b64)
     if not hmac.compare_digest(signature, expected):
         return None
     try:
@@ -298,6 +347,124 @@ def _require_admin(request: Request) -> str:
     if not username:
         raise HTTPException(status_code=401, detail="Admin auth required")
     return username
+
+
+def _normalize_username(value: str) -> str:
+    return str(value or "").strip().casefold()
+
+
+def _normalize_manager_name_for_acl(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold().replace("ё", "е")
+
+
+def _row_manager_name(row: dict) -> str:
+    manager = str(row.get("managerName") or row.get("manager") or row.get("Менеджер") or "").strip()
+    return manager or UNKNOWN_MANAGER_NAME
+
+
+def _find_access_user(username: str) -> dict | None:
+    wanted = _normalize_username(username)
+    if not wanted:
+        return None
+    rights = load_access_rights()
+    for item in rights.get("users", []):
+        if not isinstance(item, dict):
+            continue
+        current = _normalize_username(item.get("username") or "")
+        if current == wanted:
+            return item
+    return None
+
+
+def _resolve_effective_user(username: str) -> dict | None:
+    uname = str(username or "").strip()
+    if not uname:
+        return None
+    if _normalize_username(uname) == _normalize_username(ADMIN_USER):
+        return {
+            "username": uname,
+            "role": "admin",
+            "allowedManagers": "*",
+        }
+
+    user = _find_access_user(uname)
+    if not user:
+        return None
+
+    role = str(user.get("role") or "manager").strip().lower()
+    if role not in {"admin", "manager"}:
+        role = "manager"
+    allowed = user.get("allowedManagers")
+    if allowed == "*":
+        allowed_managers = "*"
+    elif isinstance(allowed, list):
+        allowed_managers = [str(v).strip() for v in allowed if str(v).strip()]
+    else:
+        allowed_managers = []
+    return {
+        "username": str(user.get("username") or uname).strip(),
+        "role": role,
+        "allowedManagers": allowed_managers,
+    }
+
+
+def _is_valid_sha256_hex(value: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-f]{64}", str(value or "").strip().lower()))
+
+
+def _user_password_ok(username: str, password: str) -> bool:
+    uname = str(username or "").strip()
+    pwd = str(password or "")
+
+    if _normalize_username(uname) == _normalize_username(ADMIN_USER):
+        return _admin_password_ok(pwd)
+
+    user = _find_access_user(uname)
+    if not user:
+        return False
+
+    password_hash = str(user.get("passwordHash") or "").strip().lower()
+    if not _is_valid_sha256_hex(password_hash):
+        return False
+    return hmac.compare_digest(_sha256_hex(pwd), password_hash)
+
+
+def _get_user_from_request(request: Request) -> dict:
+    token = request.cookies.get(USER_SESSION_COOKIE)
+    payload = _read_user_token(token or "")
+    if not payload:
+        raise HTTPException(status_code=401, detail="Login required")
+    username = str(payload.get("u") or "").strip()
+    user = _resolve_effective_user(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="User access is not configured")
+    return user
+
+
+def _get_user_from_websocket(websocket: WebSocket) -> dict | None:
+    token = websocket.cookies.get(USER_SESSION_COOKIE)
+    payload = _read_user_token(token or "")
+    if not payload:
+        return None
+    username = str(payload.get("u") or "").strip()
+    return _resolve_effective_user(username)
+
+
+def _filter_rows_for_user(rows: list[dict], user: dict) -> list[dict]:
+    role = str(user.get("role") or "manager").lower()
+    allowed = user.get("allowedManagers")
+    if role == "admin" or allowed == "*":
+        return list(rows)
+    if not isinstance(allowed, list) or not allowed:
+        return []
+
+    allowed_norm = {_normalize_manager_name_for_acl(v) for v in allowed}
+    filtered: list[dict] = []
+    for row in rows:
+        manager_name = _row_manager_name(row)
+        if _normalize_manager_name_for_acl(manager_name) in allowed_norm:
+            filtered.append(row)
+    return filtered
 
 
 def load_access_rights() -> dict:
@@ -336,11 +503,15 @@ def save_access_rights(users: list[dict]) -> dict:
             allowed_managers = values
         else:
             allowed_managers = []
+        password_hash = str(item.get("passwordHash") or "").strip().lower()
+        if password_hash and not _is_valid_sha256_hex(password_hash):
+            password_hash = ""
         cleaned_users.append(
             {
                 "username": username,
                 "role": role,
                 "allowedManagers": allowed_managers,
+                "passwordHash": password_hash,
             }
         )
 
@@ -2764,8 +2935,17 @@ async def root():
     return FileResponse("index.html", media_type="text/html")
 
 
+@app.get("/login")
+async def login_page():
+    return FileResponse("login.html", media_type="text/html")
+
+
 @app.get("/dashboard")
-async def dashboard():
+async def dashboard(request: Request):
+    token = request.cookies.get(USER_SESSION_COOKIE)
+    payload = _read_user_token(token or "")
+    if not payload:
+        return RedirectResponse(url="/login", status_code=302)
     return FileResponse("dashboard.html", media_type="text/html")
 
 
@@ -2978,7 +3158,8 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
 
 
 @app.get("/api/kp/all")
-async def get_all_kp():
+async def get_all_kp(request: Request):
+    user = _get_user_from_request(request)
     if not _cached_rows:
         await asyncio.to_thread(refresh_cache_and_file)
     elif _last_refresh is None:
@@ -2988,7 +3169,7 @@ async def get_all_kp():
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
 
-    return build_rows_with_computed_status(_cached_rows)
+    return build_rows_with_computed_status(_filter_rows_for_user(_cached_rows, user))
 
 
 @app.get("/api/debug/kp/{kp_number}/payment-chain")
@@ -3092,6 +3273,61 @@ async def admin_session(request: Request):
     return {"ok": bool(username), "username": username}
 
 
+@app.post("/api/auth/login")
+async def user_login(payload: UserLoginPayload):
+    username = str(payload.username or "").strip()
+    password = str(payload.password or "")
+    if not _user_password_ok(username, password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    user = _resolve_effective_user(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="User access is not configured")
+
+    token = _issue_user_token(str(user.get("username") or username))
+    response = JSONResponse(
+        {
+            "ok": True,
+            "user": {
+                "username": user.get("username"),
+                "role": user.get("role"),
+            },
+        }
+    )
+    response.set_cookie(
+        key=USER_SESSION_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=max(300, USER_SESSION_TTL_SECONDS),
+    )
+    return response
+
+
+@app.post("/api/auth/logout")
+async def user_logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(USER_SESSION_COOKIE)
+    return response
+
+
+@app.get("/api/auth/session")
+async def user_session(request: Request):
+    try:
+        user = _get_user_from_request(request)
+        return {
+            "ok": True,
+            "user": {
+                "username": user.get("username"),
+                "role": user.get("role"),
+                "allowedManagers": user.get("allowedManagers"),
+            },
+        }
+    except HTTPException:
+        return {"ok": False, "user": None}
+
+
 @app.get("/api/admin/rights")
 async def admin_get_rights(request: Request):
     _require_admin(request)
@@ -3128,7 +3364,8 @@ async def put_status_rules(payload: StatusRulesPayload):
 
 
 @app.post("/api/kp/new-request")
-async def create_kp_from_new_request(payload: NewRequestPayload):
+async def create_kp_from_new_request(payload: NewRequestPayload, request: Request):
+    _get_user_from_request(request)
     request_text = str(payload.requestText or "").strip()
     if len(request_text) < 3:
         raise HTTPException(status_code=400, detail="Request text is too short")
@@ -3140,6 +3377,11 @@ async def create_kp_from_new_request(payload: NewRequestPayload):
 
 @app.websocket("/ws/kp")
 async def ws_kp(websocket: WebSocket):
+    user = _get_user_from_websocket(websocket)
+    if not user:
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
     previous_fp = ""
 
@@ -3157,7 +3399,7 @@ async def ws_kp(websocket: WebSocket):
                     {
                         "type": "rows",
                         "updatedAt": _last_refresh,
-                        "rows": build_rows_with_computed_status(_cached_rows),
+                        "rows": build_rows_with_computed_status(_filter_rows_for_user(_cached_rows, user)),
                     }
                 )
             await asyncio.sleep(2)
