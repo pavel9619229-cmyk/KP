@@ -2301,7 +2301,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
     return total_count, skip, batch if isinstance(batch, list) else []
 
 
-def fetch_rows_from_odata() -> list:
+def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     """Staged refresh pipeline.
 
     Old legacy path (multi-page backward scan with large skip loop) is removed.
@@ -2453,20 +2453,24 @@ def fetch_rows_from_odata() -> list:
 
     # Stage 6: heavy group flags (orders/invoices/payments).
     stage6_patch: list[dict] = []
-    try:
-        _enrich_group_flags_bulk(rows, headers)
-    except Exception as exc:
-        log(f"stage6_group_flags failed: {type(exc).__name__}: {exc}")
+    if include_stage6:
+        try:
+            _enrich_group_flags_bulk(rows, headers)
+        except Exception as exc:
+            log(f"stage6_group_flags failed: {type(exc).__name__}: {exc}")
 
-    for row in rows:
-        stage6_patch.append(
-            {
-                "refKey": row.get("refKey"),
-                "invoiceCreated": bool(row.get("invoiceCreated")),
-                "paymentReceived": bool(row.get("paymentReceived")),
-            }
-        )
-    _save_stage_patch("stage6_group_flags", stage6_patch)
+        for row in rows:
+            stage6_patch.append(
+                {
+                    "refKey": row.get("refKey"),
+                    "invoiceCreated": bool(row.get("invoiceCreated")),
+                    "paymentReceived": bool(row.get("paymentReceived")),
+                }
+            )
+        _save_stage_patch("stage6_group_flags", stage6_patch)
+    else:
+        _save_stage_patch("stage6_group_flags", [])
+        log("stage6_group_flags skipped (fast mode)")
 
     for row in rows:
         apply_runtime_defaults(row)
