@@ -2409,11 +2409,14 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
-        customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if doc:
+            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            if customer_name:
+                row["customerName"] = customer_name
         patch = {
             "refKey": ref_key,
-            "customerName": customer_name,
-            "clientFilled": is_client_filled(customer_name),
+            "customerName": row.get("customerName") or "",
+            "clientFilled": is_client_filled(row.get("customerName") or ""),
         }
         row.update(patch)
         stage3_patch.append(patch)
@@ -2424,12 +2427,17 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
-        manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or UNKNOWN_MANAGER_NAME
-        manager_key = str(doc.get("Менеджер_Key") or "").strip()
+        if doc:
+            manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            if manager_filled is not None:
+                row["managerFilled"] = manager_filled
+                manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+                if manager_name:
+                    row["managerName"] = manager_name
         patch = {
             "refKey": ref_key,
-            "managerName": manager_name,
-            "managerFilled": bool(manager_key) and manager_key != ZERO_GUID,
+            "managerName": row.get("managerName") or UNKNOWN_MANAGER_NAME,
+            "managerFilled": row.get("managerFilled"),
         }
         row.update(patch)
         stage4_patch.append(patch)
@@ -2440,12 +2448,17 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
-        product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
-        price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if doc:
+            product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            if product_specified is not None:
+                row["productSpecified"] = bool(product_specified)
+            if price_filled is not None:
+                row["priceFilled"] = bool(price_filled)
         patch = {
             "refKey": ref_key,
-            "productSpecified": bool(product_specified),
-            "priceFilled": bool(price_filled),
+            "productSpecified": row.get("productSpecified"),
+            "priceFilled": row.get("priceFilled"),
         }
         row.update(patch)
         stage5_patch.append(patch)
