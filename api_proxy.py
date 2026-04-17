@@ -59,6 +59,7 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
+BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "45"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -1754,10 +1755,28 @@ def _get_json_with_retry(
 def _parse_odata_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
+    text = str(value).strip()
+
+    # 1C may emit legacy MS JSON date format: /Date(1713187200000+0300)/
+    match = re.match(r"^/Date\(([-+]?\d+)([-+]\d{4})?\)/$", text)
+    if match:
+        try:
+            millis = int(match.group(1))
+            return datetime.utcfromtimestamp(millis / 1000.0)
+        except Exception:
+            return None
+
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
     except Exception:
-        return None
+        pass
+
+    for pattern in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text, pattern)
+        except Exception:
+            continue
+    return None
 
 
 def _iterate_tail_pages(entity_name: str, headers: dict, select_fields: list[str], page_size: int = 200):
@@ -2685,7 +2704,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
             "$top": str(page_size),
             "$skip": str(skip),
         },
-        timeout=400,
+        timeout=BASE_BATCH_TIMEOUT_SECONDS,
         verify=False,
     )
     resp.raise_for_status()
