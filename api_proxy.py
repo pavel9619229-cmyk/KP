@@ -59,7 +59,7 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
-BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
+BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "40"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -2976,7 +2976,11 @@ def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[
 def refresh_cache_and_file() -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
-    with _refresh_lock:
+    if not _refresh_lock.acquire(blocking=False):
+        log("refresh skipped: previous cycle is still running")
+        return
+
+    try:
         try:
             fetched = fetch_rows_from_odata()
             if fetched:
@@ -3010,6 +3014,8 @@ def refresh_cache_and_file() -> None:
         except Exception as exc:
             _last_refresh_error = str(exc)
             log(f"refresh failed, keeping last successful live cache: {exc}")
+    finally:
+        _refresh_lock.release()
 
 
 def cache_is_stale() -> bool:
@@ -3034,10 +3040,13 @@ async def trigger_refresh_if_stale() -> None:
 
 async def refresh_loop() -> None:
     while True:
+        started_at = time.time()
         try:
             await asyncio.to_thread(refresh_cache_and_file)
-        except Exception:
-            pass
+        except Exception as exc:
+            log(f"refresh loop error: {type(exc).__name__}: {exc}")
+        elapsed = max(0.0, time.time() - started_at)
+        log(f"refresh loop tick finished in {elapsed:.1f}s")
         await asyncio.sleep(REFRESH_SECONDS)
 
 
