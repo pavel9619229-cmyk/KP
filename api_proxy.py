@@ -3176,8 +3176,12 @@ async def on_shutdown() -> None:
 
 
 @app.get("/")
-async def root():
-    return FileResponse("index.html", media_type="text/html")
+async def root(request: Request):
+    token = request.cookies.get(USER_SESSION_COOKIE)
+    payload = _read_user_token(token or "")
+    if not payload:
+        return RedirectResponse(url="/login", status_code=302)
+    return RedirectResponse(url="/dashboard", status_code=302)
 
 
 @app.get("/login")

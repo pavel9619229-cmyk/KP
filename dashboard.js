@@ -735,7 +735,11 @@ async function loadRows() {
   let lastError = null;
   for (const src of sources) {
     try {
-      const nextResponse = await fetch(src, { cache: 'no-store' });
+      const nextResponse = await fetch(src, { cache: 'no-store', credentials: 'include' });
+      if (nextResponse.status === 401) {
+        window.location.href = '/login';
+        return [];
+      }
       if (!nextResponse.ok) {
         throw new Error(`HTTP ${nextResponse.status}`);
       }
@@ -773,6 +777,7 @@ async function refreshData(initial = false) {
   try {
     await loadStatusRulesFromServer();
     const nextRows = await loadRows();
+    if (!Array.isArray(nextRows)) return;
     setRows(nextRows, new Date());
     // Clear any previous error state once data loads successfully
     if (boardContent.querySelector('.board-empty')) {

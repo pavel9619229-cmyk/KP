@@ -784,7 +784,11 @@ async function loadRows() {
   let lastError = null;
   for (const src of sources) {
     try {
-      const r = await fetch(src, { cache: 'no-store' });
+      const r = await fetch(src, { cache: 'no-store', credentials: 'include' });
+      if (r.status === 401) {
+        window.location.href = '/login';
+        return [];
+      }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       response = r;
       break;
@@ -821,6 +825,7 @@ function setRows(nextRows, syncedAt = null) {
 async function refreshData(initial = false) {
   try {
     const nextRows = await loadRows();
+    if (!Array.isArray(nextRows)) return;
     setRows(nextRows, new Date());
   } catch (err) {
     if (initial) {
