@@ -2984,25 +2984,6 @@ def _partial_refresh_from_cached_rows(
         row["problem"] = "ПРОБЛЕМА" in comment_clean
         row["shipmentPending"] = "ОТГРУЗИТЬ" in comment_clean
 
-        customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
-        if customer_name:
-            row["customerName"] = customer_name
-        row["clientFilled"] = is_client_filled(row.get("customerName") or "")
-
-        manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
-        if manager_filled is not None:
-            row["managerFilled"] = manager_filled
-            manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
-            if manager_name:
-                row["managerName"] = manager_name
-
-        product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
-        if product_specified is not None:
-            row["productSpecified"] = bool(product_specified)
-        price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
-        if price_filled is not None:
-            row["priceFilled"] = bool(price_filled)
-
         apply_runtime_defaults(row)
 
     refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
