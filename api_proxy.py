@@ -69,7 +69,6 @@ STATUS_KP_PROPERTY_KEY = os.getenv(
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
-KEEP_ALIVE_INTERVAL = int(os.getenv("KEEP_ALIVE_INTERVAL", "300"))  # self-ping every 5 min
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 GITHUB_REPO = os.getenv("GITHUB_REPO", "pavel9619229-cmyk/KP").strip()
@@ -2944,24 +2943,6 @@ async def refresh_loop() -> None:
         await asyncio.sleep(REFRESH_SECONDS)
 
 
-async def keep_alive_loop() -> None:
-    """Self-ping to prevent Render free tier from sleeping after 15 min of inactivity."""
-    render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip()
-    if not render_url:
-        log("keep_alive: RENDER_EXTERNAL_URL not set, skipping self-ping")
-        return
-    ping_url = f"{render_url.rstrip('/')}/healthz"
-    log(f"keep_alive: will ping {ping_url} every {KEEP_ALIVE_INTERVAL}s")
-    while True:
-        await asyncio.sleep(KEEP_ALIVE_INTERVAL)
-        try:
-            await asyncio.to_thread(
-                lambda: requests.get(ping_url, timeout=10, verify=False)
-            )
-        except Exception as exc:
-            log(f"keep_alive: ping failed: {exc}")
-
-
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
@@ -2974,12 +2955,11 @@ async def on_startup() -> None:
     # Do NOT await refresh here: blocking startup prevents Render's health-check
     # from reaching the app, causing the deploy to appear stuck.
     app.state.refresh_task = asyncio.create_task(refresh_loop())
-    app.state.keep_alive_task = asyncio.create_task(keep_alive_loop())
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    for attr in ("refresh_task", "keep_alive_task"):
+    for attr in ("refresh_task",):
         task = getattr(app.state, attr, None)
         if task:
             task.cancel()
