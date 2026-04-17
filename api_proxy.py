@@ -3309,7 +3309,7 @@ async def admin_login(payload: AdminLoginPayload):
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=True,
         max_age=max(300, ADMIN_SESSION_TTL_SECONDS),
     )
     return response
@@ -3354,7 +3354,7 @@ async def user_login(payload: UserLoginPayload):
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=True,
         max_age=max(300, USER_SESSION_TTL_SECONDS),
     )
     return response
