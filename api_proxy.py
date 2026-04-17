@@ -54,8 +54,9 @@ STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "60"))
-FAST_PARTIAL_REFRESH_TOP_ROWS = int(os.getenv("FAST_PARTIAL_REFRESH_TOP_ROWS", "50"))
-FAST_PARTIAL_DOC_TIMEOUT = float(os.getenv("FAST_PARTIAL_DOC_TIMEOUT", "2.0"))
+FAST_PARTIAL_CHUNK_SIZE = int(os.getenv("FAST_PARTIAL_CHUNK_SIZE", "150"))
+FAST_PARTIAL_DOC_TIMEOUT = float(os.getenv("FAST_PARTIAL_DOC_TIMEOUT", "3.0"))
+FAST_PARTIAL_WORKERS = int(os.getenv("FAST_PARTIAL_WORKERS", "20"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "60"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
@@ -138,6 +139,7 @@ CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per 
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 _enrich_cursor = 0
+_partial_refresh_cursor = 0
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
@@ -2930,12 +2932,25 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     return rows
 
 
-def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[list[dict], int]:
+def _partial_refresh_from_cached_rows(
+    rows: list[dict],
+    headers: dict,
+    start_idx: int,
+) -> tuple[list[dict], int, int]:
     if not rows:
-        return rows, 0
+        return rows, 0, 0
 
     refreshed: list[dict] = [dict(r) for r in rows]
-    target_refs = {str(r.get("refKey") or "") for r in refreshed if r.get("refKey")}
+    refs = [str(r.get("refKey") or "") for r in refreshed if r.get("refKey")]
+    if not refs:
+        return refreshed, 0, 0
+
+    total_refs = len(refs)
+    chunk = max(1, min(FAST_PARTIAL_CHUNK_SIZE, total_refs))
+    start = max(0, min(start_idx, total_refs - 1))
+    indices = [(start + i) % total_refs for i in range(chunk)]
+    target_refs = {refs[i] for i in indices if refs[i]}
+    next_idx = (start + chunk) % total_refs
 
     def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
@@ -2943,7 +2958,7 @@ def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[
         return ref_key, _fetch_doc_by_ref_once(ref_key, headers, timeout=FAST_PARTIAL_DOC_TIMEOUT)
 
     docs_by_ref: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=20) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, FAST_PARTIAL_WORKERS)) as pool:
         futures = {pool.submit(_fetch_one, rk): rk for rk in target_refs}
         for future in as_completed(futures):
             rk, doc = future.result()
@@ -2991,7 +3006,7 @@ def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[
         apply_runtime_defaults(row)
 
     refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
-    return refreshed, touched
+    return refreshed, touched, next_idx
 
 
 def refresh_cache_and_file() -> None:
@@ -3018,7 +3033,7 @@ def refresh_cache_and_file() -> None:
             if _cached_rows:
                 try:
                     headers = _build_headers()
-                    partial_rows, touched = _partial_refresh_from_cached_rows(_cached_rows, headers)
+                    partial_rows, touched, _ = _partial_refresh_from_cached_rows(_cached_rows, headers, 0)
                     if touched > 0:
                         save_rows(partial_rows)
                         _cached_rows = partial_rows
@@ -3040,7 +3055,7 @@ def refresh_cache_and_file() -> None:
 
 
 def refresh_cached_rows_only() -> None:
-    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _partial_refresh_cursor
 
     if not _cached_rows:
         return
@@ -3050,16 +3065,24 @@ def refresh_cached_rows_only() -> None:
 
     try:
         headers = _build_headers()
-        partial_rows, touched = _partial_refresh_from_cached_rows(_cached_rows, headers)
+        partial_rows, touched, next_idx = _partial_refresh_from_cached_rows(
+            _cached_rows,
+            headers,
+            _partial_refresh_cursor,
+        )
+        _partial_refresh_cursor = next_idx
         if touched > 0:
             save_rows(partial_rows)
             _cached_rows = partial_rows
             _cached_fp = rows_fingerprint(partial_rows)
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
             _last_refresh_error = None
-            log(f"fast partial refresh success: touched={touched}, rows={len(partial_rows)}")
+            log(
+                "fast partial refresh success: "
+                f"touched={touched}, rows={len(partial_rows)}, next_idx={_partial_refresh_cursor}"
+            )
         else:
-            log("fast partial refresh: no docs touched")
+            log(f"fast partial refresh: no docs touched, next_idx={_partial_refresh_cursor}")
     except Exception as exc:
         log(f"fast partial refresh failed: {type(exc).__name__}: {exc}")
     finally:
