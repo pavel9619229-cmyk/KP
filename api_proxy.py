@@ -59,7 +59,7 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
-BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "45"))
+BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -2909,6 +2909,70 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     return rows
 
 
+def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[list[dict], int]:
+    if not rows:
+        return rows, 0
+
+    refreshed: list[dict] = [dict(r) for r in rows]
+    ref_keys = [str(r.get("refKey") or "") for r in refreshed]
+
+    def _fetch_one(ref_key: str) -> tuple[str, dict]:
+        if not ref_key:
+            return ref_key, {}
+        return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 3.0))
+
+    docs_by_ref: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys if rk}
+        for future in as_completed(futures):
+            rk, doc = future.result()
+            docs_by_ref[rk] = doc
+
+    touched = 0
+    for row in refreshed:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        if not doc:
+            continue
+        touched += 1
+
+        raw_comment = str(doc.get("Комментарий") or "")
+        row["additionalInfoFirstLine"] = first_line(raw_comment) or row.get("additionalInfoFirstLine") or ""
+
+        comment_clean = strip_html(raw_comment).replace("\r\n", "\n").replace("\r", "\n").upper()
+        comment_top = comment_clean.split("\n")[:5]
+        row["kpSent"] = any("КП ОТПРАВЛЕНО" in line for line in comment_top)
+        row["receiptConfirmed"] = any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top)
+        row["edoSent"] = "В ЭДО ОТПРАВЛЕНО" in comment_clean
+        row["rejected"] = "ОТКАЗ" in comment_clean
+        row["problem"] = "ПРОБЛЕМА" in comment_clean
+        row["shipmentPending"] = "ОТГРУЗИТЬ" in comment_clean
+
+        customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if customer_name:
+            row["customerName"] = customer_name
+        row["clientFilled"] = is_client_filled(row.get("customerName") or "")
+
+        manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if manager_filled is not None:
+            row["managerFilled"] = manager_filled
+            manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            if manager_name:
+                row["managerName"] = manager_name
+
+        product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if product_specified is not None:
+            row["productSpecified"] = bool(product_specified)
+        price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+        if price_filled is not None:
+            row["priceFilled"] = bool(price_filled)
+
+        apply_runtime_defaults(row)
+
+    refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    return refreshed, touched
+
+
 def refresh_cache_and_file() -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
@@ -2925,6 +2989,21 @@ def refresh_cache_and_file() -> None:
                 # Disabled runtime cache auto-push to GitHub: it creates a deploy loop
                 # on Render (new commit -> new deploy -> new commit...).
                 return
+
+            if _cached_rows:
+                try:
+                    headers = _build_headers()
+                    partial_rows, touched = _partial_refresh_from_cached_rows(_cached_rows, headers)
+                    if touched > 0:
+                        save_rows(partial_rows)
+                        _cached_rows = partial_rows
+                        _cached_fp = rows_fingerprint(partial_rows)
+                        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                        _last_refresh_error = None
+                        log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
+                        return
+                except Exception as partial_exc:
+                    log(f"partial refresh failed: {partial_exc}")
 
             _last_refresh_error = "refresh returned 0 rows"
             log("refresh returned 0 rows, keeping last successful live cache")
