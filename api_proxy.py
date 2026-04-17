@@ -3112,8 +3112,9 @@ async def trigger_refresh_if_stale() -> None:
 
 
 async def refresh_loop() -> None:
-    # Wait before first refresh to allow Render health-check to pass
-    await asyncio.sleep(5)
+    # Wait before first refresh to allow Render health-check to pass.
+    # Render health-check timeout is ~30s, so we delay well after that.
+    await asyncio.sleep(35)
     while True:
         started_at = time.time()
         try:
@@ -3126,8 +3127,9 @@ async def refresh_loop() -> None:
 
 
 async def fast_partial_refresh_loop() -> None:
-    # Wait before first refresh to allow Render health-check to pass
-    await asyncio.sleep(7)
+    # Wait before first refresh to allow Render health-check to pass.
+    # Render health-check timeout is ~30s, so we delay well after that.
+    await asyncio.sleep(37)
     while True:
         started_at = time.time()
         try:
@@ -3147,9 +3149,9 @@ async def on_startup() -> None:
         _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
-    # Start refresh loop immediately — first iteration fires right away.
-    # Do NOT await refresh here: blocking startup prevents Render's health-check
-    # from reaching the app, causing the deploy to appear stuck.
+    # Start refresh loops with significant delays to allow Render's health-check
+    # to complete before refresh tasks try to contact 1C (which may timeout).
+    # Do NOT await refresh here: blocking startup prevents health-check from reaching the app.
     app.state.refresh_task = asyncio.create_task(refresh_loop())
     app.state.fast_partial_refresh_task = asyncio.create_task(fast_partial_refresh_loop())
 
