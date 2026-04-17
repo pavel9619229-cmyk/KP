@@ -54,6 +54,8 @@ STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "60"))
+FAST_PARTIAL_REFRESH_TOP_ROWS = int(os.getenv("FAST_PARTIAL_REFRESH_TOP_ROWS", "50"))
+FAST_PARTIAL_DOC_TIMEOUT = float(os.getenv("FAST_PARTIAL_DOC_TIMEOUT", "2.0"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "60"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
@@ -1702,6 +1704,23 @@ def score_customer_candidate(nav_obj: dict) -> int:
     return score
 
 
+def _fetch_doc_by_ref_once(ref_key: str, headers: dict, timeout: float) -> dict:
+    """Single-attempt fetch — no retries, used for fast partial refresh."""
+    try:
+        doc_resp = requests.get(
+            f"{BASE}/{ENTITY}(guid'{ref_key}')",
+            headers=headers,
+            timeout=timeout,
+            verify=False,
+        )
+        if doc_resp.status_code == 200:
+            doc = doc_resp.json()
+            return doc if isinstance(doc, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
 def _fetch_doc_by_ref(ref_key: str, headers: dict, timeout: float = DOC_TIMEOUT_SECONDS) -> dict:
     for attempt in range(3):
         try:
@@ -2915,17 +2934,21 @@ def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[
     if not rows:
         return rows, 0
 
+    # Only update the most recent N rows — these are most likely to have changed.
+    rows_sorted = sorted(rows, key=lambda x: x.get("createdAt", ""), reverse=True)
+    target_rows = rows_sorted[:FAST_PARTIAL_REFRESH_TOP_ROWS]
+    target_refs = {str(r.get("refKey") or "") for r in target_rows if r.get("refKey")}
+
     refreshed: list[dict] = [dict(r) for r in rows]
-    ref_keys = [str(r.get("refKey") or "") for r in refreshed]
 
     def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
             return ref_key, {}
-        return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 3.0))
+        return ref_key, _fetch_doc_by_ref_once(ref_key, headers, timeout=FAST_PARTIAL_DOC_TIMEOUT)
 
     docs_by_ref: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys if rk}
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        futures = {pool.submit(_fetch_one, rk): rk for rk in target_refs}
         for future in as_completed(futures):
             rk, doc = future.result()
             docs_by_ref[rk] = doc
