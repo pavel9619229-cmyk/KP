@@ -53,6 +53,7 @@ RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
+FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "60"))
 STALE_REFRESH_AFTER_SECONDS = int(os.getenv("STALE_REFRESH_AFTER_SECONDS", "20"))
 ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "60"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
@@ -3018,6 +3019,33 @@ def refresh_cache_and_file() -> None:
         _refresh_lock.release()
 
 
+def refresh_cached_rows_only() -> None:
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+
+    if not _cached_rows:
+        return
+    if not _refresh_lock.acquire(blocking=False):
+        log("fast partial refresh skipped: refresh lock is busy")
+        return
+
+    try:
+        headers = _build_headers()
+        partial_rows, touched = _partial_refresh_from_cached_rows(_cached_rows, headers)
+        if touched > 0:
+            save_rows(partial_rows)
+            _cached_rows = partial_rows
+            _cached_fp = rows_fingerprint(partial_rows)
+            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+            _last_refresh_error = None
+            log(f"fast partial refresh success: touched={touched}, rows={len(partial_rows)}")
+        else:
+            log("fast partial refresh: no docs touched")
+    except Exception as exc:
+        log(f"fast partial refresh failed: {type(exc).__name__}: {exc}")
+    finally:
+        _refresh_lock.release()
+
+
 def cache_is_stale() -> bool:
     if not _last_refresh:
         return True
@@ -3050,6 +3078,18 @@ async def refresh_loop() -> None:
         await asyncio.sleep(REFRESH_SECONDS)
 
 
+async def fast_partial_refresh_loop() -> None:
+    while True:
+        started_at = time.time()
+        try:
+            await asyncio.to_thread(refresh_cached_rows_only)
+        except Exception as exc:
+            log(f"fast partial loop error: {type(exc).__name__}: {exc}")
+        elapsed = max(0.0, time.time() - started_at)
+        log(f"fast partial loop tick finished in {elapsed:.1f}s")
+        await asyncio.sleep(FAST_PARTIAL_REFRESH_SECONDS)
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
@@ -3062,11 +3102,12 @@ async def on_startup() -> None:
     # Do NOT await refresh here: blocking startup prevents Render's health-check
     # from reaching the app, causing the deploy to appear stuck.
     app.state.refresh_task = asyncio.create_task(refresh_loop())
+    app.state.fast_partial_refresh_task = asyncio.create_task(fast_partial_refresh_loop())
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    for attr in ("refresh_task",):
+    for attr in ("refresh_task", "fast_partial_refresh_task"):
         task = getattr(app.state, attr, None)
         if task:
             task.cancel()
