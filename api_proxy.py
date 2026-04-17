@@ -3112,6 +3112,8 @@ async def trigger_refresh_if_stale() -> None:
 
 
 async def refresh_loop() -> None:
+    # Wait before first refresh to allow Render health-check to pass
+    await asyncio.sleep(5)
     while True:
         started_at = time.time()
         try:
@@ -3124,6 +3126,8 @@ async def refresh_loop() -> None:
 
 
 async def fast_partial_refresh_loop() -> None:
+    # Wait before first refresh to allow Render health-check to pass
+    await asyncio.sleep(7)
     while True:
         started_at = time.time()
         try:
