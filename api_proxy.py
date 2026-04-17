@@ -52,8 +52,8 @@ RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
 RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
-REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
-FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "60"))
+REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
+FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "120"))
 FAST_PARTIAL_CHUNK_SIZE = int(os.getenv("FAST_PARTIAL_CHUNK_SIZE", "150"))
 FAST_PARTIAL_DOC_TIMEOUT = float(os.getenv("FAST_PARTIAL_DOC_TIMEOUT", "3.0"))
 FAST_PARTIAL_WORKERS = int(os.getenv("FAST_PARTIAL_WORKERS", "20"))
@@ -133,6 +133,7 @@ _edo_sent_cache = {}
 _rejected_cache = {}
 _problem_cache = {}
 _shipment_pending_cache = {}
+_refresh_run_lock = threading.Lock()
 _refresh_lock = threading.Lock()
 _partial_refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
@@ -2995,8 +2996,12 @@ def _partial_refresh_from_cached_rows(
 def refresh_cache_and_file() -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
+    if not _refresh_run_lock.acquire(blocking=False):
+        log("refresh skipped: another refresh cycle is running")
+        return
     if not _refresh_lock.acquire(blocking=False):
-        log("refresh skipped: previous cycle is still running")
+        _refresh_run_lock.release()
+        log("refresh skipped: previous full cycle is still running")
         return
 
     try:
@@ -3035,6 +3040,7 @@ def refresh_cache_and_file() -> None:
             log(f"refresh failed, keeping last successful live cache: {exc}")
     finally:
         _refresh_lock.release()
+        _refresh_run_lock.release()
 
 
 def refresh_cached_rows_only() -> dict:
@@ -3043,7 +3049,11 @@ def refresh_cached_rows_only() -> dict:
 
     if not _cached_rows:
         return {"ok": False, "skipped": "empty-cache"}
+    if not _refresh_run_lock.acquire(blocking=False):
+        log("fast partial refresh skipped: another refresh cycle is running")
+        return {"ok": False, "skipped": "another-refresh-running"}
     if not _partial_refresh_lock.acquire(blocking=False):
+        _refresh_run_lock.release()
         log("fast partial refresh skipped: already running")
         return {"ok": False, "skipped": "already-running"}
 
@@ -3089,6 +3099,7 @@ def refresh_cached_rows_only() -> dict:
         return {"ok": False, "error": _last_comment_refresh_error}
     finally:
         _partial_refresh_lock.release()
+        _refresh_run_lock.release()
 
 
 def cache_is_stale() -> bool:
