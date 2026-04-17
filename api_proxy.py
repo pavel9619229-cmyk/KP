@@ -129,6 +129,7 @@ _rejected_cache = {}
 _problem_cache = {}
 _shipment_pending_cache = {}
 _refresh_lock = threading.Lock()
+_partial_refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _last_cache_push: Optional[datetime] = None
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
@@ -3024,8 +3025,8 @@ def refresh_cached_rows_only() -> None:
 
     if not _cached_rows:
         return
-    if not _refresh_lock.acquire(blocking=False):
-        log("fast partial refresh skipped: refresh lock is busy")
+    if not _partial_refresh_lock.acquire(blocking=False):
+        log("fast partial refresh skipped: already running")
         return
 
     try:
@@ -3043,7 +3044,7 @@ def refresh_cached_rows_only() -> None:
     except Exception as exc:
         log(f"fast partial refresh failed: {type(exc).__name__}: {exc}")
     finally:
-        _refresh_lock.release()
+        _partial_refresh_lock.release()
 
 
 def cache_is_stale() -> bool:
