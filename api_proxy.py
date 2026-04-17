@@ -113,6 +113,8 @@ _cached_rows = []
 _cached_fp = ""
 _last_refresh = None
 _last_refresh_error = None
+_last_comment_refresh = None
+_last_comment_refresh_error = None
 _last_group_enrich = None
 
 _TZ_MSK = timezone(timedelta(hours=3))
@@ -3035,14 +3037,15 @@ def refresh_cache_and_file() -> None:
         _refresh_lock.release()
 
 
-def refresh_cached_rows_only() -> None:
+def refresh_cached_rows_only() -> dict:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _partial_refresh_cursor
+    global _last_comment_refresh, _last_comment_refresh_error
 
     if not _cached_rows:
-        return
+        return {"ok": False, "skipped": "empty-cache"}
     if not _partial_refresh_lock.acquire(blocking=False):
         log("fast partial refresh skipped: already running")
-        return
+        return {"ok": False, "skipped": "already-running"}
 
     try:
         headers = _build_headers()
@@ -3058,14 +3061,32 @@ def refresh_cached_rows_only() -> None:
             _cached_fp = rows_fingerprint(partial_rows)
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
             _last_refresh_error = None
+            _last_comment_refresh = _last_refresh
+            _last_comment_refresh_error = None
             log(
                 "fast partial refresh success: "
                 f"touched={touched}, rows={len(partial_rows)}, next_idx={_partial_refresh_cursor}"
             )
+            return {
+                "ok": True,
+                "touched": touched,
+                "rows": len(partial_rows),
+                "nextIdx": _partial_refresh_cursor,
+            }
         else:
+            _last_comment_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+            _last_comment_refresh_error = None
             log(f"fast partial refresh: no docs touched, next_idx={_partial_refresh_cursor}")
+            return {
+                "ok": True,
+                "touched": 0,
+                "rows": len(partial_rows),
+                "nextIdx": _partial_refresh_cursor,
+            }
     except Exception as exc:
+        _last_comment_refresh_error = f"{type(exc).__name__}: {exc}"
         log(f"fast partial refresh failed: {type(exc).__name__}: {exc}")
+        return {"ok": False, "error": _last_comment_refresh_error}
     finally:
         _partial_refresh_lock.release()
 
@@ -3168,7 +3189,15 @@ async def healthz():
         "rows": len(_cached_rows),
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
+        "lastCommentRefresh": _last_comment_refresh,
+        "lastCommentRefreshError": _last_comment_refresh_error,
     }
+
+
+@app.post("/api/debug/comments-only-refresh")
+async def debug_comments_only_refresh():
+    result = await asyncio.to_thread(refresh_cached_rows_only)
+    return result
 
 
 @app.get("/api/debug/logs")
