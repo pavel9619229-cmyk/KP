@@ -2934,12 +2934,8 @@ def _partial_refresh_from_cached_rows(rows: list[dict], headers: dict) -> tuple[
     if not rows:
         return rows, 0
 
-    # Only update the most recent N rows — these are most likely to have changed.
-    rows_sorted = sorted(rows, key=lambda x: x.get("createdAt", ""), reverse=True)
-    target_rows = rows_sorted[:FAST_PARTIAL_REFRESH_TOP_ROWS]
-    target_refs = {str(r.get("refKey") or "") for r in target_rows if r.get("refKey")}
-
     refreshed: list[dict] = [dict(r) for r in rows]
+    target_refs = {str(r.get("refKey") or "") for r in refreshed if r.get("refKey")}
 
     def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
