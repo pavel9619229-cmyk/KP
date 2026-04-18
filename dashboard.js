@@ -128,41 +128,58 @@ refreshBtn.addEventListener('click', async () => {
   updatedAtLabel.textContent = 'Обновляю данные из 1С...';
 
   try {
-    let lastError = null;
-    for (let attempt = 1; attempt <= 4; attempt += 1) {
-      try {
-        const response = await fetch('/api/kp/refresh', {
-          method: 'POST',
-          credentials: 'include',
-          cache: 'no-store',
-        });
+    const startResponse = await fetch('/api/kp/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    });
 
-        if (response.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
+    if (startResponse.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
 
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload?.ok === false) {
-          const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
-          throw new Error(String(details));
-        }
+    const startPayload = await startResponse.json().catch(() => ({}));
+    if (!startResponse.ok || startPayload?.ok === false) {
+      const details = startPayload?.detail || startPayload?.error || `HTTP ${startResponse.status}`;
+      throw new Error(String(details));
+    }
 
-        await refreshData(false);
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error;
-        if (attempt < 4) {
-          updatedAtLabel.textContent = `Сервис просыпается, попытка ${attempt + 1}/4...`;
-          await new Promise((resolve) => setTimeout(resolve, 3500));
-        }
+    let done = false;
+    let lastState = null;
+    for (let attempt = 1; attempt <= 70; attempt += 1) {
+      const stateResponse = await fetch('/api/kp/refresh/status', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const statePayload = await stateResponse.json().catch(() => ({}));
+      lastState = statePayload;
+
+      if (statePayload?.running) {
+        updatedAtLabel.textContent = `Обновление из 1С... ${attempt * 2}s`;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
       }
+
+      if (statePayload?.lastOk === true || (statePayload?.lastRefresh && !statePayload?.lastRefreshError)) {
+        done = true;
+        break;
+      }
+
+      if (statePayload?.lastError || statePayload?.lastRefreshError) {
+        throw new Error(String(statePayload.lastError || statePayload.lastRefreshError));
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
-    if (lastError) {
-      throw lastError;
+    if (!done) {
+      const details = lastState?.lastError || lastState?.lastRefreshError || 'Превышено время ожидания обновления';
+      throw new Error(String(details));
     }
+
+    await refreshData(false);
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
   } finally {

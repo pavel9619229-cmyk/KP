@@ -160,6 +160,31 @@ _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 _enrich_cursor = 0
 _partial_refresh_cursor = 0
+_manual_refresh_state_lock = threading.Lock()
+_manual_refresh_state: dict = {
+    "running": False,
+    "requestedAt": None,
+    "requestedBy": None,
+    "requestedFrom": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastOk": None,
+    "lastError": None,
+}
+
+
+def _manual_refresh_snapshot() -> dict:
+    with _manual_refresh_state_lock:
+        state = dict(_manual_refresh_state)
+    state["rows"] = len(_cached_rows)
+    state["lastRefresh"] = _last_refresh
+    state["lastRefreshError"] = _last_refresh_error
+    return state
+
+
+def _set_manual_refresh_state(**updates: object) -> None:
+    with _manual_refresh_state_lock:
+        _manual_refresh_state.update(updates)
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
@@ -3357,26 +3382,79 @@ async def manual_refresh(request: Request):
         pass
 
     client_host = request.client.host if request.client else "unknown"
-    log(f"manual refresh requested by {username} from {client_host}")
-    await asyncio.to_thread(refresh_cache_and_file)
 
-    ok = bool(_cached_rows) and not _last_refresh_error
-    payload = {
-        "ok": ok,
-        "rows": len(_cached_rows),
-        "lastRefresh": _last_refresh,
-        "lastRefreshError": _last_refresh_error,
-    }
-    if ok:
-        log(
-            "manual refresh finished: "
-            f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, user={username}, host={client_host}"
+    with _manual_refresh_state_lock:
+        if _manual_refresh_state.get("running"):
+            state = dict(_manual_refresh_state)
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "ok": True,
+                    "message": "manual refresh is already running",
+                    **state,
+                    "rows": len(_cached_rows),
+                    "lastRefresh": _last_refresh,
+                    "lastRefreshError": _last_refresh_error,
+                },
+            )
+
+        _manual_refresh_state.update(
+            {
+                "running": True,
+                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "requestedBy": username,
+                "requestedFrom": client_host,
+                "startedAt": None,
+                "finishedAt": None,
+                "lastError": None,
+            }
         )
-    else:
-        log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
-    if ok:
-        return payload
-    return JSONResponse(status_code=502, content=payload)
+
+    async def _run_manual_refresh() -> None:
+        _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
+        log(f"manual refresh requested by {username} from {client_host}")
+        try:
+            await asyncio.to_thread(refresh_cache_and_file)
+            ok = bool(_cached_rows) and not _last_refresh_error
+            error_text = None if ok else str(_last_refresh_error or "refresh failed")
+            _set_manual_refresh_state(lastOk=ok, lastError=error_text)
+
+            if ok:
+                log(
+                    "manual refresh finished: "
+                    f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, user={username}, host={client_host}"
+                )
+            else:
+                payload = {
+                    "ok": ok,
+                    "rows": len(_cached_rows),
+                    "lastRefresh": _last_refresh,
+                    "lastRefreshError": _last_refresh_error,
+                }
+                log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
+        except Exception as exc:
+            _set_manual_refresh_state(lastOk=False, lastError=str(exc))
+            log(f"manual refresh crashed: {type(exc).__name__}: {exc}")
+        finally:
+            _set_manual_refresh_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            )
+
+    asyncio.create_task(_run_manual_refresh())
+    return JSONResponse(
+        status_code=202,
+        content={
+            "ok": True,
+            "message": "manual refresh started",
+            **_manual_refresh_snapshot(),
+        },
+    )
+
+
+@app.get("/api/kp/refresh/status")
+async def manual_refresh_status():
+    return _manual_refresh_snapshot()
 
 
 @app.post("/api/debug/comments-only-refresh")
