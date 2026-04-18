@@ -18,6 +18,8 @@ services:
         value: Document_КоммерческоеПредложениеКлиенту
       - key: REFRESH_SECONDS
         value: "60"
+      - key: ENABLE_BACKGROUND_REFRESH
+        value: "false"
       - key: RENDER_API_KEY
         sync: false
       - key: RENDER_SERVICE_NAME

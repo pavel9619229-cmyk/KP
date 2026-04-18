@@ -1,6 +1,7 @@
 const searchInput = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearchBtn');
 const managerFilter = document.getElementById('managerFilter');
+const refreshBtn = document.getElementById('refreshBtn');
 const newRequestBtn = document.getElementById('newRequestBtn');
 const newRequestPanel = document.getElementById('newRequestPanel');
 const closeRequestPanelBtn = document.getElementById('closeRequestPanelBtn');
@@ -12,7 +13,6 @@ const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
 const boardContent = document.getElementById('boardContent');
 
-const REFRESH_INTERVAL_MS = 15000;
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
 const ALL_TAB_KEY = '__all__';
@@ -120,6 +120,39 @@ clearSearchBtn.addEventListener('click', () => {
 managerFilter.addEventListener('change', () => {
   renderBoard();
 });
+
+refreshBtn.addEventListener('click', async () => {
+  const defaultLabel = 'ОБНОВИТЬ ИЗ 1С';
+  refreshBtn.disabled = true;
+  refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+  updatedAtLabel.textContent = 'Обновляю данные из 1С...';
+
+  try {
+    const response = await fetch('/api/kp/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false) {
+      const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
+      throw new Error(String(details));
+    }
+
+    await refreshData(false);
+  } catch (error) {
+    updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = defaultLabel;
+  }
+});
+
 function closeRequestPanel() {
   newRequestPanel.hidden = true;
   newRequestBtn.textContent = 'НОВЫЙ ЗАПРОС';
@@ -836,11 +869,6 @@ async function init() {
   await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();
-  setInterval(() => {
-    if (!wsActive) {
-      refreshData(false);
-    }
-  }, REFRESH_INTERVAL_MS);
 }
 
 init();

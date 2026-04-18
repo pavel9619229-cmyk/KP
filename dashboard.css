@@ -72,7 +72,7 @@ textarea {
 
 .topbar-actions {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(300px, 2fr) minmax(220px, 1.2fr) minmax(170px, 1fr) minmax(150px, 1fr);
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 2fr) minmax(220px, 1.2fr) repeat(4, minmax(140px, 1fr));
   gap: 12px;
   width: 100%;
 }

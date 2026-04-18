@@ -54,6 +54,12 @@ STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
 FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "120"))
+ENABLE_BACKGROUND_REFRESH = os.getenv("ENABLE_BACKGROUND_REFRESH", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 FAST_PARTIAL_CHUNK_SIZE = int(os.getenv("FAST_PARTIAL_CHUNK_SIZE", "150"))
 FAST_PARTIAL_DOC_TIMEOUT = float(os.getenv("FAST_PARTIAL_DOC_TIMEOUT", "3.0"))
 FAST_PARTIAL_WORKERS = int(os.getenv("FAST_PARTIAL_WORKERS", "20"))
@@ -3206,11 +3212,16 @@ async def on_startup() -> None:
         _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
-    # Start refresh loops with significant delays to allow Render's health-check
-    # to complete before refresh tasks try to contact 1C (which may timeout).
     # Do NOT await refresh here: blocking startup prevents health-check from reaching the app.
-    app.state.refresh_task = asyncio.create_task(refresh_loop())
-    app.state.fast_partial_refresh_task = asyncio.create_task(fast_partial_refresh_loop())
+    # Background refresh loops are optional and disabled by default.
+    if ENABLE_BACKGROUND_REFRESH:
+        app.state.refresh_task = asyncio.create_task(refresh_loop())
+        app.state.fast_partial_refresh_task = asyncio.create_task(fast_partial_refresh_loop())
+        log("background refresh loops enabled")
+    else:
+        app.state.refresh_task = None
+        app.state.fast_partial_refresh_task = None
+        log("background refresh loops disabled: waiting for manual refresh")
 
 
 @app.on_event("shutdown")
@@ -3315,11 +3326,29 @@ async def healthz():
     return {
         "ok": True,
         "rows": len(_cached_rows),
+        "backgroundRefreshEnabled": ENABLE_BACKGROUND_REFRESH,
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
         "lastCommentRefresh": _last_comment_refresh,
         "lastCommentRefreshError": _last_comment_refresh_error,
     }
+
+
+@app.post("/api/kp/refresh")
+async def manual_refresh(request: Request):
+    _get_user_from_request(request)
+    await asyncio.to_thread(refresh_cache_and_file)
+
+    ok = bool(_cached_rows) and not _last_refresh_error
+    payload = {
+        "ok": ok,
+        "rows": len(_cached_rows),
+        "lastRefresh": _last_refresh,
+        "lastRefreshError": _last_refresh_error,
+    }
+    if ok:
+        return payload
+    return JSONResponse(status_code=502, content=payload)
 
 
 @app.post("/api/debug/comments-only-refresh")
@@ -3525,12 +3554,6 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
 async def get_all_kp(request: Request):
     user = _get_user_from_request(request)
     if not _cached_rows:
-        await asyncio.to_thread(refresh_cache_and_file)
-    elif _last_refresh is None:
-        # Snapshot is available, so return it immediately and refresh live data in background.
-        await trigger_refresh_if_stale()
-    await trigger_refresh_if_stale()
-    if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
 
     return build_rows_with_computed_status(_filter_rows_for_user(_cached_rows, user))
@@ -3543,8 +3566,7 @@ async def debug_kp_payment_chain(kp_number: str):
         raise HTTPException(status_code=400, detail="kp_number is required")
 
     if not _cached_rows:
-        await asyncio.to_thread(refresh_cache_and_file)
-    await trigger_refresh_if_stale()
+        raise HTTPException(status_code=503, detail="KP data is not available yet")
 
     target_row = None
     for row in _cached_rows:
@@ -3753,7 +3775,6 @@ async def ws_kp(websocket: WebSocket):
     try:
         while True:
             if not _cached_rows:
-                await trigger_refresh_if_stale()
                 await asyncio.sleep(2)
                 continue
 
