@@ -6,7 +6,6 @@ const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
-const rulesShortcutBtn = document.getElementById('rulesShortcutBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const rulesPanel = document.getElementById('rulesPanel');
 const rulesStoragePanel = document.getElementById('rulesStoragePanel');
@@ -913,11 +912,6 @@ resetBtn.addEventListener('click', () => {
 rulesBtn.addEventListener('click', () => {
   if (rulesPanel.hidden) openRulesPanel();
   else closeRulesPanel();
-});
-
-rulesShortcutBtn?.addEventListener('click', () => {
-  openRulesPanel();
-  rulesTextInput?.focus();
 });
 
 rulesStorageBtn?.addEventListener('click', () => {
