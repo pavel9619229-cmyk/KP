@@ -3077,7 +3077,7 @@ def _partial_refresh_from_cached_rows(
     return refreshed, touched, next_idx
 
 
-def refresh_cache_and_file() -> None:
+def refresh_cache_and_file(allow_partial_fallback: bool = True) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
     if not _refresh_run_lock.acquire(blocking=False):
@@ -3102,7 +3102,7 @@ def refresh_cache_and_file() -> None:
                 # on Render (new commit -> new deploy -> new commit...).
                 return
 
-            if _cached_rows:
+            if allow_partial_fallback and _cached_rows:
                 try:
                     headers = _build_headers()
                     partial_rows, touched, _ = _partial_refresh_from_cached_rows(_cached_rows, headers, 0)
@@ -3116,6 +3116,8 @@ def refresh_cache_and_file() -> None:
                         return
                 except Exception as partial_exc:
                     log(f"partial refresh failed: {partial_exc}")
+            elif not allow_partial_fallback:
+                log("partial fallback skipped for this refresh run")
 
             _last_refresh_error = "refresh returned 0 rows"
             log("refresh returned 0 rows, keeping last successful live cache")
@@ -3414,7 +3416,10 @@ async def manual_refresh(request: Request):
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"manual refresh requested by {username} from {client_host}")
         try:
-            await asyncio.to_thread(refresh_cache_and_file)
+            await asyncio.wait_for(
+                asyncio.to_thread(refresh_cache_and_file, False),
+                timeout=190,
+            )
             ok = bool(_cached_rows) and not _last_refresh_error
             error_text = None if ok else str(_last_refresh_error or "refresh failed")
             _set_manual_refresh_state(lastOk=ok, lastError=error_text)
@@ -3433,8 +3438,12 @@ async def manual_refresh(request: Request):
                 }
                 log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
         except Exception as exc:
-            _set_manual_refresh_state(lastOk=False, lastError=str(exc))
-            log(f"manual refresh crashed: {type(exc).__name__}: {exc}")
+            if isinstance(exc, asyncio.TimeoutError):
+                _set_manual_refresh_state(lastOk=False, lastError="manual refresh timed out")
+                log("manual refresh timed out")
+            else:
+                _set_manual_refresh_state(lastOk=False, lastError=str(exc))
+                log(f"manual refresh crashed: {type(exc).__name__}: {exc}")
         finally:
             _set_manual_refresh_state(
                 running=False,
