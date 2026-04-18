@@ -3184,15 +3184,7 @@ async def root(request: Request):
 
     role = str(user.get("role") or "manager").lower()
     if role == "admin":
-        return FileResponse(
-            "index.html",
-            media_type="text/html",
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
+        return RedirectResponse(url="/admin/dashboard", status_code=302)
     return RedirectResponse(url="/dashboard", status_code=302)
 
 
@@ -3211,12 +3203,34 @@ async def login_page():
 
 @app.get("/dashboard")
 async def dashboard(request: Request):
-    token = request.cookies.get(USER_SESSION_COOKIE)
-    payload = _read_user_token(token or "")
-    if not payload:
+    try:
+        _get_user_from_request(request)
+    except HTTPException:
         return RedirectResponse(url="/login", status_code=302)
     return FileResponse(
         "dashboard.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@app.get("/admin/dashboard")
+async def admin_dashboard(request: Request):
+    try:
+        user = _get_user_from_request(request)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=302)
+
+    role = str(user.get("role") or "manager").lower()
+    if role != "admin":
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    return FileResponse(
+        "index.html",
         media_type="text/html",
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",

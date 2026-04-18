@@ -3,6 +3,10 @@ const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('loginBtn');
 const msg = document.getElementById('msg');
 
+function dashboardUrlForRole(role) {
+  return String(role || '').toLowerCase() === 'admin' ? '/admin/dashboard' : '/dashboard';
+}
+
 function setMsg(text) {
   msg.textContent = String(text || '');
 }
@@ -24,7 +28,7 @@ async function checkSession() {
   try {
     const session = await api('/api/auth/session', { method: 'GET' });
     if (session?.ok) {
-      window.location.href = '/dashboard';
+      window.location.href = dashboardUrlForRole(session?.user?.role);
     }
   } catch {
     // keep login page
@@ -42,11 +46,11 @@ loginBtn.addEventListener('click', async () => {
   try {
     loginBtn.disabled = true;
     setMsg('Проверка...');
-    await api('/api/auth/login', {
+    const result = await api('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
-    window.location.href = '/dashboard';
+    window.location.href = dashboardUrlForRole(result?.user?.role);
   } catch (err) {
     setMsg(`Ошибка входа: ${err.message}`);
   } finally {
