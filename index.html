@@ -32,8 +32,22 @@
       <button id="darkBtn" type="button">🌙 Тёмный фон</button>
       <button id="rulesBtn" type="button">Правила статусов</button>
       <button id="loadingRulesBtn" type="button">ПРАВИЛА ЗАГРУЗКИ</button>
+      <button id="versionNumbersBtn" type="button">НОМЕРА ВЕРСИЙ ЗАГРУЗКИ</button>
       <button id="rulesStorageBtn" type="button">МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ</button>
       <a id="logoutLink" href="/logout" class="logout-link">Выйти</a>
+    </section>
+
+    <section id="versionNumbersPanel" class="rules-panel" hidden aria-label="Номера версий загрузки">
+      <div class="rules-storage-block">
+        <strong>номера версий загрузки</strong>
+        <textarea
+          id="versionNumbersInput"
+          class="rules-storage-input"
+          rows="9"
+          spellcheck="false"
+          readonly
+        >Загрузка информации о версиях...</textarea>
+      </div>
     </section>
 
     <section id="loadingRulesPanel" class="rules-panel" hidden aria-label="Правила загрузки">

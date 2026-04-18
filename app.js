@@ -7,12 +7,15 @@ const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
 const loadingRulesBtn = document.getElementById('loadingRulesBtn');
+const versionNumbersBtn = document.getElementById('versionNumbersBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const rulesPanel = document.getElementById('rulesPanel');
 const loadingRulesPanel = document.getElementById('loadingRulesPanel');
+const versionNumbersPanel = document.getElementById('versionNumbersPanel');
 const rulesStoragePanel = document.getElementById('rulesStoragePanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
 const rulesTextInput = document.getElementById('rulesTextInput');
+const versionNumbersInput = document.getElementById('versionNumbersInput');
 const rulesStorageLocationsInput = document.getElementById('rulesStorageLocationsInput');
 const enrichStatusLabel = document.getElementById('enrichStatusLabel');
 const saveRulesBtn = document.getElementById('saveRulesBtn');
@@ -127,6 +130,7 @@ const DEFAULT_STATUS_RULES_TEXT = [
 let rows = [];
 let lastFingerprint = '';
 let lastSyncAt = null;
+let frontendLoadedVersion = null;
 let ws = null;
 let wsActive = false;
 const TABLE_COLUMN_COUNT = 17;
@@ -363,6 +367,67 @@ function renderRulesStorageLocations() {
   ];
 
   rulesStorageLocationsInput.value = lines.join('\n');
+}
+
+function formatVersionValue(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 'n/a';
+  return String(parsed);
+}
+
+function renderVersionNumbers(info = {}) {
+  if (!versionNumbersInput) return;
+
+  versionNumbersInput.value = [
+    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion)}`,
+    'Версия, которую фронтенд реально сейчас показывает пользователю.',
+    '',
+    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion)}`,
+    'Последняя успешная версия, полученная напрямую из 1С.',
+    '',
+    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion)}`,
+    'Последняя версия, доступная в GitHub как резерв для восстановления.',
+  ].join('\n');
+}
+
+async function loadVersionInfo() {
+  const sources = ['/api/kp/version-info', 'https://onec-kp-realtime.onrender.com/api/kp/version-info'];
+
+  let response = null;
+  let lastError = null;
+  for (const src of sources) {
+    try {
+      const r = await fetch(src, { cache: 'no-store', credentials: 'include' });
+      if (r.status === 401) {
+        window.location.href = '/login';
+        return null;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      response = r;
+      break;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  if (!response) throw lastError || new Error('Нет доступа к версии загрузки');
+  return response.json();
+}
+
+async function refreshVersionNumbers(syncFrontendVersion = false) {
+  try {
+    const info = await loadVersionInfo();
+    if (!info) return;
+    if (syncFrontendVersion) {
+      const nextVersion = Number(info.frontendRecommendedVersion);
+      frontendLoadedVersion = Number.isFinite(nextVersion) && nextVersion > 0 ? nextVersion : null;
+    }
+    renderVersionNumbers(info);
+  } catch (err) {
+    if (versionNumbersInput) {
+      versionNumbersInput.value = `Не удалось загрузить версии: ${err.message}`;
+    }
+  }
 }
 
 function parseBooleanToken(value) {
@@ -829,6 +894,9 @@ async function refreshData(initial = false) {
     const nextRows = await loadRows();
     if (!Array.isArray(nextRows)) return;
     setRows(nextRows, new Date());
+    if (!versionNumbersPanel?.hidden) {
+      await refreshVersionNumbers(true);
+    }
   } catch (err) {
     if (initial) {
       countLabel.textContent = 'Ошибка загрузки данных';
@@ -857,6 +925,9 @@ function connectWebSocket() {
       if (payload.type === 'rows' && Array.isArray(payload.rows)) {
         const sorted = sortRowsByKpNumberDesc(payload.rows.slice());
         setRows(sorted, new Date());
+        if (!versionNumbersPanel?.hidden) {
+          refreshVersionNumbers(true);
+        }
       }
     } catch {
       // Ignore malformed WS frames.
@@ -921,6 +992,15 @@ loadingRulesBtn?.addEventListener('click', () => {
     loadingRulesPanel.hidden = false;
   } else {
     loadingRulesPanel.hidden = true;
+  }
+});
+
+versionNumbersBtn?.addEventListener('click', async () => {
+  if (versionNumbersPanel?.hidden) {
+    versionNumbersPanel.hidden = false;
+    await refreshVersionNumbers(false);
+  } else {
+    versionNumbersPanel.hidden = true;
   }
 });
 

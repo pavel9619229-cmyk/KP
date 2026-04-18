@@ -2823,6 +2823,62 @@ def _read_runtime_generated_at(meta_path: Path) -> Optional[datetime]:
     return _parse_iso_datetime_utc(meta.get("generatedAt"))
 
 
+def _read_runtime_meta(meta_path: Path | None = None) -> dict:
+    path = meta_path or Path(RUNTIME_META_FILE)
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            meta = json.load(f)
+        return meta if isinstance(meta, dict) else {}
+    except Exception:
+        return {}
+
+
+def _load_runtime_meta_from_github() -> dict:
+    if not GITHUB_REPO:
+        return {}
+
+    gh_headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if GITHUB_TOKEN:
+        gh_headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/data/kp_runtime_meta.json"
+    try:
+        resp = requests.get(api_url, headers=gh_headers, params={"ref": GITHUB_BRANCH}, timeout=20)
+        if resp.status_code == 200:
+            payload = resp.json()
+            content_b64 = str(payload.get("content") or "").replace("\n", "")
+            if content_b64:
+                decoded = base64.b64decode(content_b64.encode("ascii")).decode("utf-8")
+                meta = json.loads(decoded)
+                return meta if isinstance(meta, dict) else {}
+    except Exception as exc:
+        log(f"github runtime meta API fetch failed: {exc}")
+
+    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/kp_runtime_meta.json"
+    try:
+        resp = requests.get(raw_url, timeout=20)
+        if resp.status_code != 200:
+            return {}
+        meta = resp.json()
+        return meta if isinstance(meta, dict) else {}
+    except Exception as exc:
+        log(f"github runtime meta RAW fetch failed: {exc}")
+        return {}
+
+
+def _to_int_or_none(value: object) -> int | None:
+    try:
+        parsed = int(value)
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
+
+
 def save_rows(
     rows: list,
     *,
@@ -2855,21 +2911,19 @@ def save_rows(
             return False
 
         generated_at = datetime.now(timezone.utc)
-        prev_cycle = 0
-        try:
-            with runtime_meta_path.open("r", encoding="utf-8") as f:
-                prev_meta = json.load(f)
-            prev_cycle = int(prev_meta.get("cycleVersion") or 0)
-        except Exception:
-            prev_cycle = 0
+        prev_meta = _read_runtime_meta(runtime_meta_path)
+        prev_cycle = int(prev_meta.get("cycleVersion") or 0)
+        prev_last_1c = int(prev_meta.get("last1cLoadedVersion") or 0)
 
         cycle_version = prev_cycle + 1
+        is_live_1c_write = not str(write_source or "").startswith("github-recovery:")
         meta_payload = {
             "generatedAt": generated_at.isoformat(),
             "refreshStartedAt": started_at.isoformat(),
             "rowCount": len(rows),
             "writeSource": write_source,
             "cycleVersion": cycle_version,
+            "last1cLoadedVersion": cycle_version if is_live_1c_write else prev_last_1c,
         }
 
         with runtime_path.open("w", encoding="utf-8") as f:
@@ -3688,6 +3742,29 @@ async def healthz():
         "lastRefreshError": _last_refresh_error,
         "lastCommentRefresh": _last_comment_refresh,
         "lastCommentRefreshError": _last_comment_refresh_error,
+    }
+
+
+@app.get("/api/kp/version-info")
+async def kp_version_info(request: Request):
+    _get_user_from_request(request)
+
+    local_meta = _read_runtime_meta()
+    github_meta = _load_runtime_meta_from_github()
+
+    current_cycle_version = _to_int_or_none(local_meta.get("cycleVersion"))
+    last_1c_loaded_version = _to_int_or_none(local_meta.get("last1cLoadedVersion"))
+    last_github_backup_version = _to_int_or_none(github_meta.get("cycleVersion"))
+
+    return {
+        "frontendRecommendedVersion": current_cycle_version,
+        "currentRuntimeVersion": current_cycle_version,
+        "last1cLoadedVersion": last_1c_loaded_version,
+        "lastGithubBackupVersion": last_github_backup_version,
+        "runtimeWriteSource": str(local_meta.get("writeSource") or ""),
+        "githubWriteSource": str(github_meta.get("writeSource") or ""),
+        "runtimeGeneratedAt": str(local_meta.get("generatedAt") or ""),
+        "githubGeneratedAt": str(github_meta.get("generatedAt") or ""),
     }
 
 

@@ -93,7 +93,7 @@ body {
   margin-top: 20px;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(240px, 1fr) 220px 220px repeat(5, max-content);
+  grid-template-columns: minmax(240px, 1fr) 220px 220px repeat(7, max-content);
 }
 
 .controls label {
@@ -132,14 +132,14 @@ button:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: auto;
+  width: 100%;
   text-decoration: none;
   font-weight: 700;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.86);
   border-radius: 12px;
   padding: 10px 12px;
-  color: var(--text);
+  color: #000;
 }
 
 .logout-link:hover {
@@ -149,6 +149,11 @@ button:hover {
 #rulesStorageBtn {
   white-space: nowrap;
   width: auto;
+}
+
+#resetBtn,
+#logoutLink {
+  min-width: 92px;
 }
 
 .panel {
