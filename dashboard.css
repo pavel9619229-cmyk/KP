@@ -173,6 +173,13 @@ body.light .search-box input {
   width: 100%;
 }
 
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .primary-button {
   border: 1px solid transparent;
   background: linear-gradient(180deg, var(--accent), var(--accent-2));

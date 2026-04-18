@@ -241,6 +241,24 @@ def _sha256_hex(value: str) -> str:
     return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()
 
 
+def _clear_session_cookies(response: JSONResponse | RedirectResponse) -> None:
+    # Match cookie attributes to maximize compatibility on mobile browsers.
+    response.delete_cookie(
+        key=ADMIN_SESSION_COOKIE,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=USER_SESSION_COOKIE,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+
+
 def _admin_password_ok(password: str) -> bool:
     candidate_hash = _sha256_hex(password)
     if ADMIN_PASSWORD_HASH:
@@ -3201,6 +3219,13 @@ async def login_page():
     )
 
 
+@app.get("/logout")
+async def logout_page():
+    response = RedirectResponse(url="/login", status_code=302)
+    _clear_session_cookies(response)
+    return response
+
+
 @app.get("/dashboard")
 async def dashboard(request: Request):
     try:
@@ -3567,7 +3592,7 @@ async def admin_login(payload: AdminLoginPayload):
 @app.post("/api/admin/logout")
 async def admin_logout():
     response = JSONResponse({"ok": True})
-    response.delete_cookie(ADMIN_SESSION_COOKIE)
+    _clear_session_cookies(response)
     return response
 
 
@@ -3612,7 +3637,7 @@ async def user_login(payload: UserLoginPayload):
 @app.post("/api/auth/logout")
 async def user_logout():
     response = JSONResponse({"ok": True})
-    response.delete_cookie(USER_SESSION_COOKIE)
+    _clear_session_cookies(response)
     return response
 
 
