@@ -2797,10 +2797,21 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     total_count = 0
     skip = 0
 
-    try:
-        total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=300)
-    except Exception as exc:
-        log(f"stage1_base failed: {type(exc).__name__}: {exc}")
+    base_batch: list = []
+    stage1_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=300)
+            stage1_error = None
+            break
+        except Exception as exc:
+            stage1_error = exc
+            log(f"stage1_base attempt {attempt}/3 failed: {type(exc).__name__}: {exc}")
+            if attempt < 3:
+                time.sleep(2)
+
+    if stage1_error is not None:
+        log(f"stage1_base failed after retries: {type(stage1_error).__name__}: {stage1_error}")
         return []
 
     if total_count <= 0:
