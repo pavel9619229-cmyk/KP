@@ -3667,7 +3667,8 @@ async def root(request: Request):
     except HTTPException:
         return RedirectResponse(url="/login", status_code=302)
 
-    return RedirectResponse(url="/dashboard", status_code=302)
+    role = str(user.get("role") or "manager").strip().lower()
+    return RedirectResponse(url="/admin/dashboard" if role == "admin" else "/dashboard", status_code=302)
 
 
 @app.get("/login")
