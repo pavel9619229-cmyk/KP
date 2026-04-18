@@ -2914,6 +2914,7 @@ def save_rows(
         prev_meta = _read_runtime_meta(runtime_meta_path)
         prev_cycle = int(prev_meta.get("cycleVersion") or 0)
         prev_last_1c = int(prev_meta.get("last1cLoadedVersion") or 0)
+        prev_last_1c_at = str(prev_meta.get("last1cLoadedAt") or prev_meta.get("generatedAt") or "")
 
         cycle_version = prev_cycle + 1
         is_live_1c_write = not str(write_source or "").startswith("github-recovery:")
@@ -2924,6 +2925,7 @@ def save_rows(
             "writeSource": write_source,
             "cycleVersion": cycle_version,
             "last1cLoadedVersion": cycle_version if is_live_1c_write else prev_last_1c,
+            "last1cLoadedAt": generated_at.isoformat() if is_live_1c_write else prev_last_1c_at,
         }
 
         with runtime_path.open("w", encoding="utf-8") as f:
@@ -3760,6 +3762,7 @@ async def kp_version_info(request: Request):
         "frontendRecommendedVersion": current_cycle_version,
         "currentRuntimeVersion": current_cycle_version,
         "last1cLoadedVersion": last_1c_loaded_version,
+        "last1cLoadedAt": str(local_meta.get("last1cLoadedAt") or local_meta.get("generatedAt") or ""),
         "lastGithubBackupVersion": last_github_backup_version,
         "runtimeWriteSource": str(local_meta.get("writeSource") or ""),
         "githubWriteSource": str(github_meta.get("writeSource") or ""),

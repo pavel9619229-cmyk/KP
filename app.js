@@ -369,23 +369,38 @@ function renderRulesStorageLocations() {
   rulesStorageLocationsInput.value = lines.join('\n');
 }
 
-function formatVersionValue(value) {
+function formatVersionMoment(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'n/a';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return 'n/a';
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatVersionValue(value, moment) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 'n/a';
-  return String(parsed);
+  const formattedMoment = formatVersionMoment(moment);
+  return formattedMoment === 'n/a' ? String(parsed) : `${parsed} | ${formattedMoment}`;
 }
 
 function renderVersionNumbers(info = {}) {
   if (!versionNumbersInput) return;
 
   versionNumbersInput.value = [
-    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion)}`,
+    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt)}`,
     'Версия, которую фронтенд реально сейчас показывает пользователю.',
     '',
-    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion)}`,
+    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt)}`,
     'Последняя успешная версия, полученная напрямую из 1С.',
     '',
-    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion)}`,
+    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt)}`,
     'Последняя версия, доступная в GitHub как резерв для восстановления.',
   ].join('\n');
 }
