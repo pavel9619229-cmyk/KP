@@ -2695,19 +2695,28 @@ def load_fresh_runtime_rows() -> list:
     if not path.exists():
         log("runtime snapshot skipped: runtime data file does not exist")
         return []
-    if not meta_path.exists():
-        log("runtime snapshot skipped: runtime metadata file does not exist")
-        return []
 
-    try:
-        with meta_path.open("r", encoding="utf-8") as f:
-            meta = json.load(f)
-        generated_at_raw = str(meta.get("generatedAt") or "").strip()
-        generated_at = datetime.fromisoformat(generated_at_raw)
-        age_seconds = max(0, time.time() - generated_at.timestamp())
-    except Exception as exc:
-        log(f"runtime snapshot skipped: cannot read runtime metadata: {exc}")
-        return []
+    age_seconds = None
+    if meta_path.exists():
+        try:
+            with meta_path.open("r", encoding="utf-8") as f:
+                meta = json.load(f)
+            generated_at_raw = str(meta.get("generatedAt") or "").strip()
+            if generated_at_raw:
+                generated_at = datetime.fromisoformat(generated_at_raw)
+                age_seconds = max(0, time.time() - generated_at.timestamp())
+            else:
+                log("runtime metadata has empty generatedAt; using runtime file mtime")
+        except Exception as exc:
+            log(f"runtime metadata parse failed: {exc}; using runtime file mtime")
+    else:
+        log("runtime metadata file does not exist; using runtime file mtime")
+
+    if age_seconds is None:
+        try:
+            age_seconds = max(0, time.time() - path.stat().st_mtime)
+        except Exception:
+            age_seconds = 0
 
     # Always load the runtime snapshot regardless of age on startup.
     # A stale-by-timestamp cache still has enriched flags that are far better
