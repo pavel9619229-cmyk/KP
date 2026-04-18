@@ -6,8 +6,10 @@ const statusFilter = document.getElementById('statusFilter');
 const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
+const loadingRulesBtn = document.getElementById('loadingRulesBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const rulesPanel = document.getElementById('rulesPanel');
+const loadingRulesPanel = document.getElementById('loadingRulesPanel');
 const rulesStoragePanel = document.getElementById('rulesStoragePanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
 const rulesTextInput = document.getElementById('rulesTextInput');
@@ -912,6 +914,14 @@ resetBtn.addEventListener('click', () => {
 rulesBtn.addEventListener('click', () => {
   if (rulesPanel.hidden) openRulesPanel();
   else closeRulesPanel();
+});
+
+loadingRulesBtn?.addEventListener('click', () => {
+  if (loadingRulesPanel?.hidden) {
+    loadingRulesPanel.hidden = false;
+  } else {
+    loadingRulesPanel.hidden = true;
+  }
 });
 
 rulesStorageBtn?.addEventListener('click', () => {
