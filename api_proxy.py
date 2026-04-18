@@ -3280,7 +3280,7 @@ async def admin_dashboard(request: Request):
     if role != "admin":
         return RedirectResponse(url="/dashboard", status_code=302)
 
-    return FileResponse(
+    response = FileResponse(
         "index.html",
         media_type="text/html",
         headers={
@@ -3289,6 +3289,20 @@ async def admin_dashboard(request: Request):
             "Expires": "0",
         },
     )
+
+    # Keep frontend auth flows consistent: admin dashboard also gets user-session cookie.
+    # This avoids blank UI when only admin cookie is present (e.g. after /api/admin/login).
+    if not request.cookies.get(USER_SESSION_COOKIE):
+        response.set_cookie(
+            key=USER_SESSION_COOKIE,
+            value=_issue_user_token(str(user.get("username") or "")),
+            httponly=True,
+            samesite="lax",
+            secure=True,
+            max_age=max(300, USER_SESSION_TTL_SECONDS),
+        )
+
+    return response
 
 
 @app.get("/admin/rights")
