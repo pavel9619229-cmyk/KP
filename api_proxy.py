@@ -487,15 +487,28 @@ def _user_password_ok(username: str, password: str) -> bool:
 
 
 def _get_user_from_request(request: Request) -> dict:
+    # Try user session cookie first.
     token = request.cookies.get(USER_SESSION_COOKIE)
     payload = _read_user_token(token or "")
-    if not payload:
-        raise HTTPException(status_code=401, detail="Login required")
-    username = str(payload.get("u") or "").strip()
-    user = _resolve_effective_user(username)
-    if not user:
-        raise HTTPException(status_code=401, detail="User access is not configured")
-    return user
+    if payload:
+        username = str(payload.get("u") or "").strip()
+        user = _resolve_effective_user(username)
+        if user:
+            return user
+
+    # Fallback: accept a valid admin session cookie (e.g. from /admin/rights login).
+    admin_token = request.cookies.get(ADMIN_SESSION_COOKIE)
+    admin_payload = _read_admin_token(admin_token or "")
+    if admin_payload:
+        username = str(admin_payload.get("u") or "").strip()
+        if username:
+            return {
+                "username": username,
+                "role": "admin",
+                "allowedManagers": "*",
+            }
+
+    raise HTTPException(status_code=401, detail="Login required")
 
 
 def _get_user_from_websocket(websocket: WebSocket) -> dict | None:
