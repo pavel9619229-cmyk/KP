@@ -2912,6 +2912,15 @@ def save_rows(
 
         generated_at = datetime.now(timezone.utc)
         prev_meta = _read_runtime_meta(runtime_meta_path)
+        
+        # Ensure metadata has all required fields (for old files that lack new fields)
+        if not prev_meta.get("cycleVersion"):
+            prev_meta["cycleVersion"] = 0
+        if not prev_meta.get("last1cLoadedVersion"):
+            prev_meta["last1cLoadedVersion"] = 0
+        if not prev_meta.get("last1cLoadedAt"):
+            prev_meta["last1cLoadedAt"] = prev_meta.get("generatedAt") or ""
+        
         prev_cycle = int(prev_meta.get("cycleVersion") or 0)
         prev_last_1c = int(prev_meta.get("last1cLoadedVersion") or 0)
         prev_last_1c_at = str(prev_meta.get("last1cLoadedAt") or prev_meta.get("generatedAt") or "")
@@ -3754,9 +3763,17 @@ async def kp_version_info(request: Request):
     local_meta = _read_runtime_meta()
     github_meta = _load_runtime_meta_from_github()
 
-    current_cycle_version = _to_int_or_none(local_meta.get("cycleVersion"))
-    last_1c_loaded_version = _to_int_or_none(local_meta.get("last1cLoadedVersion"))
-    last_github_backup_version = _to_int_or_none(github_meta.get("cycleVersion"))
+    # Ensure all required fields exist with proper defaults
+    if "cycleVersion" not in local_meta or not local_meta.get("cycleVersion"):
+        local_meta["cycleVersion"] = 0
+    if "last1cLoadedVersion" not in local_meta or not local_meta.get("last1cLoadedVersion"):
+        local_meta["last1cLoadedVersion"] = 0
+    if "last1cLoadedAt" not in local_meta or not local_meta.get("last1cLoadedAt"):
+        local_meta["last1cLoadedAt"] = local_meta.get("generatedAt") or ""
+
+    current_cycle_version = _to_int_or_none(local_meta.get("cycleVersion")) or 0
+    last_1c_loaded_version = _to_int_or_none(local_meta.get("last1cLoadedVersion")) or 0
+    last_github_backup_version = _to_int_or_none(github_meta.get("cycleVersion")) or 0
 
     return {
         "frontendRecommendedVersion": current_cycle_version,
