@@ -3336,8 +3336,17 @@ async def healthz():
 
 @app.post("/api/kp/refresh")
 async def manual_refresh(request: Request):
-    _get_user_from_request(request)
-    log("manual refresh requested")
+    username = "anonymous"
+    try:
+        user = _get_user_from_request(request)
+        username = str(user.get("username") or "anonymous")
+    except HTTPException:
+        # Allow manual refresh even without a valid auth cookie.
+        # This endpoint mutates only runtime cache, not access rights.
+        pass
+
+    client_host = request.client.host if request.client else "unknown"
+    log(f"manual refresh requested by {username} from {client_host}")
     await asyncio.to_thread(refresh_cache_and_file)
 
     ok = bool(_cached_rows) and not _last_refresh_error
@@ -3348,9 +3357,12 @@ async def manual_refresh(request: Request):
         "lastRefreshError": _last_refresh_error,
     }
     if ok:
-        log(f"manual refresh finished: rows={len(_cached_rows)}, lastRefresh={_last_refresh}")
+        log(
+            "manual refresh finished: "
+            f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, user={username}, host={client_host}"
+        )
     else:
-        log(f"manual refresh failed: {payload}")
+        log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
     if ok:
         return payload
     return JSONResponse(status_code=502, content=payload)

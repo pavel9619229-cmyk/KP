@@ -128,23 +128,41 @@ refreshBtn.addEventListener('click', async () => {
   updatedAtLabel.textContent = 'Обновляю данные из 1С...';
 
   try {
-    const response = await fetch('/api/kp/refresh', {
-      method: 'POST',
-      credentials: 'include',
-    });
+    let lastError = null;
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      try {
+        const response = await fetch('/api/kp/refresh', {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+        });
 
-    if (response.status === 401) {
-      window.location.href = '/login';
-      return;
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok === false) {
+          const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
+          throw new Error(String(details));
+        }
+
+        await refreshData(false);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 4) {
+          updatedAtLabel.textContent = `Сервис просыпается, попытка ${attempt + 1}/4...`;
+          await new Promise((resolve) => setTimeout(resolve, 3500));
+        }
+      }
     }
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.ok === false) {
-      const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
-      throw new Error(String(details));
+    if (lastError) {
+      throw lastError;
     }
-
-    await refreshData(false);
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
   } finally {
