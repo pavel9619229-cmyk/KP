@@ -3833,8 +3833,8 @@ async def manual_refresh(request: Request):
         log(f"manual refresh requested by {username} from {client_host}")
         try:
             await asyncio.wait_for(
-                # Phase 1: refresh only first comment line from live 1C docs.
-                asyncio.to_thread(refresh_comment_first_line_only),
+                # Run full pipeline refresh from 1C and rebuild runtime cache.
+                asyncio.to_thread(refresh_cache_and_file),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
             ok = bool(_cached_rows) and not _last_refresh_error
