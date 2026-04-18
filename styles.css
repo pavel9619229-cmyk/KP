@@ -96,6 +96,34 @@ body {
   grid-template-columns: minmax(240px, 1fr) 220px 220px repeat(4, max-content);
 }
 
+.rules-shortcut {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.rules-shortcut label {
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.rules-shortcut__row {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) max-content;
+  gap: 10px;
+  align-items: end;
+}
+
+.rules-shortcut__row input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+body.dark .rules-shortcut__row input {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .controls label {
   display: grid;
   gap: 6px;
@@ -329,6 +357,12 @@ tbody tr:hover {
   th:nth-child(13),
   td:nth-child(13) {
     display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .rules-shortcut__row {
+    grid-template-columns: 1fr;
   }
 }
   background: rgba(14, 139, 114, 0.07);

@@ -35,6 +35,20 @@
       <a id="logoutLink" href="/logout" class="logout-link">Выйти</a>
     </section>
 
+    <section class="rules-shortcut" aria-label="Быстрый доступ к правилам">
+      <label for="rulesShortcutInput">Правила статусов</label>
+      <div class="rules-shortcut__row">
+        <input
+          id="rulesShortcutInput"
+          type="text"
+          value="Редактирование правил расчета статусов КП"
+          readonly
+          aria-readonly="true"
+        >
+        <button id="rulesShortcutBtn" type="button">Открыть правила</button>
+      </div>
+    </section>
+
     <section id="rulesPanel" class="rules-panel" hidden aria-label="Редактор правил статусов">
       <div class="rules-panel__header">
         <div>
