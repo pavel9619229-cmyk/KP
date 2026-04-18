@@ -160,6 +160,7 @@ _last_cache_push: Optional[datetime] = None
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
+_runtime_write_guard_lock = threading.Lock()
 _enrich_cursor = 0
 _partial_refresh_cursor = 0
 _manual_refresh_state_lock = threading.Lock()
@@ -2727,17 +2728,76 @@ def load_fresh_runtime_rows() -> list:
     return rows
 
 
-def save_rows(rows: list) -> None:
+def _parse_iso_datetime_utc(value: object) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _read_runtime_generated_at(meta_path: Path) -> Optional[datetime]:
+    if not meta_path.exists():
+        return None
+    try:
+        with meta_path.open("r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except Exception:
+        return None
+    return _parse_iso_datetime_utc(meta.get("generatedAt"))
+
+
+def save_rows(
+    rows: list,
+    *,
+    refresh_started_at: Optional[datetime] = None,
+    write_source: str = "runtime-refresh",
+) -> bool:
     for row in rows:
         apply_storage_defaults(row)
+
+    started_at = refresh_started_at or datetime.now(timezone.utc)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    else:
+        started_at = started_at.astimezone(timezone.utc)
+
     runtime_path = Path(RUNTIME_DATA_FILE)
     runtime_meta_path = Path(RUNTIME_META_FILE)
     runtime_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_meta_path.parent.mkdir(parents=True, exist_ok=True)
-    with runtime_path.open("w", encoding="utf-8") as f:
-        json.dump(rows, f, ensure_ascii=False, indent=2)
-    with runtime_meta_path.open("w", encoding="utf-8") as f:
-        json.dump({"generatedAt": datetime.now().isoformat()}, f, ensure_ascii=False, indent=2)
+
+    with _runtime_write_guard_lock:
+        current_generated_at = _read_runtime_generated_at(runtime_meta_path)
+        if current_generated_at and current_generated_at > started_at:
+            log(
+                "save_rows skipped: newer runtime snapshot already exists "
+                f"(source={write_source}, current={current_generated_at.isoformat()}, "
+                f"started={started_at.isoformat()})"
+            )
+            return False
+
+        generated_at = datetime.now(timezone.utc)
+        with runtime_path.open("w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+        with runtime_meta_path.open("w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "generatedAt": generated_at.isoformat(),
+                    "refreshStartedAt": started_at.isoformat(),
+                    "rowCount": len(rows),
+                    "writeSource": write_source,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        return True
 
 
 def build_known_rows_lookup() -> dict:
@@ -3129,6 +3189,7 @@ def refresh_cache_and_file(
     use_known_cache: bool = True,
 ) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+    refresh_started_at = datetime.now(timezone.utc)
 
     if not _refresh_run_lock.acquire(blocking=False):
         log("refresh skipped: another refresh cycle is running")
@@ -3142,7 +3203,19 @@ def refresh_cache_and_file(
         try:
             fetched = fetch_rows_from_odata(include_stage6=include_stage6, page_size=page_size)
             if fetched:
-                save_rows(fetched)
+                saved = save_rows(
+                    fetched,
+                    refresh_started_at=refresh_started_at,
+                    write_source="full-refresh",
+                )
+                if not saved:
+                    latest_rows = load_fresh_runtime_rows()
+                    if latest_rows:
+                        _cached_rows = latest_rows
+                        _cached_fp = rows_fingerprint(latest_rows)
+                    _last_refresh_error = "full refresh skipped: newer runtime snapshot already exists"
+                    log(_last_refresh_error)
+                    return
                 _cached_rows = fetched
                 _cached_fp = rows_fingerprint(fetched)
                 _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
@@ -3175,7 +3248,19 @@ def refresh_cache_and_file(
                     headers = _build_headers()
                     partial_rows, touched, _ = _partial_refresh_from_cached_rows(valid_cached, headers, 0)
                     if touched > 0:
-                        save_rows(partial_rows)
+                        saved = save_rows(
+                            partial_rows,
+                            refresh_started_at=refresh_started_at,
+                            write_source="full-refresh-partial-fallback",
+                        )
+                        if not saved:
+                            latest_rows = load_fresh_runtime_rows()
+                            if latest_rows:
+                                _cached_rows = latest_rows
+                                _cached_fp = rows_fingerprint(latest_rows)
+                            _last_refresh_error = "partial fallback skipped: newer runtime snapshot already exists"
+                            log(_last_refresh_error)
+                            return
                         _cached_rows = partial_rows
                         _cached_fp = rows_fingerprint(partial_rows)
                         _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
@@ -3215,6 +3300,7 @@ def refresh_cached_rows_only() -> dict:
         return {"ok": False, "skipped": "already-running"}
 
     try:
+        refresh_started_at = datetime.now(timezone.utc)
         headers = _build_headers()
         partial_rows, touched, next_idx = _partial_refresh_from_cached_rows(
             _cached_rows,
@@ -3223,7 +3309,23 @@ def refresh_cached_rows_only() -> dict:
         )
         _partial_refresh_cursor = next_idx
         if touched > 0:
-            save_rows(partial_rows)
+            saved = save_rows(
+                partial_rows,
+                refresh_started_at=refresh_started_at,
+                write_source="fast-partial-refresh",
+            )
+            if not saved:
+                latest_rows = load_fresh_runtime_rows()
+                if latest_rows:
+                    _cached_rows = latest_rows
+                    _cached_fp = rows_fingerprint(latest_rows)
+                _last_comment_refresh_error = "fast partial skipped: newer runtime snapshot already exists"
+                log(_last_comment_refresh_error)
+                return {
+                    "ok": False,
+                    "error": _last_comment_refresh_error,
+                    "nextIdx": _partial_refresh_cursor,
+                }
             _cached_rows = partial_rows
             _cached_fp = rows_fingerprint(partial_rows)
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
@@ -3264,6 +3366,7 @@ def refresh_comment_first_line_only() -> dict:
 
     if not _cached_rows:
         return {"ok": False, "error": "empty-cache"}
+    refresh_started_at = datetime.now(timezone.utc)
 
     headers = _build_headers()
     refreshed: list[dict] = [dict(r) for r in _cached_rows]
@@ -3295,7 +3398,19 @@ def refresh_comment_first_line_only() -> dict:
         apply_runtime_defaults(row)
 
     refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
-    save_rows(refreshed)
+    saved = save_rows(
+        refreshed,
+        refresh_started_at=refresh_started_at,
+        write_source="comment-first-line-refresh",
+    )
+    if not saved:
+        latest_rows = load_fresh_runtime_rows()
+        if latest_rows:
+            _cached_rows = latest_rows
+            _cached_fp = rows_fingerprint(latest_rows)
+        _last_refresh_error = "comment refresh skipped: newer runtime snapshot already exists"
+        log(_last_refresh_error)
+        return {"ok": False, "error": _last_refresh_error}
     _cached_rows = refreshed
     _cached_fp = rows_fingerprint(refreshed)
     _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
