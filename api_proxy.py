@@ -3337,6 +3337,7 @@ async def healthz():
 @app.post("/api/kp/refresh")
 async def manual_refresh(request: Request):
     _get_user_from_request(request)
+    log("manual refresh requested")
     await asyncio.to_thread(refresh_cache_and_file)
 
     ok = bool(_cached_rows) and not _last_refresh_error
@@ -3346,6 +3347,10 @@ async def manual_refresh(request: Request):
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
     }
+    if ok:
+        log(f"manual refresh finished: rows={len(_cached_rows)}, lastRefresh={_last_refresh}")
+    else:
+        log(f"manual refresh failed: {payload}")
     if ok:
         return payload
     return JSONResponse(status_code=502, content=payload)
