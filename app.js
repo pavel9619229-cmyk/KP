@@ -447,10 +447,9 @@ async function refreshVersionNumbers(syncFrontendVersion = false) {
   try {
     const info = await loadVersionInfo();
     if (!info) return;
-    if (syncFrontendVersion) {
-      const nextVersion = Number(info.frontendRecommendedVersion);
-      frontendLoadedVersion = Number.isFinite(nextVersion) && nextVersion > 0 ? nextVersion : null;
-    }
+    // Always sync frontendLoadedVersion from API
+    const nextVersion = Number(info.frontendRecommendedVersion);
+    frontendLoadedVersion = Number.isFinite(nextVersion) && nextVersion > 0 ? nextVersion : null;
     renderVersionNumbers(info);
   } catch (err) {
     if (versionNumbersInput) {
