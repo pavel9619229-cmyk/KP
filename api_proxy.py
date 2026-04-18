@@ -83,7 +83,36 @@ ACCESS_RIGHTS_FILE = os.getenv("ACCESS_RIGHTS_FILE", "data/access_rights.json").
 ADMIN_USER = os.getenv("ADMIN_USER", "admin").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip().lower()
-ADMIN_SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET", "change-me-admin-secret").strip()
+_DEFAULT_ADMIN_SESSION_SECRET = "change-me-admin-secret"
+_DEFAULT_USER_SESSION_SECRET = "change-me-user-secret"
+_raw_admin_session_secret = os.getenv("ADMIN_SESSION_SECRET", _DEFAULT_ADMIN_SESSION_SECRET).strip()
+_raw_user_session_secret = os.getenv("USER_SESSION_SECRET", "").strip()
+
+
+def _generate_ephemeral_secret(prefix: str) -> str:
+    token = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii").rstrip("=")
+    return f"{prefix}-{token}"
+
+
+ADMIN_SESSION_SECRET_IS_EPHEMERAL = (not _raw_admin_session_secret) or (
+    _raw_admin_session_secret == _DEFAULT_ADMIN_SESSION_SECRET
+)
+ADMIN_SESSION_SECRET = (
+    _generate_ephemeral_secret("admin")
+    if ADMIN_SESSION_SECRET_IS_EPHEMERAL
+    else _raw_admin_session_secret
+)
+
+_user_secret_seed = _raw_user_session_secret or _DEFAULT_USER_SESSION_SECRET
+USER_SESSION_SECRET_IS_EPHEMERAL = (not _raw_user_session_secret) or (
+    _user_secret_seed == _DEFAULT_USER_SESSION_SECRET
+)
+USER_SESSION_SECRET = (
+    _generate_ephemeral_secret("user")
+    if USER_SESSION_SECRET_IS_EPHEMERAL
+    else _raw_user_session_secret
+)
+
 ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "43200"))
 ADMIN_SESSION_COOKIE = "kp_admin_session"
 USER_SESSION_TTL_SECONDS = int(os.getenv("USER_SESSION_TTL_SECONDS", "43200"))
@@ -299,7 +328,7 @@ def _issue_admin_token(username: str) -> str:
 
 def _sign_user_payload(payload_b64: str) -> str:
     signature = hmac.new(
-        f"{ADMIN_SESSION_SECRET}:user".encode("utf-8"),
+        USER_SESSION_SECRET.encode("utf-8"),
         payload_b64.encode("ascii"),
         hashlib.sha256,
     ).digest()
@@ -3173,6 +3202,10 @@ async def fast_partial_refresh_loop() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     global _cached_rows, _cached_fp, _last_refresh
+    if ADMIN_SESSION_SECRET_IS_EPHEMERAL:
+        log("WARNING: ADMIN_SESSION_SECRET is not configured; using ephemeral runtime secret")
+    if USER_SESSION_SECRET_IS_EPHEMERAL:
+        log("WARNING: USER_SESSION_SECRET is not configured; using ephemeral runtime secret")
     _cached_rows = load_fresh_runtime_rows()
     if not _cached_rows:
         _cached_rows = load_seed_rows()
