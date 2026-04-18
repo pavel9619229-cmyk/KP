@@ -3126,6 +3126,7 @@ def refresh_cache_and_file(
     allow_partial_fallback: bool = True,
     include_stage6: bool = True,
     page_size: int = 300,
+    use_known_cache: bool = True,
 ) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
@@ -3256,6 +3257,51 @@ def refresh_cached_rows_only() -> dict:
     finally:
         _partial_refresh_lock.release()
         _refresh_run_lock.release()
+
+
+def refresh_comment_first_line_only() -> dict:
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+
+    if not _cached_rows:
+        return {"ok": False, "error": "empty-cache"}
+
+    headers = _build_headers()
+    refreshed: list[dict] = [dict(r) for r in _cached_rows]
+    refs = [str(r.get("refKey") or "") for r in refreshed if r.get("refKey")]
+    if not refs:
+        return {"ok": False, "error": "no-ref-keys"}
+
+    def _fetch_one(ref_key: str) -> tuple[str, dict]:
+        if not ref_key:
+            return ref_key, {}
+        return ref_key, _fetch_doc_by_ref_once(ref_key, headers, timeout=FAST_PARTIAL_DOC_TIMEOUT)
+
+    docs_by_ref: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=max(1, FAST_PARTIAL_WORKERS)) as pool:
+        futures = {pool.submit(_fetch_one, rk): rk for rk in refs}
+        for future in as_completed(futures):
+            rk, doc = future.result()
+            docs_by_ref[rk] = doc
+
+    touched = 0
+    for row in refreshed:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        if not doc:
+            continue
+        touched += 1
+        raw_comment = str(doc.get("Комментарий") or "")
+        row["additionalInfoFirstLine"] = first_line(raw_comment) or row.get("additionalInfoFirstLine") or ""
+        apply_runtime_defaults(row)
+
+    refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    save_rows(refreshed)
+    _cached_rows = refreshed
+    _cached_fp = rows_fingerprint(refreshed)
+    _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+    _last_refresh_error = None
+    log(f"comment-first-line refresh success: touched={touched}, rows={len(refreshed)}")
+    return {"ok": True, "touched": touched, "rows": len(refreshed)}
 
 
 def cache_is_stale() -> bool:
@@ -3487,13 +3533,8 @@ async def manual_refresh(request: Request):
         log(f"manual refresh requested by {username} from {client_host}")
         try:
             await asyncio.wait_for(
-                # Manual path runs in fast mode: skip heavy stage6 to stay within timeout budget.
-                asyncio.to_thread(
-                    refresh_cache_and_file,
-                    False,
-                    False,
-                    max(1, MANUAL_REFRESH_PAGE_SIZE),
-                ),
+                # Phase 1: refresh only first comment line from live 1C docs.
+                asyncio.to_thread(refresh_comment_first_line_only),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
             ok = bool(_cached_rows) and not _last_refresh_error
