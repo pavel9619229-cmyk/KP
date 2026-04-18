@@ -84,34 +84,16 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip().lower()
 _DEFAULT_ADMIN_SESSION_SECRET = "change-me-admin-secret"
-_DEFAULT_USER_SESSION_SECRET = "change-me-user-secret"
 _raw_admin_session_secret = os.getenv("ADMIN_SESSION_SECRET", _DEFAULT_ADMIN_SESSION_SECRET).strip()
 _raw_user_session_secret = os.getenv("USER_SESSION_SECRET", "").strip()
 
+ADMIN_SESSION_SECRET = _raw_admin_session_secret or _DEFAULT_ADMIN_SESSION_SECRET
+# User tokens derive from admin secret for backwards-compatibility.
+# Set USER_SESSION_SECRET env var to use an independent secret.
+USER_SESSION_SECRET = _raw_user_session_secret or (ADMIN_SESSION_SECRET + ":user")
 
-def _generate_ephemeral_secret(prefix: str) -> str:
-    token = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii").rstrip("=")
-    return f"{prefix}-{token}"
-
-
-ADMIN_SESSION_SECRET_IS_EPHEMERAL = (not _raw_admin_session_secret) or (
-    _raw_admin_session_secret == _DEFAULT_ADMIN_SESSION_SECRET
-)
-ADMIN_SESSION_SECRET = (
-    _generate_ephemeral_secret("admin")
-    if ADMIN_SESSION_SECRET_IS_EPHEMERAL
-    else _raw_admin_session_secret
-)
-
-_user_secret_seed = _raw_user_session_secret or _DEFAULT_USER_SESSION_SECRET
-USER_SESSION_SECRET_IS_EPHEMERAL = (not _raw_user_session_secret) or (
-    _user_secret_seed == _DEFAULT_USER_SESSION_SECRET
-)
-USER_SESSION_SECRET = (
-    _generate_ephemeral_secret("user")
-    if USER_SESSION_SECRET_IS_EPHEMERAL
-    else _raw_user_session_secret
-)
+ADMIN_SESSION_SECRET_IS_EPHEMERAL = ADMIN_SESSION_SECRET == _DEFAULT_ADMIN_SESSION_SECRET
+USER_SESSION_SECRET_IS_EPHEMERAL = False
 
 ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "43200"))
 ADMIN_SESSION_COOKIE = "kp_admin_session"
