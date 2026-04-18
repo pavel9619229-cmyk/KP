@@ -3186,7 +3186,15 @@ async def root(request: Request):
 
 @app.get("/login")
 async def login_page():
-    return FileResponse("login.html", media_type="text/html")
+    return FileResponse(
+        "login.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/dashboard")
@@ -3195,7 +3203,15 @@ async def dashboard(request: Request):
     payload = _read_user_token(token or "")
     if not payload:
         return RedirectResponse(url="/login", status_code=302)
-    return FileResponse("dashboard.html", media_type="text/html")
+    return FileResponse(
+        "dashboard.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/admin/rights")
