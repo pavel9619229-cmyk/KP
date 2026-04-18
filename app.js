@@ -410,7 +410,7 @@ function renderVersionNumbers(info = {}) {
       label: 'lastGithubBackupVersion:',
       version: formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt),
       desc: 'Последняя версия, доступная в GitHub как резерв для восстановления.',
-      extraSpaces: 0,
+      extraSpaces: 1,
     },
   ];
 
