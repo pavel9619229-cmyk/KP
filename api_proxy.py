@@ -70,6 +70,8 @@ GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "40"))
+MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "420"))
+MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "120"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -2829,7 +2831,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
     return len(collected), 0, collected[:wanted]
 
 
-def fetch_rows_from_odata(include_stage6: bool = True) -> list:
+def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> list:
     """Staged refresh pipeline.
 
     Old legacy path (multi-page backward scan with large skip loop) is removed.
@@ -2844,7 +2846,7 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
     stage1_error: Exception | None = None
     for attempt in range(1, 4):
         try:
-            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=300)
+            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=max(1, page_size))
             stage1_error = None
             break
         except Exception as exc:
@@ -3099,6 +3101,7 @@ def _partial_refresh_from_cached_rows(
 def refresh_cache_and_file(
     allow_partial_fallback: bool = True,
     include_stage6: bool = True,
+    page_size: int = 300,
 ) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
@@ -3112,7 +3115,7 @@ def refresh_cache_and_file(
 
     try:
         try:
-            fetched = fetch_rows_from_odata(include_stage6=include_stage6)
+            fetched = fetch_rows_from_odata(include_stage6=include_stage6, page_size=page_size)
             if fetched:
                 save_rows(fetched)
                 _cached_rows = fetched
@@ -3440,8 +3443,13 @@ async def manual_refresh(request: Request):
         try:
             await asyncio.wait_for(
                 # Manual path runs in fast mode: skip heavy stage6 to stay within timeout budget.
-                asyncio.to_thread(refresh_cache_and_file, False, False),
-                timeout=190,
+                asyncio.to_thread(
+                    refresh_cache_and_file,
+                    False,
+                    False,
+                    max(1, MANUAL_REFRESH_PAGE_SIZE),
+                ),
+                timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
             ok = bool(_cached_rows) and not _last_refresh_error
             error_text = None if ok else str(_last_refresh_error or "refresh failed")
