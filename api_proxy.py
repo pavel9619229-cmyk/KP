@@ -69,9 +69,9 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
-BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "40"))
+BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "420"))
-MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "120"))
+MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "300"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -117,7 +117,7 @@ APP_BRANCH = (
     or os.getenv("GIT_BRANCH", "").strip()
 )
 
-TARGET_START = datetime(2026, 4, 1, 0, 0, 0)
+TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
 TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
 
 LIGHT_SELECT_FIELDS = [
@@ -2795,12 +2795,19 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
     select_expr = "Ref_Key,Number,Date,Статус,СуммаДокумента"
     wanted = max(1, page_size)
     chunk_size = min(50, wanted)
-    skip = 0
+
+    total_count = get_total_count(headers)
+    if total_count <= 0:
+        return total_count, 0, []
+
+    skip = max(0, total_count - chunk_size)
+    initial_skip = skip
     collected: list = []
 
-    # 1C endpoint is unstable on large $top payloads; read in small pages.
+    # 1C OData-specific stable strategy:
+    # read from the tail in small pages and move backwards.
     while len(collected) < wanted:
-        top = min(chunk_size, wanted - len(collected))
+        top = chunk_size
         payload, error = _get_json_with_retry(
             f"{BASE}/{ENTITY}",
             headers,
@@ -2808,10 +2815,9 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
                 "$select": select_expr,
                 "$top": str(top),
                 "$skip": str(skip),
-                "$orderby": "Date desc",
             },
             timeout=BASE_BATCH_TIMEOUT_SECONDS,
-            retries=2,
+            retries=3,
         )
         if error or not isinstance(payload, dict):
             if collected:
@@ -2823,12 +2829,19 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
             break
 
         collected.extend(batch)
-        skip += len(batch)
+        batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch if isinstance(item, dict)]
+        batch_dates = [d for d in batch_dates if d is not None]
+        if batch_dates and max(batch_dates) < TARGET_START:
+            break
+
+        if skip == 0:
+            break
+        skip = max(0, skip - chunk_size)
 
         if len(batch) < top:
             break
 
-    return len(collected), 0, collected[:wanted]
+    return total_count, initial_skip, collected[:wanted]
 
 
 def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> list:
@@ -2876,6 +2889,8 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
 
         dt = _parse_odata_datetime(str(dt_raw))
         if dt is None:
+            continue
+        if not (TARGET_START <= dt <= TARGET_END):
             continue
 
         known_row = known_rows.get(number, {})
@@ -3128,19 +3143,27 @@ def refresh_cache_and_file(
                 return
 
             if allow_partial_fallback and _cached_rows:
-                try:
-                    headers = _build_headers()
-                    partial_rows, touched, _ = _partial_refresh_from_cached_rows(_cached_rows, headers, 0)
-                    if touched > 0:
-                        save_rows(partial_rows)
-                        _cached_rows = partial_rows
-                        _cached_fp = rows_fingerprint(partial_rows)
-                        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
-                        _last_refresh_error = None
-                        log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
-                        return
-                except Exception as partial_exc:
-                    log(f"partial refresh failed: {partial_exc}")
+                # Filter cached rows to target period to prevent returning stale old data.
+                filtered_cached = [
+                    r for r in _cached_rows
+                    if TARGET_START <= datetime.strptime(r.get("createdAt", ""), "%Y-%m-%d %H:%M:%S") <= TARGET_END
+                ]
+                if filtered_cached:
+                    try:
+                        headers = _build_headers()
+                        partial_rows, touched, _ = _partial_refresh_from_cached_rows(filtered_cached, headers, 0)
+                        if touched > 0:
+                            save_rows(partial_rows)
+                            _cached_rows = partial_rows
+                            _cached_fp = rows_fingerprint(partial_rows)
+                            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                            _last_refresh_error = None
+                            log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
+                            return
+                    except Exception as partial_exc:
+                        log(f"partial refresh failed: {partial_exc}")
+                else:
+                    log("no cached rows in target period for partial fallback")
             elif not allow_partial_fallback:
                 log("partial fallback skipped for this refresh run")
 
