@@ -3177,10 +3177,22 @@ async def on_shutdown() -> None:
 
 @app.get("/")
 async def root(request: Request):
-    token = request.cookies.get(USER_SESSION_COOKIE)
-    payload = _read_user_token(token or "")
-    if not payload:
+    try:
+        user = _get_user_from_request(request)
+    except HTTPException:
         return RedirectResponse(url="/login", status_code=302)
+
+    role = str(user.get("role") or "manager").lower()
+    if role == "admin":
+        return FileResponse(
+            "index.html",
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return RedirectResponse(url="/dashboard", status_code=302)
 
 
