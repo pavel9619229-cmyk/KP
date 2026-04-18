@@ -393,11 +393,30 @@ function formatVersionValue(value, moment) {
 function renderVersionNumbers(info = {}) {
   if (!versionNumbersInput) return;
 
-  versionNumbersInput.value = [
-    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt)} — Версия, которую фронтенд реально сейчас показывает пользователю.`,
-    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt)} — Последняя успешная версия, полученная напрямую из 1С.`,
-    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt)} — Последняя версия, доступная в GitHub как резерв для восстановления.`,
-  ].join('\n');
+  const lines = [
+    {
+      label: 'frontendLoadedVersion:',
+      version: formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt),
+      desc: 'Версия, которую фронтенд реально сейчас показывает пользователю.',
+    },
+    {
+      label: 'last1cLoadedVersion:',
+      version: formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt),
+      desc: 'Последняя успешная версия, полученная напрямую из 1С.',
+    },
+    {
+      label: 'lastGithubBackupVersion:',
+      version: formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt),
+      desc: 'Последняя версия, доступная в GitHub как резерв для восстановления.',
+    },
+  ];
+
+  // Find max version string width for right-alignment
+  const maxVersionWidth = Math.max(...lines.map(l => l.version.length));
+
+  versionNumbersInput.value = lines
+    .map(l => `${l.label} ${l.version.padStart(maxVersionWidth, ' ')} — ${l.desc}`)
+    .join('\n');
 }
 
 async function loadVersionInfo() {
