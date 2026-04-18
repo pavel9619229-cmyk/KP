@@ -3142,28 +3142,41 @@ def refresh_cache_and_file(
                 # on Render (new commit -> new deploy -> new commit...).
                 return
 
+            # Stage1 returned 0 rows: do NOT fallback to old cached data (may be from 2015, 2016, etc).
+            # Only allow partial refresh if explicitly requested AND we have explicitly vetted target-period cache.
             if allow_partial_fallback and _cached_rows:
-                # Filter cached rows to target period to prevent returning stale old data.
-                filtered_cached = [
-                    r for r in _cached_rows
-                    if TARGET_START <= datetime.strptime(r.get("createdAt", ""), "%Y-%m-%d %H:%M:%S") <= TARGET_END
-                ]
-                if filtered_cached:
-                    try:
-                        headers = _build_headers()
-                        partial_rows, touched, _ = _partial_refresh_from_cached_rows(filtered_cached, headers, 0)
-                        if touched > 0:
-                            save_rows(partial_rows)
-                            _cached_rows = partial_rows
-                            _cached_fp = rows_fingerprint(partial_rows)
-                            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
-                            _last_refresh_error = None
-                            log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
-                            return
-                    except Exception as partial_exc:
-                        log(f"partial refresh failed: {partial_exc}")
-                else:
-                    log("no cached rows in target period for partial fallback")
+                # CRITICAL: only use cache if all rows are in target period to prevent returning 2015+ data.
+                try:
+                    valid_cached = []
+                    for r in _cached_rows:
+                        try:
+                            dt = datetime.strptime(r.get("createdAt", ""), "%Y-%m-%d %H:%M:%S")
+                            if TARGET_START <= dt <= TARGET_END:
+                                valid_cached.append(r)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if not valid_cached:
+                        # Cache has no rows in target period: it's stale/old, cannot use it.
+                        _last_refresh_error = "refresh returned 0 rows; cached rows are outside target period (skipped fallback)"
+                        log(_last_refresh_error)
+                        return
+
+                    headers = _build_headers()
+                    partial_rows, touched, _ = _partial_refresh_from_cached_rows(valid_cached, headers, 0)
+                    if touched > 0:
+                        save_rows(partial_rows)
+                        _cached_rows = partial_rows
+                        _cached_fp = rows_fingerprint(partial_rows)
+                        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                        _last_refresh_error = None
+                        log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
+                        return
+                    else:
+                        log("partial refresh: no docs touched, keeping cache")
+                        return
+                except Exception as partial_exc:
+                    log(f"partial refresh failed: {partial_exc}")
             elif not allow_partial_fallback:
                 log("partial fallback skipped for this refresh run")
 
