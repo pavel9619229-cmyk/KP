@@ -3096,7 +3096,10 @@ def _partial_refresh_from_cached_rows(
     return refreshed, touched, next_idx
 
 
-def refresh_cache_and_file(allow_partial_fallback: bool = True) -> None:
+def refresh_cache_and_file(
+    allow_partial_fallback: bool = True,
+    include_stage6: bool = True,
+) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
     if not _refresh_run_lock.acquire(blocking=False):
@@ -3109,7 +3112,7 @@ def refresh_cache_and_file(allow_partial_fallback: bool = True) -> None:
 
     try:
         try:
-            fetched = fetch_rows_from_odata()
+            fetched = fetch_rows_from_odata(include_stage6=include_stage6)
             if fetched:
                 save_rows(fetched)
                 _cached_rows = fetched
@@ -3436,7 +3439,8 @@ async def manual_refresh(request: Request):
         log(f"manual refresh requested by {username} from {client_host}")
         try:
             await asyncio.wait_for(
-                asyncio.to_thread(refresh_cache_and_file, False),
+                # Manual path runs in fast mode: skip heavy stage6 to stay within timeout budget.
+                asyncio.to_thread(refresh_cache_and_file, False, False),
                 timeout=190,
             )
             ok = bool(_cached_rows) and not _last_refresh_error
