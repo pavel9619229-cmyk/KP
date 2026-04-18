@@ -2790,25 +2790,43 @@ def _save_stage_patch(stage_name: str, rows: list) -> None:
 
 
 def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[int, int, list]:
-    total_count = get_total_count(headers)
-    if total_count <= 0:
-        return total_count, 0, []
+    select_expr = "Ref_Key,Number,Date,Статус,СуммаДокумента"
+    wanted = max(1, page_size)
+    chunk_size = min(50, wanted)
+    skip = 0
+    collected: list = []
 
-    skip = max(0, total_count - page_size)
-    resp = requests.get(
-        f"{BASE}/{ENTITY}",
-        headers=headers,
-        params={
-            "$select": "Ref_Key,Number,Date,Статус,Комментарий,СуммаДокумента",
-            "$top": str(page_size),
-            "$skip": str(skip),
-        },
-        timeout=BASE_BATCH_TIMEOUT_SECONDS,
-        verify=False,
-    )
-    resp.raise_for_status()
-    batch = resp.json().get("value", [])
-    return total_count, skip, batch if isinstance(batch, list) else []
+    # 1C endpoint is unstable on large $top payloads; read in small pages.
+    while len(collected) < wanted:
+        top = min(chunk_size, wanted - len(collected))
+        payload, error = _get_json_with_retry(
+            f"{BASE}/{ENTITY}",
+            headers,
+            params={
+                "$select": select_expr,
+                "$top": str(top),
+                "$skip": str(skip),
+                "$orderby": "Date desc",
+            },
+            timeout=BASE_BATCH_TIMEOUT_SECONDS,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            if collected:
+                break
+            raise RuntimeError(error or "stage1 base batch request failed")
+
+        batch = payload.get("value", [])
+        if not isinstance(batch, list) or not batch:
+            break
+
+        collected.extend(batch)
+        skip += len(batch)
+
+        if len(batch) < top:
+            break
+
+    return len(collected), 0, collected[:wanted]
 
 
 def fetch_rows_from_odata(include_stage6: bool = True) -> list:
@@ -2836,8 +2854,9 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
                 time.sleep(2)
 
     if stage1_error is not None:
-        log(f"stage1_base failed after retries: {type(stage1_error).__name__}: {stage1_error}")
-        return []
+        message = f"stage1_base failed after retries: {type(stage1_error).__name__}: {stage1_error}"
+        log(message)
+        raise RuntimeError(message)
 
     if total_count <= 0:
         log(f"stage1_base: total_count={total_count}, aborting")
@@ -2852,11 +2871,9 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
         number = str(item.get("Number") or "")
         dt_raw = item.get("Date") or ""
         status = str(item.get("Статус") or "")
-        comment = str(item.get("Комментарий") or "")
 
-        try:
-            dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
-        except Exception:
+        dt = _parse_odata_datetime(str(dt_raw))
+        if dt is None:
             continue
 
         known_row = known_rows.get(number, {})
@@ -2877,7 +2894,7 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
             "problem": known_row.get("problem"),
             "shipmentPending": known_row.get("shipmentPending"),
             "statusKp": known_row.get("statusKp", ""),
-            "additionalInfoFirstLine": first_line(comment) or known_row.get("additionalInfoFirstLine", ""),
+            "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
             "invoiceCreated": known_row.get("invoiceCreated"),
             "paymentReceived": known_row.get("paymentReceived"),
             "statusHash": known_row.get("statusHash", ""),
@@ -2897,26 +2914,6 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
 
     _save_stage_patch("stage1_base", stage1_patch)
 
-    # Stage 2: quick flags from base comment payload.
-    stage2_patch: list[dict] = []
-    by_ref = {str(item.get("Ref_Key") or ""): item for item in base_batch}
-    for row in rows:
-        base_item = by_ref.get(row.get("refKey") or "", {})
-        comment_clean = strip_html(str(base_item.get("Комментарий") or "")).replace("\r\n", "\n").replace("\r", "\n").upper()
-        comment_top = comment_clean.split("\n")[:5]
-        patch = {
-            "refKey": row.get("refKey"),
-            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top),
-            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top),
-            "edoSent": "В ЭДО ОТПРАВЛЕНО" in comment_clean,
-            "rejected": "ОТКАЗ" in comment_clean,
-            "problem": "ПРОБЛЕМА" in comment_clean,
-            "shipmentPending": "ОТГРУЗИТЬ" in comment_clean,
-        }
-        row.update(patch)
-        stage2_patch.append(patch)
-    _save_stage_patch("stage2_comment_flags", stage2_patch)
-
     # Stage 2.5: fetch docs in parallel for per-doc stages.
     def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
@@ -2929,6 +2926,28 @@ def fetch_rows_from_odata(include_stage6: bool = True) -> list:
         for future in as_completed(futures):
             rk, doc = future.result()
             docs_by_ref[rk] = doc
+
+    # Stage 2: quick flags from full comment payload.
+    stage2_patch: list[dict] = []
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        comment_raw = str(doc.get("Комментарий") or "")
+        comment_clean = strip_html(comment_raw).replace("\r\n", "\n").replace("\r", "\n").upper()
+        comment_top = comment_clean.split("\n")[:5]
+        patch = {
+            "refKey": ref_key,
+            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top),
+            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top),
+            "edoSent": "В ЭДО ОТПРАВЛЕНО" in comment_clean,
+            "rejected": "ОТКАЗ" in comment_clean,
+            "problem": "ПРОБЛЕМА" in comment_clean,
+            "shipmentPending": "ОТГРУЗИТЬ" in comment_clean,
+            "additionalInfoFirstLine": first_line(comment_raw) or row.get("additionalInfoFirstLine") or "",
+        }
+        row.update(patch)
+        stage2_patch.append(patch)
+    _save_stage_patch("stage2_comment_flags", stage2_patch)
 
     # Stage 3: customer.
     stage3_patch: list[dict] = []
