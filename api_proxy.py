@@ -2119,8 +2119,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
     )
-    if not orders_complete:
-        # No confirmed fresh data from 1C: preserve current flags.
+    if not orders_complete and not order_pages:
+        # No order data at all: preserve current flags.
         return
 
     for batch in order_pages:
@@ -2145,11 +2145,12 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     target_order_refs = set(order_to_kp.keys())
     if not target_order_refs:
-        # Fresh scan confirmed that no linked orders exist in range.
-        for row in rows:
-            if row.get("refKey") in kp_ref_set:
-                row["invoiceCreated"] = False
-                row["paymentReceived"] = False
+        # Only a complete orders scan can safely downgrade to False.
+        if orders_complete:
+            for row in rows:
+                if row.get("refKey") in kp_ref_set:
+                    row["invoiceCreated"] = False
+                    row["paymentReceived"] = False
         return
 
     invoice_order_refs: set[str] = set()
@@ -2158,7 +2159,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         headers,
         ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
     )
-    if not invoices_complete:
+    if not invoices_complete and not invoice_pages:
         return
 
     for batch in invoice_pages:
@@ -2281,8 +2282,13 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     for row in rows:
         kp_ref = row.get("refKey")
         if kp_ref in kp_ref_set:
-            row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
-            if payments_complete:
+            if orders_complete and invoices_complete:
+                row["invoiceCreated"] = kp_invoice_map.get(kp_ref, False)
+            elif kp_invoice_map.get(kp_ref, False):
+                # Partial orders/invoices scan: only upgrade to True; do not force False.
+                row["invoiceCreated"] = True
+
+            if orders_complete and payments_complete:
                 row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
             elif kp_payment_map.get(kp_ref, False):
                 # Partial payment scan: only upgrade to True; do not force False.
