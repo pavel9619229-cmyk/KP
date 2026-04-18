@@ -124,8 +124,8 @@ managerFilter.addEventListener('change', () => {
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ ИЗ 1С';
   const pollIntervalMs = 2000;
-  // Backend manual refresh timeout is 190s; keep extra buffer for status propagation.
-  const maxWaitMs = 240000;
+  // Backend manual refresh timeout is 190s, but 1C/status propagation can lag.
+  const maxWaitMs = 600000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
@@ -151,14 +151,34 @@ refreshBtn.addEventListener('click', async () => {
 
     let done = false;
     let lastState = null;
+    let consecutiveStatusErrors = 0;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const stateResponse = await fetch('/api/kp/refresh/status', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      const statePayload = await stateResponse.json().catch(() => ({}));
-      lastState = statePayload;
+      let stateResponse;
+      let statePayload;
+      try {
+        stateResponse = await fetch('/api/kp/refresh/status', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (stateResponse.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        if (!stateResponse.ok) {
+          throw new Error(`HTTP ${stateResponse.status}`);
+        }
+        statePayload = await stateResponse.json().catch(() => ({}));
+        lastState = statePayload;
+        consecutiveStatusErrors = 0;
+      } catch (statusError) {
+        consecutiveStatusErrors += 1;
+        if (consecutiveStatusErrors >= 5) {
+          throw new Error(`Ошибка статуса обновления: ${statusError.message}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
+      }
 
       if (statePayload?.running) {
         updatedAtLabel.textContent = `Обновление из 1С... ${Math.floor((attempt * pollIntervalMs) / 1000)}s`;
@@ -167,6 +187,11 @@ refreshBtn.addEventListener('click', async () => {
       }
 
       if (statePayload?.lastOk === true || (statePayload?.lastRefresh && !statePayload?.lastRefreshError)) {
+        done = true;
+        break;
+      }
+
+      if (statePayload?.finishedAt && !statePayload?.lastError && !statePayload?.lastRefreshError) {
         done = true;
         break;
       }
