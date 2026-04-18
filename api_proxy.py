@@ -733,7 +733,7 @@ def _push_access_rights_to_github(payload: dict) -> None:
         log(f"GitHub push error for access rights: {exc}")
 
 
-def _push_runtime_cache_to_github(rows: list) -> None:
+def _push_runtime_cache_to_github(rows: list, meta_payload: dict | None = None) -> None:
     """Push kp_runtime_cache.json + kp_runtime_meta.json to GitHub so enriched
     data survives the next Render deploy. Throttled to once per hour. [skip ci]."""
     global _last_cache_push
@@ -781,12 +781,83 @@ def _push_runtime_cache_to_github(rows: list) -> None:
     try:
         cache_bytes = json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8")
         _push_one("data/kp_runtime_cache.json", cache_bytes, "kp_runtime_cache.json")
-        meta = {"generatedAt": now.isoformat(), "rowCount": len(rows)}
+        meta = meta_payload or {"generatedAt": now.isoformat(), "rowCount": len(rows)}
         meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode("utf-8")
         _push_one("data/kp_runtime_meta.json", meta_bytes, "kp_runtime_meta.json")
         _last_cache_push = now
     except Exception as exc:
         log(f"GitHub cache push unexpected error: {exc}")
+
+
+def _load_runtime_rows_from_github() -> list:
+    if not GITHUB_REPO:
+        return []
+
+    gh_headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if GITHUB_TOKEN:
+        gh_headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/data/kp_runtime_cache.json"
+    try:
+        resp = requests.get(api_url, headers=gh_headers, params={"ref": GITHUB_BRANCH}, timeout=20)
+        if resp.status_code == 200:
+            payload = resp.json()
+            content_b64 = str(payload.get("content") or "").replace("\n", "")
+            if content_b64:
+                decoded = base64.b64decode(content_b64.encode("ascii")).decode("utf-8")
+                rows = json.loads(decoded)
+                if isinstance(rows, list):
+                    for row in rows:
+                        apply_storage_defaults(row)
+                    rows.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+                    return rows
+    except Exception as exc:
+        log(f"github runtime cache API fetch failed: {exc}")
+
+    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/kp_runtime_cache.json"
+    try:
+        resp = requests.get(raw_url, timeout=20)
+        if resp.status_code != 200:
+            return []
+        rows = resp.json()
+        if not isinstance(rows, list):
+            return []
+        for row in rows:
+            apply_storage_defaults(row)
+        rows.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+        return rows
+    except Exception as exc:
+        log(f"github runtime cache RAW fetch failed: {exc}")
+        return []
+
+
+def _recover_runtime_cache_from_github_if_needed(reason: str) -> bool:
+    global _cached_rows, _cached_fp, _last_refresh_error
+
+    if _cached_rows:
+        return True
+
+    rows = _load_runtime_rows_from_github()
+    if not rows:
+        return False
+
+    saved = save_rows(
+        rows,
+        refresh_started_at=datetime.now(timezone.utc),
+        write_source=f"github-recovery:{reason}",
+        push_to_github=False,
+    )
+    if not saved:
+        rows = load_fresh_runtime_rows() or rows
+
+    _cached_rows = rows
+    _cached_fp = rows_fingerprint(rows)
+    _last_refresh_error = None
+    log(f"runtime cache recovered from GitHub: rows={len(rows)}, reason={reason}")
+    return True
 
 
 def save_status_rules_text(rules_text: str) -> None:
@@ -2757,6 +2828,7 @@ def save_rows(
     *,
     refresh_started_at: Optional[datetime] = None,
     write_source: str = "runtime-refresh",
+    push_to_github: bool = True,
 ) -> bool:
     for row in rows:
         apply_storage_defaults(row)
@@ -2783,20 +2855,34 @@ def save_rows(
             return False
 
         generated_at = datetime.now(timezone.utc)
+        prev_cycle = 0
+        try:
+            with runtime_meta_path.open("r", encoding="utf-8") as f:
+                prev_meta = json.load(f)
+            prev_cycle = int(prev_meta.get("cycleVersion") or 0)
+        except Exception:
+            prev_cycle = 0
+
+        cycle_version = prev_cycle + 1
+        meta_payload = {
+            "generatedAt": generated_at.isoformat(),
+            "refreshStartedAt": started_at.isoformat(),
+            "rowCount": len(rows),
+            "writeSource": write_source,
+            "cycleVersion": cycle_version,
+        }
+
         with runtime_path.open("w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
         with runtime_meta_path.open("w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "generatedAt": generated_at.isoformat(),
-                    "refreshStartedAt": started_at.isoformat(),
-                    "rowCount": len(rows),
-                    "writeSource": write_source,
-                },
-                f,
-                ensure_ascii=False,
-                indent=2,
-            )
+            json.dump(meta_payload, f, ensure_ascii=False, indent=2)
+
+        if push_to_github:
+            threading.Thread(
+                target=_push_runtime_cache_to_github,
+                args=(rows, meta_payload),
+                daemon=True,
+            ).start()
         return True
 
 
@@ -3478,6 +3564,8 @@ async def on_startup() -> None:
         log("WARNING: USER_SESSION_SECRET is not configured; using ephemeral runtime secret")
     _cached_rows = load_fresh_runtime_rows()
     if not _cached_rows:
+        _recover_runtime_cache_from_github_if_needed("startup")
+    if not _cached_rows:
         _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
@@ -3900,6 +3988,8 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
 @app.get("/api/kp/all")
 async def get_all_kp(request: Request):
     user = _get_user_from_request(request)
+    if not _cached_rows:
+        _recover_runtime_cache_from_github_if_needed("api-kp-all")
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
 
