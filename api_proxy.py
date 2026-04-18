@@ -2739,7 +2739,7 @@ def get_total_count(headers: dict, odata_filter: str = "") -> int:
         url,
         headers=headers,
         params=params,
-        timeout=30,
+        timeout=120,
         verify=False,
     )
     resp.raise_for_status()
@@ -3369,7 +3369,7 @@ async def debug_odata_test():
                 "$top": str(page_size),
                 "$skip": str(skip),
             },
-            timeout=400,
+            timeout=120,
             verify=False,
         )
         batch = r2.json().get("value", []) if r2.status_code == 200 else []
@@ -3393,7 +3393,7 @@ async def debug_odata_test():
                 "$top": str(page_size),
                 "$skip": str(skip),
             },
-            timeout=400,
+            timeout=120,
             verify=False,
         )
         if r3.status_code == 200:
