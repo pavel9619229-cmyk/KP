@@ -123,6 +123,10 @@ managerFilter.addEventListener('change', () => {
 
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ ИЗ 1С';
+  const pollIntervalMs = 2000;
+  // Backend manual refresh timeout is 190s; keep extra buffer for status propagation.
+  const maxWaitMs = 240000;
+  const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
   updatedAtLabel.textContent = 'Обновляю данные из 1С...';
@@ -147,7 +151,7 @@ refreshBtn.addEventListener('click', async () => {
 
     let done = false;
     let lastState = null;
-    for (let attempt = 1; attempt <= 70; attempt += 1) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const stateResponse = await fetch('/api/kp/refresh/status', {
         method: 'GET',
         credentials: 'include',
@@ -157,8 +161,8 @@ refreshBtn.addEventListener('click', async () => {
       lastState = statePayload;
 
       if (statePayload?.running) {
-        updatedAtLabel.textContent = `Обновление из 1С... ${attempt * 2}s`;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        updatedAtLabel.textContent = `Обновление из 1С... ${Math.floor((attempt * pollIntervalMs) / 1000)}s`;
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
 
@@ -171,7 +175,7 @@ refreshBtn.addEventListener('click', async () => {
         throw new Error(String(statePayload.lastError || statePayload.lastRefreshError));
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
 
     if (!done) {
