@@ -394,14 +394,9 @@ function renderVersionNumbers(info = {}) {
   if (!versionNumbersInput) return;
 
   versionNumbersInput.value = [
-    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt)}`,
-    'Версия, которую фронтенд реально сейчас показывает пользователю.',
-    '',
-    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt)}`,
-    'Последняя успешная версия, полученная напрямую из 1С.',
-    '',
-    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt)}`,
-    'Последняя версия, доступная в GitHub как резерв для восстановления.',
+    `frontendLoadedVersion: ${formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt)} — Версия, которую фронтенд реально сейчас показывает пользователю.`,
+    `last1cLoadedVersion: ${formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt)} — Последняя успешная версия, полученная напрямую из 1С.`,
+    `lastGithubBackupVersion: ${formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt)} — Последняя версия, доступная в GitHub как резерв для восстановления.`,
   ].join('\n');
 }
 
