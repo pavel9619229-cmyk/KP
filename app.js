@@ -398,16 +398,19 @@ function renderVersionNumbers(info = {}) {
       label: 'frontendLoadedVersion:',
       version: formatVersionValue(frontendLoadedVersion, info.runtimeGeneratedAt),
       desc: 'Версия, которую фронтенд реально сейчас показывает пользователю.',
+      extraSpaces: 3,
     },
     {
       label: 'last1cLoadedVersion:',
       version: formatVersionValue(info.last1cLoadedVersion, info.last1cLoadedAt),
       desc: 'Последняя успешная версия, полученная напрямую из 1С.',
+      extraSpaces: 5,
     },
     {
       label: 'lastGithubBackupVersion:',
       version: formatVersionValue(info.lastGithubBackupVersion, info.githubGeneratedAt),
       desc: 'Последняя версия, доступная в GitHub как резерв для восстановления.',
+      extraSpaces: 0,
     },
   ];
 
@@ -415,7 +418,7 @@ function renderVersionNumbers(info = {}) {
   const maxVersionWidth = Math.max(...lines.map(l => l.version.length));
 
   versionNumbersInput.value = lines
-    .map(l => `${l.label} ${l.version.padStart(maxVersionWidth, ' ')} — ${l.desc}`)
+    .map(l => `${l.label}${' '.repeat(1 + (l.extraSpaces || 0))}${l.version.padStart(maxVersionWidth, ' ')} — ${l.desc}`)
     .join('\n');
 }
 
