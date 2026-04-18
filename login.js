@@ -14,7 +14,7 @@ function setPasswordVisibility(isVisible) {
 }
 
 function dashboardUrlForRole(role) {
-  return String(role || '').toLowerCase() === 'admin' ? '/admin/dashboard' : '/dashboard';
+  return '/dashboard';
 }
 
 function setMsg(text) {

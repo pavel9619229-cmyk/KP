@@ -3233,9 +3233,6 @@ async def root(request: Request):
     except HTTPException:
         return RedirectResponse(url="/login", status_code=302)
 
-    role = str(user.get("role") or "manager").lower()
-    if role == "admin":
-        return RedirectResponse(url="/admin/dashboard", status_code=302)
     return RedirectResponse(url="/dashboard", status_code=302)
 
 
@@ -3265,10 +3262,6 @@ async def dashboard(request: Request):
         user = _get_user_from_request(request)
     except HTTPException:
         return RedirectResponse(url="/login", status_code=302)
-
-    role = str(user.get("role") or "manager").lower()
-    if role == "admin":
-        return RedirectResponse(url="/admin/dashboard", status_code=302)
 
     return FileResponse(
         "dashboard.html",
