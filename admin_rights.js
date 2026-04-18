@@ -2,6 +2,7 @@ const loginCard = document.getElementById('loginCard');
 const editorCard = document.getElementById('editorCard');
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
+const togglePasswordBtn = document.getElementById('togglePasswordBtn');
 const loginBtn = document.getElementById('loginBtn');
 const loginMsg = document.getElementById('loginMsg');
 const rightsEditor = document.getElementById('rightsEditor');
@@ -18,6 +19,15 @@ function setMsg(node, text, isError = false) {
 function setLoggedIn(isLoggedIn) {
   loginCard.classList.toggle('hidden', isLoggedIn);
   editorCard.classList.toggle('hidden', !isLoggedIn);
+}
+
+function setPasswordVisibility(isVisible) {
+  passwordInput.type = isVisible ? 'text' : 'password';
+  if (togglePasswordBtn) {
+    togglePasswordBtn.textContent = isVisible ? 'Скрыть' : 'Показать';
+    togglePasswordBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+    togglePasswordBtn.setAttribute('aria-label', isVisible ? 'Скрыть пароль' : 'Показать пароль');
+  }
 }
 
 async function api(url, options = {}) {
@@ -115,3 +125,11 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 checkSession();
+
+if (togglePasswordBtn) {
+  togglePasswordBtn.addEventListener('click', () => {
+    const isVisible = passwordInput.type !== 'password';
+    setPasswordVisibility(!isVisible);
+  });
+  setPasswordVisibility(false);
+}

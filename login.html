@@ -42,6 +42,12 @@
       font-size: 14px;
     }
     .field { margin-bottom: 10px; }
+    .password-field {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
     input {
       width: 100%;
       padding: 11px 12px;
@@ -63,6 +69,18 @@
       font-weight: 800;
       cursor: pointer;
     }
+    .toggle-password-btn {
+      width: auto;
+      margin-top: 0;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0b1220;
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+      min-width: 96px;
+    }
     .msg {
       min-height: 20px;
       margin-top: 8px;
@@ -80,7 +98,10 @@
       <input id="username" type="text" placeholder="Логин" autocomplete="username" />
     </div>
     <div class="field">
-      <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+      <div class="password-field">
+        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+        <button id="togglePasswordBtn" class="toggle-password-btn" type="button" aria-label="Показать пароль" aria-pressed="false">Показать</button>
+      </div>
     </div>
     <button id="loginBtn" type="button">Войти в dashboard</button>
     <div id="msg" class="msg"></div>

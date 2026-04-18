@@ -1,7 +1,17 @@
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
+const togglePasswordBtn = document.getElementById('togglePasswordBtn');
 const loginBtn = document.getElementById('loginBtn');
 const msg = document.getElementById('msg');
+
+function setPasswordVisibility(isVisible) {
+  passwordInput.type = isVisible ? 'text' : 'password';
+  if (togglePasswordBtn) {
+    togglePasswordBtn.textContent = isVisible ? 'Скрыть' : 'Показать';
+    togglePasswordBtn.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+    togglePasswordBtn.setAttribute('aria-label', isVisible ? 'Скрыть пароль' : 'Показать пароль');
+  }
+}
 
 function dashboardUrlForRole(role) {
   return String(role || '').toLowerCase() === 'admin' ? '/admin/dashboard' : '/dashboard';
@@ -59,3 +69,11 @@ loginBtn.addEventListener('click', async () => {
 });
 
 checkSession();
+
+if (togglePasswordBtn) {
+  togglePasswordBtn.addEventListener('click', () => {
+    const isVisible = passwordInput.type !== 'password';
+    setPasswordVisibility(!isVisible);
+  });
+  setPasswordVisibility(false);
+}

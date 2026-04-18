@@ -33,6 +33,11 @@
     }
     h1 { margin: 0 0 12px; font-size: 24px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .password-wrap {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+    }
     input, button, textarea {
       border-radius: 10px;
       border: 1px solid var(--line);
@@ -61,6 +66,9 @@
       color: var(--text);
       border-color: var(--line);
     }
+    #togglePasswordBtn {
+      min-width: 96px;
+    }
     .hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
     .msg { min-height: 22px; font-size: 14px; }
     .ok { color: var(--ok); }
@@ -76,7 +84,10 @@
       <p class="hint">Вход только для администратора.</p>
       <div class="row">
         <input id="username" type="text" placeholder="Логин" autocomplete="username" />
-        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+        <div class="password-wrap">
+          <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+          <button id="togglePasswordBtn" type="button" class="ghost" aria-label="Показать пароль" aria-pressed="false">Показать</button>
+        </div>
         <button id="loginBtn" type="button">Войти</button>
       </div>
       <div id="loginMsg" class="msg"></div>
