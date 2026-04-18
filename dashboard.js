@@ -124,8 +124,8 @@ managerFilter.addEventListener('change', () => {
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ ИЗ 1С';
   const pollIntervalMs = 2000;
-  // Backend manual refresh timeout is 190s, but 1C/status propagation can lag.
-  const maxWaitMs = 600000;
+  // Backend manual refresh timeout is now 600s (10 min) to handle slow 1C API read timeouts.
+  const maxWaitMs = 900000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
