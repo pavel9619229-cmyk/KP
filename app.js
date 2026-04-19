@@ -1113,13 +1113,33 @@ function renderPayMatchTable(data) {
     payMatchBlock2Body.appendChild(tr);
   });
 
-  // Block 3: placeholder until matching rule is provided.
-  const tr3 = document.createElement('tr');
-  const td3 = document.createElement('td');
-  td3.textContent = 'Ожидает правило заполнения';
-  td3.classList.add('pm-empty');
-  tr3.appendChild(td3);
-  payMatchBlock3Body.appendChild(tr3);
+  // Block 3: KP numbers (descending) whose linked order number appears in block2 purposeNum list.
+  const purposeNumSet = new Set(
+    Array.from(block2Map.values()).map((r) => r.purpose).filter(Boolean)
+  );
+  // For each KP in block1, check if any of its order numbers appears in purposeNumSet.
+  const block3KpSet = new Set();
+  block1Map.forEach(({ kp, order }) => {
+    if (kp && order && purposeNumSet.has(order)) block3KpSet.add(kp);
+  });
+  const block3Rows = Array.from(block3KpSet).sort((a, b) => toNumDesc(b) - toNumDesc(a));
+
+  if (block3Rows.length) {
+    block3Rows.forEach((kp) => {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.textContent = kp;
+      tr.appendChild(td);
+      payMatchBlock3Body.appendChild(tr);
+    });
+  } else {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.textContent = 'нет совпадений';
+    td.classList.add('pm-empty');
+    tr.appendChild(td);
+    payMatchBlock3Body.appendChild(tr);
+  }
 
   if (!block1Rows.length) {
     const tr = document.createElement('tr');
