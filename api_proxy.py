@@ -2210,6 +2210,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
     )
+    log(f"[orders] scan: complete={orders_complete}, pages={len(order_pages)}, rows={sum(len(p) for p in order_pages)}")
     _load_order_cache()
 
     for batch in order_pages:
@@ -2272,7 +2273,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                     row["paymentReceived"] = False
             if not target_order_refs:
                 # Last resort: scan payment purposes, extract order number hints,
-                # then try $filter=Number on ЗаказКлиента for those specific numbers.
+                # then try tail-pages on ЗаказКлиента for those specific numbers.
+                log(f"[orders-lazy] entering last-resort: target_refs empty, {len(kp_ref_set)} KPs to match")
                 purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
                     "Document_ПоступлениеБезналичныхДенежныхСредств",
                     headers,
@@ -2288,14 +2290,16 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                             digits = m.group(1).lstrip("0") or "0"
                             if digits and digits != "0":
                                 purpose_number_hints.add(digits)
+                log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in purpose_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
                 if purpose_number_hints:
                     lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, kp_ref_set)
+                    log(f"[orders-lazy] tail-page scan found {len(lazy_orders)} order→KP matches")
                     for order_ref, kp_ref in lazy_orders.items():
                         order_to_kp[order_ref] = kp_ref
                         kp_to_orders[kp_ref].add(order_ref)
                     target_order_refs = set(order_to_kp.keys())
                     if target_order_refs:
-                        log(f"[orders-lazy] found {len(target_order_refs)} orders via Number filter for {len(kp_ref_set)} KPs")
+                        log(f"[orders-lazy] now have {len(target_order_refs)} target orders for {len(kp_ref_set)} KPs")
 
             if not target_order_refs:
                 # Only a complete orders scan can safely downgrade to False.
