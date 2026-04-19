@@ -2693,6 +2693,8 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
 
 def _build_payment_match_table(headers: dict) -> dict:
     """Scan all orders and payment docs, return table rows for the admin match UI."""
+    _load_order_cache()
+
     # --- orders ---
     order_pages, orders_complete = _collect_tail_pages(
         "Document_ЗаказКлиента",
