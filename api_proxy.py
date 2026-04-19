@@ -3903,6 +3903,59 @@ async def debug_logs():
 
 @app.get("/api/debug/odata-test")
 async def debug_odata_test():
+@app.get("/api/debug/orders-test")
+async def debug_orders_test():
+    """Test Document_ЗаказКлиента fetch strategies for KP 229."""
+    KP_REF = "6c133ed3-2290-11f1-8d55-bc97e15eb091"
+    result: dict = {"kpRef": KP_REF, "steps": []}
+    headers = _build_headers()
+    entity = "Document_ЗаказКлиента"
+
+    def _run():
+        # Step 1: $count
+        try:
+            r = requests.get(f"{BASE}/{entity}/$count", headers=headers, timeout=15, verify=False)
+            total = int(r.text.strip()) if r.status_code == 200 else 0
+            result["steps"].append({"step": "count", "status": r.status_code, "total": total})
+        except Exception as e:
+            result["steps"].append({"step": "count", "error": str(e)})
+            return
+
+        # Step 2: top=50 skip=0 (first page, no orderby)
+        try:
+            r2 = requests.get(f"{BASE}/{entity}", headers=headers,
+                params={"$select": "Ref_Key,Date,Number,ДокументОснование,ДокументОснование_Type",
+                        "$top": "50", "$skip": "0"},
+                timeout=20, verify=False)
+            items = r2.json().get("value", []) if r2.ok else []
+            matches = [i for i in items if i.get("ДокументОснование") == KP_REF]
+            result["steps"].append({"step": "top50_skip0", "status": r2.status_code,
+                                     "fetched": len(items), "matches": len(matches),
+                                     "sample_date": items[0].get("Date") if items else None})
+        except Exception as e:
+            result["steps"].append({"step": "top50_skip0", "error": str(e)})
+
+        # Step 3: orderby Date desc top=200 skip=0
+        try:
+            r3 = requests.get(f"{BASE}/{entity}", headers=headers,
+                params={"$select": "Ref_Key,Date,Number,ДокументОснование,ДокументОснование_Type",
+                        "$top": "200", "$skip": "0", "$orderby": "Date desc"},
+                timeout=30, verify=False)
+            items3 = r3.json().get("value", []) if r3.ok else []
+            matches3 = [i for i in items3 if i.get("ДокументОснование") == KP_REF]
+            result["steps"].append({"step": "orderby_date_desc_top200", "status": r3.status_code,
+                                     "fetched": len(items3), "matches": len(matches3),
+                                     "matched_numbers": [i.get("Number") for i in matches3],
+                                     "first_date": items3[0].get("Date") if items3 else None})
+        except Exception as e:
+            result["steps"].append({"step": "orderby_date_desc_top200", "error": str(e)})
+
+    await asyncio.to_thread(_run)
+    return result
+
+
+@app.get("/api/debug/odata-test")
+async def debug_odata_test():
     """Diagnostic endpoint: test OData connectivity step by step."""
     result: dict = {"steps": []}
     headers = _build_headers()
