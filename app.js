@@ -14,7 +14,9 @@ const payMatchPanel = document.getElementById('payMatchPanel');
 const closePayMatchBtn = document.getElementById('closePayMatchBtn');
 const loadPayMatchBtn = document.getElementById('loadPayMatchBtn');
 const payMatchStatus = document.getElementById('payMatchStatus');
-const payMatchTableBody = document.getElementById('payMatchTableBody');
+const payMatchBlock1Body = document.getElementById('payMatchBlock1Body');
+const payMatchBlock2Body = document.getElementById('payMatchBlock2Body');
+const payMatchBlock3Body = document.getElementById('payMatchBlock3Body');
 const rulesPanel = document.getElementById('rulesPanel');
 const loadingRulesPanel = document.getElementById('loadingRulesPanel');
 const versionNumbersPanel = document.getElementById('versionNumbersPanel');
@@ -1049,40 +1051,99 @@ rulesStorageBtn?.addEventListener('click', () => {
 // ── Payment match table ──────────────────────────────────────────────────────
 
 function renderPayMatchTable(data) {
-  if (!payMatchTableBody) return;
-  payMatchTableBody.innerHTML = '';
+  if (!payMatchBlock1Body || !payMatchBlock2Body || !payMatchBlock3Body) return;
+  payMatchBlock1Body.innerHTML = '';
+  payMatchBlock2Body.innerHTML = '';
+  payMatchBlock3Body.innerHTML = '';
+
   const rows = data.rows || [];
-  rows.forEach(r => {
-    const tr = document.createElement('tr');
-    const isMatch = r.match === 'СОВПАДЕНИЕ';
-    if (isMatch) tr.classList.add('pm-match');
 
-    const displayValues = [
-      r.kpNum || 'не определено',
-      r.orderNum || 'не определено',
-      r.payNum || '',
-      r.purposeNum || '',
-    ];
+  const toNumDesc = (value) => {
+    const n = Number.parseInt(String(value || '').replace(/\D+/g, ''), 10);
+    return Number.isFinite(n) ? n : -1;
+  };
 
-    displayValues.forEach((val, index) => {
-      const td = document.createElement('td');
-      td.textContent = val || '';
-      if (!val || (index < 2 && val === 'не определено')) td.classList.add('pm-empty');
-      tr.appendChild(td);
-    });
-
-    const matchTd = document.createElement('td');
-    matchTd.textContent = r.match || '';
-    if (isMatch) matchTd.classList.add('pm-match-cell');
-    tr.appendChild(matchTd);
-    payMatchTableBody.appendChild(tr);
+  // Block 1: unique pairs (KP, order), sorted by KP desc then order desc.
+  const block1Map = new Map();
+  rows.forEach((r) => {
+    const kp = String(r.kpNum || '').trim();
+    const order = String(r.orderNum || '').trim();
+    if (!kp && !order) return;
+    const key = `${kp}|${order}`;
+    if (!block1Map.has(key)) block1Map.set(key, { kp, order });
+  });
+  const block1Rows = Array.from(block1Map.values()).sort((a, b) => {
+    const kpCmp = toNumDesc(b.kp) - toNumDesc(a.kp);
+    if (kpCmp !== 0) return kpCmp;
+    return toNumDesc(b.order) - toNumDesc(a.order);
   });
 
-  const total = rows.length;
-  const matched = rows.filter(r => r.match === 'СОВПАДЕНИЕ').length;
+  block1Rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    const tdKp = document.createElement('td');
+    const tdOrder = document.createElement('td');
+    tdKp.textContent = r.kp || 'не определено';
+    tdOrder.textContent = r.order || 'не определено';
+    if (!r.kp) tdKp.classList.add('pm-empty');
+    if (!r.order) tdOrder.classList.add('pm-empty');
+    tr.append(tdKp, tdOrder);
+    payMatchBlock1Body.appendChild(tr);
+  });
+
+  // Block 2: unique pairs (pay, purpose), sorted by pay desc.
+  const block2Map = new Map();
+  rows.forEach((r) => {
+    const pay = String(r.payNum || '').trim();
+    const purpose = String(r.purposeNum || '').trim();
+    if (!pay && !purpose) return;
+    const key = `${pay}|${purpose}`;
+    if (!block2Map.has(key)) block2Map.set(key, { pay, purpose });
+  });
+  const block2Rows = Array.from(block2Map.values()).sort((a, b) => toNumDesc(b.pay) - toNumDesc(a.pay));
+
+  block2Rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    const tdPay = document.createElement('td');
+    const tdPurpose = document.createElement('td');
+    tdPay.textContent = r.pay || 'не определено';
+    tdPurpose.textContent = r.purpose || 'не определено';
+    if (!r.pay) tdPay.classList.add('pm-empty');
+    if (!r.purpose) tdPurpose.classList.add('pm-empty');
+    tr.append(tdPay, tdPurpose);
+    payMatchBlock2Body.appendChild(tr);
+  });
+
+  // Block 3: placeholder until matching rule is provided.
+  const tr3 = document.createElement('tr');
+  const td3 = document.createElement('td');
+  td3.textContent = 'Ожидает правило заполнения';
+  td3.classList.add('pm-empty');
+  tr3.appendChild(td3);
+  payMatchBlock3Body.appendChild(tr3);
+
+  if (!block1Rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 2;
+    td.textContent = 'нет данных';
+    td.classList.add('pm-empty');
+    tr.appendChild(td);
+    payMatchBlock1Body.appendChild(tr);
+  }
+
+  if (!block2Rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 2;
+    td.textContent = 'нет данных';
+    td.classList.add('pm-empty');
+    tr.appendChild(td);
+    payMatchBlock2Body.appendChild(tr);
+  }
+
   if (payMatchStatus) {
     payMatchStatus.textContent =
-      `Строк: ${total} | Совпадений: ${matched} | ` +
+      `Блок 1: ${block1Rows.length} строк | Блок 2: ${block2Rows.length} строк | ` +
       `Заказы: ${data.ordersScanComplete ? 'полный скан' : 'неполный скан'}, ` +
       `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
   }
@@ -1093,7 +1154,9 @@ async function loadPayMatchTable() {
   loadPayMatchBtn.disabled = true;
   loadPayMatchBtn.textContent = 'Загружаю...';
   if (payMatchStatus) payMatchStatus.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
-  if (payMatchTableBody) payMatchTableBody.innerHTML = '';
+  if (payMatchBlock1Body) payMatchBlock1Body.innerHTML = '';
+  if (payMatchBlock2Body) payMatchBlock2Body.innerHTML = '';
+  if (payMatchBlock3Body) payMatchBlock3Body.innerHTML = '';
   try {
     const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

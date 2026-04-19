@@ -505,11 +505,27 @@ body.dark .rules-storage-input {
 }
 
 /* Payment match table */
+.pay-match-grid {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.pay-match-block h4 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.pay-match-wrap {
+  overflow-x: auto;
+}
+
 .pay-match-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.86rem;
-  min-width: 700px;
+  min-width: 420px;
 }
 .pay-match-table th,
 .pay-match-table td {
