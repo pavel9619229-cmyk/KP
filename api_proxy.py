@@ -2140,53 +2140,53 @@ def _extract_order_refs_from_payment_breakdown(item: dict) -> set[str]:
 def _fetch_orders_by_number_hints(
     number_hints: set[str], headers: dict, kp_ref_set: set[str]
 ) -> dict[str, str]:
-    """Try to look up specific ЗаказКлиента rows by Number $filter.
-    Returns {order_ref: kp_ref}.  Best-effort — silently returns {} if 1C rejects $filter.
+    """Scan tail pages of Document_ЗаказКлиента (small page_size, long timeout)
+    and match against known number hints extracted from payment purposes.
+    Returns {order_ref: kp_ref} for any found matches to our target KPs.
     """
     result: dict[str, str] = {}
-    tried: set[str] = set()
-    for digits in sorted(number_hints)[:20]:
-        candidates = [
-            f"УТ-{digits}",
-            f"ПСУТ-{digits.zfill(6)}",
-            f"ПСУТ-000{digits.zfill(3)}",
-        ]
-        found_for_digits = False
-        for num_fmt in candidates:
-            if num_fmt in tried:
+    if not number_hints:
+        return result
+
+    # Build compact number variants from hints for faster matching
+    # e.g. digits "198" -> patterns: "198", "0198", "000198", etc.
+    hint_patterns: set[str] = set()
+    for digits in number_hints:
+        hint_patterns.add(digits)
+        hint_patterns.add(digits.zfill(3))
+        hint_patterns.add(digits.zfill(6))
+
+    # Scan tail pages with small page_size to avoid timeouts
+    pages, complete = _collect_tail_pages(
+        "Document_ЗаказКлиента",
+        headers,
+        ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
+        page_size=5,  # small page, high timeout
+        timeout=60.0,
+    )
+
+    for batch in pages:
+        for item in batch:
+            if not isinstance(item, dict):
                 continue
-            tried.add(num_fmt)
-            try:
-                payload, error = _get_json_with_retry(
-                    f"{BASE}/Document_ЗаказКлиента",
-                    headers,
-                    params={
-                        "$filter": f"Number eq '{num_fmt}'",
-                        "$select": "Ref_Key,Number,ДокументОснование,ДокументОснование_Type",
-                        "$top": "5",
-                    },
-                    timeout=15.0,
-                    retries=0,
-                )
-            except Exception:
-                return result  # network error — abort
-            if error:
-                continue  # this format rejected — try next
-            items = (payload or {}).get("value", []) if isinstance(payload, dict) else []
-            for item in items:
-                base_type = str(item.get("ДокументОснование_Type") or "")
-                base_ref = str(item.get("ДокументОснование") or "")
-                order_ref = str(item.get("Ref_Key") or "")
-                if (
-                    order_ref
-                    and base_type.endswith("Document_КоммерческоеПредложениеКлиенту")
-                    and base_ref in kp_ref_set
-                ):
-                    result[order_ref] = base_ref
-            if items:
-                found_for_digits = True
-                break  # right format found, move to next number
-        _ = found_for_digits  # suppress unused warning
+            base_type = str(item.get("ДокументОснование_Type") or "")
+            base_ref = str(item.get("ДокументОснование") or "")
+            order_ref = str(item.get("Ref_Key") or "")
+            order_number = str(item.get("Number") or "")
+
+            # Check if order number matches any of our hints
+            order_compact = "".join(c for c in order_number if c.isdigit())
+            if order_compact not in hint_patterns:
+                continue
+
+            # Check if this order's base is one of our target КП
+            if (
+                order_ref
+                and base_type.endswith("Document_КоммерческоеПредложениеКлиенту")
+                and base_ref in kp_ref_set
+            ):
+                result[order_ref] = base_ref
+
     return result
 
     return refs
