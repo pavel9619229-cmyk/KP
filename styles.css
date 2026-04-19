@@ -105,6 +105,12 @@ body {
   flex: 1 1 180px;
 }
 
+.controls button,
+.controls a {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 input,
 select,
 button {
