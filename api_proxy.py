@@ -2695,11 +2695,21 @@ def _build_payment_match_table(headers: dict) -> dict:
     """Scan all orders and payment docs, return table rows for the admin match UI."""
     _load_order_cache()
 
+    # Target the latest 300 KPs from current runtime cache.
+    target_kp_refs: set[str] = set()
+    if _cached_rows:
+        for row in _cached_rows[:300]:
+            ref = str(row.get("refKey") or "").strip()
+            if ref:
+                target_kp_refs.add(ref)
+
     # --- orders ---
     order_pages, orders_complete = _collect_tail_pages(
         "Document_ЗаказКлиента",
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
+        page_size=20,
+        timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
 
     # ref_key → {kp_ref, raw_number, short_number}
@@ -2714,7 +2724,11 @@ def _build_payment_match_table(headers: dict) -> dict:
             order_ref = str(item.get("Ref_Key") or "")
             if not order_ref:
                 continue
-            if base_ref and base_type.endswith("Document_КоммерческоеПредложениеКлиенту"):
+            if (
+                base_ref
+                and base_type.endswith("Document_КоммерческоеПредложениеКлиенту")
+                and (not target_kp_refs or base_ref in target_kp_refs)
+            ):
                 raw_num = str(item.get("Number") or "")
                 short = "".join(ch for ch in raw_num if ch.isdigit()).lstrip("0") or ""
                 order_info[order_ref] = {"kp_ref": base_ref, "raw": raw_num, "short": short}
@@ -2726,7 +2740,7 @@ def _build_payment_match_table(headers: dict) -> dict:
             for order_ref, entry in _order_to_kp_cache.items():
                 if order_ref not in order_info:
                     kp_ref = entry.get("kp", "")
-                    if kp_ref:
+                    if kp_ref and (not target_kp_refs or kp_ref in target_kp_refs):
                         short = entry.get("num", "")
                         order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short}
                         kp_to_orders.setdefault(kp_ref, []).append(order_ref)
@@ -2739,6 +2753,27 @@ def _build_payment_match_table(headers: dict) -> dict:
             num = str(row.get("number") or "")
             if ref:
                 kp_number_map[ref] = _normalize_kp_number(num)
+
+    # If runtime cache does not cover all target refs, try to backfill KP numbers
+    # from the latest КП tail pages.
+    missing_target_refs = {
+        info.get("kp_ref", "")
+        for info in order_info.values()
+        if info.get("kp_ref") and not kp_number_map.get(info.get("kp_ref", ""))
+    }
+    if missing_target_refs:
+        kp_pages, _ = _collect_tail_pages(
+            ENTITY,
+            headers,
+            ["Ref_Key", "Number", "Date"],
+            page_size=120,
+            timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
+        )
+        for batch in kp_pages:
+            for item in batch:
+                ref = str(item.get("Ref_Key") or "")
+                if ref in missing_target_refs:
+                    kp_number_map[ref] = _normalize_kp_number(str(item.get("Number") or ""))
 
     # --- payments ---
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
