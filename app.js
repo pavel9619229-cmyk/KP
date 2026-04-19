@@ -9,6 +9,12 @@ const rulesBtn = document.getElementById('rulesBtn');
 const loadingRulesBtn = document.getElementById('loadingRulesBtn');
 const versionNumbersBtn = document.getElementById('versionNumbersBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
+const payMatchBtn = document.getElementById('payMatchBtn');
+const payMatchPanel = document.getElementById('payMatchPanel');
+const closePayMatchBtn = document.getElementById('closePayMatchBtn');
+const loadPayMatchBtn = document.getElementById('loadPayMatchBtn');
+const payMatchStatus = document.getElementById('payMatchStatus');
+const payMatchTableBody = document.getElementById('payMatchTableBody');
 const rulesPanel = document.getElementById('rulesPanel');
 const loadingRulesPanel = document.getElementById('loadingRulesPanel');
 const versionNumbersPanel = document.getElementById('versionNumbersPanel');
@@ -1039,6 +1045,79 @@ rulesStorageBtn?.addEventListener('click', () => {
   if (rulesStoragePanel?.hidden) openRulesStoragePanel();
   else closeRulesStoragePanel();
 });
+
+// ── Payment match table ──────────────────────────────────────────────────────
+
+function renderPayMatchTable(data) {
+  if (!payMatchTableBody) return;
+  payMatchTableBody.innerHTML = '';
+  const rows = data.rows || [];
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const isMatch = r.match === 'СОВПАДЕНИЕ';
+    if (isMatch) tr.classList.add('pm-match');
+
+    [r.kpNum, r.orderNum, r.payNum, r.purposeNum].forEach(val => {
+      const td = document.createElement('td');
+      td.textContent = val || '';
+      if (!val) td.classList.add('pm-empty');
+      tr.appendChild(td);
+    });
+
+    const matchTd = document.createElement('td');
+    matchTd.textContent = r.match || '';
+    if (isMatch) matchTd.classList.add('pm-match-cell');
+    tr.appendChild(matchTd);
+    payMatchTableBody.appendChild(tr);
+  });
+
+  const total = rows.length;
+  const matched = rows.filter(r => r.match === 'СОВПАДЕНИЕ').length;
+  if (payMatchStatus) {
+    payMatchStatus.textContent =
+      `Строк: ${total} | Совпадений: ${matched} | ` +
+      `Заказы: ${data.ordersScanComplete ? 'полный скан' : 'неполный скан'}, ` +
+      `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
+  }
+}
+
+async function loadPayMatchTable() {
+  if (!loadPayMatchBtn) return;
+  loadPayMatchBtn.disabled = true;
+  loadPayMatchBtn.textContent = 'Загружаю...';
+  if (payMatchStatus) payMatchStatus.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
+  if (payMatchTableBody) payMatchTableBody.innerHTML = '';
+  try {
+    const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderPayMatchTable(data);
+  } catch (err) {
+    if (payMatchStatus) payMatchStatus.textContent = `Ошибка: ${err.message}`;
+  } finally {
+    loadPayMatchBtn.disabled = false;
+    loadPayMatchBtn.textContent = 'Загрузить / обновить';
+  }
+}
+
+payMatchBtn?.addEventListener('click', () => {
+  if (payMatchPanel?.hidden) {
+    payMatchPanel.hidden = false;
+    payMatchBtn.textContent = 'СКРЫТЬ СОПОСТАВЛЕНИЕ';
+  } else {
+    payMatchPanel.hidden = true;
+    payMatchBtn.textContent = 'СОПОСТАВЛЕНИЕ ПЛАТЕЖЕЙ';
+  }
+});
+
+closePayMatchBtn?.addEventListener('click', () => {
+  if (payMatchPanel) payMatchPanel.hidden = true;
+  if (payMatchBtn) payMatchBtn.textContent = 'СОПОСТАВЛЕНИЕ ПЛАТЕЖЕЙ';
+});
+
+loadPayMatchBtn?.addEventListener('click', loadPayMatchTable);
+
+// ────────────────────────────────────────────────────────────────────────────
 
 closeRulesBtn.addEventListener('click', closeRulesPanel);
 saveRulesBtn.addEventListener('click', onSaveRulesClick);

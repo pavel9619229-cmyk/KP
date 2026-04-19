@@ -34,6 +34,7 @@
       <button id="loadingRulesBtn" type="button">ПРАВИЛА ЗАГРУЗКИ</button>
       <button id="versionNumbersBtn" type="button">НОМЕРА ВЕРСИЙ ЗАГРУЗКИ</button>
       <button id="rulesStorageBtn" type="button">МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ</button>
+      <button id="payMatchBtn" type="button">СОПОСТАВЛЕНИЕ ПЛАТЕЖЕЙ</button>
       <a id="logoutLink" href="/logout" class="logout-link">Выйти</a>
     </section>
 
@@ -97,6 +98,34 @@
       <div class="rules-storage-block">
         <strong>места хранения правил статусов</strong>
         <textarea id="rulesStorageLocationsInput" class="rules-storage-input" rows="7" spellcheck="false" readonly></textarea>
+      </div>
+    </section>
+
+    <section id="payMatchPanel" class="rules-panel" hidden aria-label="Сопоставление платежей с КП">
+      <div class="rules-panel__header">
+        <div>
+          <strong>Сопоставление платежей с КП</strong>
+          <p>Связка: КП → Заказ → Назначение платежа. Номера очищены от ПСУТ- и ведущих нулей.</p>
+        </div>
+        <button id="closePayMatchBtn" type="button">Закрыть</button>
+      </div>
+      <div class="rules-panel__footer">
+        <button id="loadPayMatchBtn" type="button">Загрузить / обновить</button>
+        <span id="payMatchStatus" style="margin-left:12px;color:var(--muted);font-size:0.88rem;"></span>
+      </div>
+      <div style="overflow-x:auto;margin-top:14px;">
+        <table id="payMatchTable" class="pay-match-table">
+          <thead>
+            <tr>
+              <th>№ КП</th>
+              <th>№ заказа</th>
+              <th>№ прихода ДС</th>
+              <th>№ счёта из назначения платежа</th>
+              <th>Совпадение</th>
+            </tr>
+          </thead>
+          <tbody id="payMatchTableBody"></tbody>
+        </table>
       </div>
     </section>
 

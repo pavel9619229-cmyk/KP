@@ -494,6 +494,45 @@ body.dark .rules-storage-input {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* Payment match table */
+.pay-match-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  min-width: 700px;
+}
+.pay-match-table th,
+.pay-match-table td {
+  border: 1px solid var(--line);
+  padding: 7px 11px;
+  text-align: left;
+  white-space: nowrap;
+}
+.pay-match-table th {
+  background: rgba(0,0,0,0.06);
+  font-weight: 700;
+  color: var(--muted);
+}
+.pay-match-table tr.pm-match {
+  background: rgba(35, 122, 86, 0.1);
+}
+.pay-match-table tr.pm-match td.pm-match-cell {
+  color: #237a56;
+  font-weight: 700;
+}
+.pay-match-table td.pm-empty {
+  color: var(--muted);
+}
+body.dark .pay-match-table th {
+  background: rgba(255,255,255,0.06);
+}
+body.dark .pay-match-table tr.pm-match {
+  background: rgba(35, 180, 110, 0.1);
+}
+body.dark .pay-match-table tr.pm-match td.pm-match-cell {
+  color: #4ade80;
+}
+
 .rule-card {
   border: 1px solid var(--line);
   border-radius: 16px;
