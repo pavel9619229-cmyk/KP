@@ -3796,6 +3796,16 @@ async def on_startup() -> None:
         _recover_runtime_cache_from_github_if_needed("startup")
     if not _cached_rows:
         _cached_rows = load_seed_rows()
+    
+    # Enrich loaded rows with group flags (orders/invoices/payments) — no blocking
+    # but essential for payment detection to work without requiring separate refresh
+    try:
+        headers = _build_headers()
+        _enrich_group_flags_bulk(_cached_rows, headers)
+        log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
+    except Exception as exc:
+        log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
+    
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
     # Do NOT await refresh here: blocking startup prevents health-check from reaching the app.
