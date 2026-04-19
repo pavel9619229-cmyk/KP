@@ -1113,14 +1113,15 @@ function renderPayMatchTable(data) {
     payMatchBlock2Body.appendChild(tr);
   });
 
-  // Block 3: KP numbers (descending) whose linked order number appears in block2 purposeNum list.
+  // Block 3: KP numbers (descending) whose KP number appears in block2 purposeNum list.
+  // purposeNum in block2 is extracted from НазначениеПлатежа text like "УТ-198" → "198" = KP number.
   const purposeNumSet = new Set(
     Array.from(block2Map.values()).map((r) => r.purpose).filter(Boolean)
   );
-  // For each KP in block1, check if any of its order numbers appears in purposeNumSet.
+  // For each KP in block1, check if its KP number appears in purposeNumSet.
   const block3KpSet = new Set();
-  block1Map.forEach(({ kp, order }) => {
-    if (kp && order && purposeNumSet.has(order)) block3KpSet.add(kp);
+  block1Map.forEach(({ kp }) => {
+    if (kp && purposeNumSet.has(kp)) block3KpSet.add(kp);
   });
   const block3Rows = Array.from(block3KpSet).sort((a, b) => toNumDesc(b) - toNumDesc(a));
 
