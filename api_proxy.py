@@ -157,6 +157,13 @@ _refresh_lock = threading.Lock()
 _partial_refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _last_cache_push: Optional[datetime] = None
+
+# Persistent order→KP mapping cache.  Survives incomplete orders scans so
+# payment matching still works even when Document_ЗаказКлиента times out.
+ORDER_CACHE_FILE = os.getenv("ORDER_CACHE_FILE", "data/kp_order_cache.json")
+_order_to_kp_cache: dict[str, dict] = {}   # order_ref -> {"kp": kp_ref, "num": order_number}
+_order_cache_loaded: bool = False
+_order_cache_lock = threading.Lock()
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
@@ -1925,6 +1932,37 @@ def _get_json_with_retry(
     return None, last_error
 
 
+def _load_order_cache() -> None:
+    """Load persisted order→KP cache from disk once per process lifetime."""
+    global _order_to_kp_cache, _order_cache_loaded
+    if _order_cache_loaded:
+        return
+    with _order_cache_lock:
+        if _order_cache_loaded:
+            return
+        try:
+            if os.path.exists(ORDER_CACHE_FILE):
+                with open(ORDER_CACHE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    _order_to_kp_cache = data
+        except Exception:
+            pass
+        _order_cache_loaded = True
+
+
+def _save_order_cache() -> None:
+    """Persist order→KP cache to disk (best-effort)."""
+    try:
+        os.makedirs(os.path.dirname(ORDER_CACHE_FILE), exist_ok=True)
+        tmp = ORDER_CACHE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_order_to_kp_cache, f, ensure_ascii=False)
+        os.replace(tmp, ORDER_CACHE_FILE)
+    except Exception:
+        pass
+
+
 def _parse_odata_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -2098,6 +2136,59 @@ def _extract_order_refs_from_payment_breakdown(item: dict) -> set[str]:
         if basis_ref and (not basis_type or basis_type.endswith("Document_ЗаказКлиента")):
             refs.add(basis_ref)
 
+
+def _fetch_orders_by_number_hints(
+    number_hints: set[str], headers: dict, kp_ref_set: set[str]
+) -> dict[str, str]:
+    """Try to look up specific ЗаказКлиента rows by Number $filter.
+    Returns {order_ref: kp_ref}.  Best-effort — silently returns {} if 1C rejects $filter.
+    """
+    result: dict[str, str] = {}
+    tried: set[str] = set()
+    for digits in sorted(number_hints)[:20]:
+        candidates = [
+            f"УТ-{digits}",
+            f"ПСУТ-{digits.zfill(6)}",
+            f"ПСУТ-000{digits.zfill(3)}",
+        ]
+        found_for_digits = False
+        for num_fmt in candidates:
+            if num_fmt in tried:
+                continue
+            tried.add(num_fmt)
+            try:
+                payload, error = _get_json_with_retry(
+                    f"{BASE}/Document_ЗаказКлиента",
+                    headers,
+                    params={
+                        "$filter": f"Number eq '{num_fmt}'",
+                        "$select": "Ref_Key,Number,ДокументОснование,ДокументОснование_Type",
+                        "$top": "5",
+                    },
+                    timeout=15.0,
+                    retries=0,
+                )
+            except Exception:
+                return result  # network error — abort
+            if error:
+                continue  # this format rejected — try next
+            items = (payload or {}).get("value", []) if isinstance(payload, dict) else []
+            for item in items:
+                base_type = str(item.get("ДокументОснование_Type") or "")
+                base_ref = str(item.get("ДокументОснование") or "")
+                order_ref = str(item.get("Ref_Key") or "")
+                if (
+                    order_ref
+                    and base_type.endswith("Document_КоммерческоеПредложениеКлиенту")
+                    and base_ref in kp_ref_set
+                ):
+                    result[order_ref] = base_ref
+            if items:
+                found_for_digits = True
+                break  # right format found, move to next number
+        _ = found_for_digits  # suppress unused warning
+    return result
+
     return refs
 
 
@@ -2119,9 +2210,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
     )
-    if not orders_complete and not order_pages:
-        # No order data at all: preserve current flags.
-        return
+    _load_order_cache()
 
     for batch in order_pages:
         for item in batch:
@@ -2143,7 +2232,37 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 if compact_number:
                     order_compact_numbers[order_ref] = compact_number
 
+    # When orders scan is complete, update the persistent cache for all found entries.
+    if orders_complete and order_to_kp:
+        with _order_cache_lock:
+            _order_to_kp_cache.update({
+                ref: {"kp": kp, "num": order_short_numbers.get(ref, ""),
+                       "compact": order_compact_numbers.get(ref, "")}
+                for ref, kp in order_to_kp.items()
+            })
+        _save_order_cache()
+        log(f"[orders-cache] saved {len(order_to_kp)} order→KP entries")
+
     target_order_refs = set(order_to_kp.keys())
+    if not target_order_refs:
+        # Supplement from persistent cache for KPs that are in our current set.
+        if not orders_complete:
+            with _order_cache_lock:
+                for order_ref, entry in _order_to_kp_cache.items():
+                    kp_ref = entry.get("kp", "")
+                    if kp_ref in kp_ref_set:
+                        order_to_kp[order_ref] = kp_ref
+                        kp_to_orders[kp_ref].add(order_ref)
+                        num = entry.get("num", "")
+                        if num:
+                            order_short_numbers[order_ref] = num
+                        compact = entry.get("compact", "")
+                        if compact:
+                            order_compact_numbers[order_ref] = compact
+            target_order_refs = set(order_to_kp.keys())
+            if target_order_refs:
+                log(f"[orders-cache] using {len(target_order_refs)} cached order→KP entries for {len(kp_ref_set)} KPs")
+
     if not target_order_refs:
         # Only a complete orders scan can safely downgrade to False.
         if orders_complete:
@@ -2151,6 +2270,41 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 if row.get("refKey") in kp_ref_set:
                     row["invoiceCreated"] = False
                     row["paymentReceived"] = False
+            if not target_order_refs:
+                # Last resort: scan payment purposes, extract order number hints,
+                # then try $filter=Number on ЗаказКлиента for those specific numbers.
+                purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
+                    "Document_ПоступлениеБезналичныхДенежныхСредств",
+                    headers,
+                    [["Ref_Key", "НазначениеПлатежа"]],
+                    page_size=20,
+                    timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
+                )
+                purpose_number_hints: set[str] = set()
+                for batch in purpose_pages:
+                    for item in batch:
+                        purpose = str(item.get("НазначениеПлатежа") or "").lower()
+                        for m in re.finditer(r"\bут[\s\-_/]*0*(\d+)\b", purpose):
+                            digits = m.group(1).lstrip("0") or "0"
+                            if digits and digits != "0":
+                                purpose_number_hints.add(digits)
+                if purpose_number_hints:
+                    lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, kp_ref_set)
+                    for order_ref, kp_ref in lazy_orders.items():
+                        order_to_kp[order_ref] = kp_ref
+                        kp_to_orders[kp_ref].add(order_ref)
+                    target_order_refs = set(order_to_kp.keys())
+                    if target_order_refs:
+                        log(f"[orders-lazy] found {len(target_order_refs)} orders via Number filter for {len(kp_ref_set)} KPs")
+
+            if not target_order_refs:
+                # Only a complete orders scan can safely downgrade to False.
+                if orders_complete:
+                    for row in rows:
+                        if row.get("refKey") in kp_ref_set:
+                            row["invoiceCreated"] = False
+                            row["paymentReceived"] = False
+                return
         return
 
     invoice_order_refs: set[str] = set()
