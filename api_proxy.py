@@ -4567,7 +4567,20 @@ async def admin_logout():
 
 @app.get("/api/admin/payment-match-table")
 async def admin_payment_match_table(request: Request):
-    _require_admin(request)
+    # Accept either an admin-session cookie (from /admin/rights login)
+    # or a user-session cookie with role=admin (from /admin/dashboard login).
+    ok = False
+    if _get_admin_username(request):
+        ok = True
+    else:
+        try:
+            user = _get_user_from_request(request)
+            if str(user.get("role") or "").lower() == "admin":
+                ok = True
+        except HTTPException:
+            pass
+    if not ok:
+        raise HTTPException(status_code=401, detail="Admin auth required")
     headers = _build_headers()
     result = await asyncio.to_thread(_build_payment_match_table, headers)
     return {"ok": True, **result}
