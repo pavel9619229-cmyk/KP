@@ -1057,10 +1057,17 @@ function renderPayMatchTable(data) {
     const isMatch = r.match === 'СОВПАДЕНИЕ';
     if (isMatch) tr.classList.add('pm-match');
 
-    [r.kpNum, r.orderNum, r.payNum, r.purposeNum].forEach(val => {
+    const displayValues = [
+      r.kpNum || 'не определено',
+      r.orderNum || 'не определено',
+      r.payNum || '',
+      r.purposeNum || '',
+    ];
+
+    displayValues.forEach((val, index) => {
       const td = document.createElement('td');
       td.textContent = val || '';
-      if (!val) td.classList.add('pm-empty');
+      if (!val || (index < 2 && val === 'не определено')) td.classList.add('pm-empty');
       tr.appendChild(td);
     });
 
