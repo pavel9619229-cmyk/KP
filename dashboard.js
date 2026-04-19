@@ -122,14 +122,14 @@ managerFilter.addEventListener('change', () => {
 });
 
 refreshBtn.addEventListener('click', async () => {
-  const defaultLabel = 'ОБНОВИТЬ ИЗ 1С';
+  const defaultLabel = 'ОБНОВИТЬ';
   const pollIntervalMs = 2000;
   // Backend manual refresh timeout is now 600s (10 min) to handle slow 1C API read timeouts.
   const maxWaitMs = 900000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
-  updatedAtLabel.textContent = 'Обновляю данные из 1С...';
+  updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
 
   try {
     const startResponse = await fetch('/api/kp/refresh', {
@@ -181,7 +181,7 @@ refreshBtn.addEventListener('click', async () => {
       }
 
       if (statePayload?.running) {
-        updatedAtLabel.textContent = `Обновление из 1С... ${Math.floor((attempt * pollIntervalMs) / 1000)}s`;
+        updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
