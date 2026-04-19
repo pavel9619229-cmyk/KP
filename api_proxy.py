@@ -2734,16 +2734,17 @@ def _build_payment_match_table(headers: dict) -> dict:
                 order_info[order_ref] = {"kp_ref": base_ref, "raw": raw_num, "short": short}
                 kp_to_orders.setdefault(base_ref, []).append(order_ref)
 
-    # Fall back to persistent order cache for entries not seen in this scan
-    if not orders_complete:
-        with _order_cache_lock:
-            for order_ref, entry in _order_to_kp_cache.items():
-                if order_ref not in order_info:
-                    kp_ref = entry.get("kp", "")
-                    if kp_ref and (not target_kp_refs or kp_ref in target_kp_refs):
-                        short = entry.get("num", "")
-                        order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short}
-                        kp_to_orders.setdefault(kp_ref, []).append(order_ref)
+    # Always merge persistent order cache for entries not seen in live scan.
+    # This ensures seed entries (e.g. KP229 seed-ut-198/199) are included even
+    # when orders_complete=True (live scan succeeded but doesn't cover all cached pairs).
+    with _order_cache_lock:
+        for order_ref, entry in _order_to_kp_cache.items():
+            if order_ref not in order_info:
+                kp_ref = entry.get("kp", "")
+                if kp_ref and (not target_kp_refs or kp_ref in target_kp_refs):
+                    short = entry.get("num", "")
+                    order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short}
+                    kp_to_orders.setdefault(kp_ref, []).append(order_ref)
 
     # Map kp_ref → КП display number
     kp_number_map: dict[str, str] = {}
