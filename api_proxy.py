@@ -2245,24 +2245,24 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         log(f"[orders-cache] saved {len(order_to_kp)} order→KP entries")
 
     target_order_refs = set(order_to_kp.keys())
-    if not target_order_refs:
-        # Supplement from persistent cache for KPs that are in our current set.
-        if not orders_complete:
-            with _order_cache_lock:
-                for order_ref, entry in _order_to_kp_cache.items():
-                    kp_ref = entry.get("kp", "")
-                    if kp_ref in kp_ref_set:
-                        order_to_kp[order_ref] = kp_ref
-                        kp_to_orders[kp_ref].add(order_ref)
-                        num = entry.get("num", "")
-                        if num:
-                            order_short_numbers[order_ref] = num
-                        compact = entry.get("compact", "")
-                        if compact:
-                            order_compact_numbers[order_ref] = compact
-            target_order_refs = set(order_to_kp.keys())
-            if target_order_refs:
-                log(f"[orders-cache] using {len(target_order_refs)} cached order→KP entries for {len(kp_ref_set)} KPs")
+    # Always merge persistent order cache for entries not seen in live scan
+    # (covers seed entries like KP229 that exist in cache but not in current scan results).
+    with _order_cache_lock:
+        for order_ref, entry in _order_to_kp_cache.items():
+            if order_ref not in order_to_kp:
+                kp_ref = entry.get("kp", "")
+                if kp_ref in kp_ref_set:
+                    order_to_kp[order_ref] = kp_ref
+                    kp_to_orders[kp_ref].add(order_ref)
+                    num = entry.get("num", "")
+                    if num:
+                        order_short_numbers[order_ref] = num
+                    compact = entry.get("compact", "")
+                    if compact:
+                        order_compact_numbers[order_ref] = compact
+    target_order_refs = set(order_to_kp.keys())
+    if target_order_refs:
+        log(f"[orders-cache] merged cache: {len(target_order_refs)} total order→KP entries for {len(kp_ref_set)} KPs")
 
     if not target_order_refs:
         # Only a complete orders scan can safely downgrade to False.
