@@ -74,6 +74,36 @@
     .ok { color: var(--ok); }
     .err { color: var(--err); }
     .hidden { display: none; }
+
+    /* Payment match table */
+    #matchTableCard { overflow-x: auto; }
+    #matchTableWrap { overflow-x: auto; margin-top: 12px; }
+    #matchTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    #matchTable th, #matchTable td {
+      border: 1px solid var(--line);
+      padding: 7px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    #matchTable th {
+      background: #1e2d45;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    #matchTable tr.match-row {
+      background: rgba(22, 163, 74, 0.12);
+    }
+    #matchTable tr.match-row td.match-cell {
+      color: var(--ok);
+      font-weight: 700;
+    }
+    #matchTable td.kp-cell { font-weight: 600; }
+    #matchTable td.empty { color: #475569; }
+    #matchTableStatus { margin-top: 8px; font-size: 13px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -105,6 +135,33 @@
       </div>
       <div id="editorMsg" class="msg" style="margin-top: 8px;"></div>
     </section>
+
+    <section class="card hidden" id="matchTableCard">
+      <h2 style="margin: 0 0 4px; font-size: 18px;">Сопоставление платежей с КП</h2>
+      <p class="hint">
+        Сопоставление заказов, привязанных к КП, с платёжными документами по номеру из поля «Назначение платежа».
+        Очищены от ПСУТ- и ведущих нулей.
+      </p>
+      <div class="row">
+        <button id="loadMatchTableBtn" type="button">Загрузить таблицу</button>
+      </div>
+      <div id="matchTableWrap" class="hidden">
+        <table id="matchTable">
+          <thead>
+            <tr>
+              <th>№ КП</th>
+              <th>№ заказа</th>
+              <th>№ прихода ДС</th>
+              <th>№ счёта из назначения платежа</th>
+              <th>Совпадение</th>
+            </tr>
+          </thead>
+          <tbody id="matchTableBody"></tbody>
+        </table>
+        <div id="matchTableStatus"></div>
+      </div>
+    </section>
+
   </div>
 
   <script src="/admin_rights.js"></script>

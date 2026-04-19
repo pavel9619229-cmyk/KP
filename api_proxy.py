@@ -2691,6 +2691,158 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
     return trace
 
 
+def _build_payment_match_table(headers: dict) -> dict:
+    """Scan all orders and payment docs, return table rows for the admin match UI."""
+    # --- orders ---
+    order_pages, orders_complete = _collect_tail_pages(
+        "Document_ЗаказКлиента",
+        headers,
+        ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
+    )
+
+    # ref_key → {kp_ref, raw_number, short_number}
+    order_info: dict[str, dict] = {}
+    # kp_ref → list of order_refs
+    kp_to_orders: dict[str, list[str]] = {}
+
+    for batch in order_pages:
+        for item in batch:
+            base_type = str(item.get("ДокументОснование_Type") or "")
+            base_ref = str(item.get("ДокументОснование") or "")
+            order_ref = str(item.get("Ref_Key") or "")
+            if not order_ref:
+                continue
+            if base_ref and base_type.endswith("Document_КоммерческоеПредложениеКлиенту"):
+                raw_num = str(item.get("Number") or "")
+                short = "".join(ch for ch in raw_num if ch.isdigit()).lstrip("0") or ""
+                order_info[order_ref] = {"kp_ref": base_ref, "raw": raw_num, "short": short}
+                kp_to_orders.setdefault(base_ref, []).append(order_ref)
+
+    # Fall back to persistent order cache for entries not seen in this scan
+    if not orders_complete:
+        with _order_cache_lock:
+            for order_ref, entry in _order_to_kp_cache.items():
+                if order_ref not in order_info:
+                    kp_ref = entry.get("kp", "")
+                    if kp_ref:
+                        short = entry.get("num", "")
+                        order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short}
+                        kp_to_orders.setdefault(kp_ref, []).append(order_ref)
+
+    # Map kp_ref → КП display number
+    kp_number_map: dict[str, str] = {}
+    if _cached_rows:
+        for row in _cached_rows:
+            ref = str(row.get("refKey") or "")
+            num = str(row.get("number") or "")
+            if ref:
+                kp_number_map[ref] = _normalize_kp_number(num)
+
+    # --- payments ---
+    payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
+        "Document_ПоступлениеБезналичныхДенежныхСредств",
+        headers,
+        [
+            ["Ref_Key", "Date", "Number", "НазначениеПлатежа"],
+        ],
+        timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
+    )
+
+    # For each payment build: pay_short (cleaned number), purpose_number (extracted from НазначениеПлатежа)
+    pay_rows: list[dict] = []
+    for batch in payment_pages:
+        for item in batch:
+            pay_ref = str(item.get("Ref_Key") or "")
+            pay_raw = str(item.get("Number") or "")
+            pay_short = "".join(ch for ch in pay_raw if ch.isdigit()).lstrip("0") or pay_raw
+            purpose = str(item.get("НазначениеПлатежа") or "")
+            # Extract number from "УТ-198" / "ут 198" etc.
+            purpose_nums: list[str] = []
+            for m in re.finditer(r"[а-яa-z]*ут[\s\-_/]*0*(\d+)", purpose.lower()):
+                d = m.group(1).lstrip("0") or "0"
+                if d and d != "0":
+                    purpose_nums.append(d)
+            pay_rows.append({
+                "payRef": pay_ref,
+                "payShort": pay_short,
+                "purpose": purpose,
+                "purposeNums": purpose_nums,
+            })
+
+    # --- build table rows ---
+    table_rows: list[dict] = []
+
+    # For each order, try to match payments by purpose number
+    matched_pay_refs: set[str] = set()
+
+    # Build: order_short → list[order_ref] for quick lookup
+    short_to_orders: dict[str, list[str]] = {}
+    for oref, info in order_info.items():
+        s = info["short"]
+        if s:
+            short_to_orders.setdefault(s, []).append(oref)
+
+    for oref, info in sorted(order_info.items(), key=lambda x: x[1]["short"]):
+        kp_ref = info["kp_ref"]
+        kp_num = kp_number_map.get(kp_ref, "")
+        order_short = info["short"]
+        order_raw = info["raw"]
+
+        # Find payments that reference this order's number in their purpose
+        matched_payments = [
+            p for p in pay_rows
+            if order_short and order_short in p["purposeNums"]
+        ]
+
+        if matched_payments:
+            for pay in matched_payments:
+                matched_pay_refs.add(pay["payRef"])
+                table_rows.append({
+                    "kpNum": kp_num,
+                    "orderNum": order_short or order_raw,
+                    "payNum": pay["payShort"],
+                    "purposeNum": ", ".join(pay["purposeNums"]),
+                    "match": "СОВПАДЕНИЕ",
+                })
+        else:
+            # Order exists but no payment matched
+            table_rows.append({
+                "kpNum": kp_num,
+                "orderNum": order_short or order_raw,
+                "payNum": "",
+                "purposeNum": "",
+                "match": "",
+            })
+
+    # Payments that didn't match any order
+    for pay in pay_rows:
+        if pay["payRef"] not in matched_pay_refs:
+            table_rows.append({
+                "kpNum": "",
+                "orderNum": "",
+                "payNum": pay["payShort"],
+                "purposeNum": ", ".join(pay["purposeNums"]),
+                "match": "",
+            })
+
+    # Sort: matched first, then by kpNum asc
+    def _sort_key(r: dict):
+        match_flag = 0 if r["match"] == "СОВПАДЕНИЕ" else 1
+        try:
+            kp_int = int(r["kpNum"]) if r["kpNum"] else 99999
+        except ValueError:
+            kp_int = 99999
+        return (match_flag, kp_int, r["orderNum"], r["payNum"])
+
+    table_rows.sort(key=_sort_key)
+
+    return {
+        "ordersScanComplete": orders_complete,
+        "paymentsScanComplete": payments_complete,
+        "rows": table_rows,
+    }
+
+
 def resolve_customer_name_for_ref(
     ref_key: str,
     headers: dict,
@@ -4411,6 +4563,14 @@ async def admin_logout():
     response = JSONResponse({"ok": True})
     _clear_session_cookies(response)
     return response
+
+
+@app.get("/api/admin/payment-match-table")
+async def admin_payment_match_table(request: Request):
+    _require_admin(request)
+    headers = _build_headers()
+    result = await asyncio.to_thread(_build_payment_match_table, headers)
+    return {"ok": True, **result}
 
 
 @app.get("/api/admin/session")

@@ -19,6 +19,8 @@ function setMsg(node, text, isError = false) {
 function setLoggedIn(isLoggedIn) {
   loginCard.classList.toggle('hidden', isLoggedIn);
   editorCard.classList.toggle('hidden', !isLoggedIn);
+  const mc = document.getElementById('matchTableCard');
+  if (mc) mc.classList.toggle('hidden', !isLoggedIn);
 }
 
 function setPasswordVisibility(isVisible) {
@@ -133,3 +135,68 @@ if (togglePasswordBtn) {
   });
   setPasswordVisibility(false);
 }
+
+// ── Payment match table ─────────────────────────────────────────────────────
+
+const matchTableCard = document.getElementById('matchTableCard');
+const loadMatchTableBtn = document.getElementById('loadMatchTableBtn');
+
+function renderMatchTable(data) {
+  matchTableBody.innerHTML = '';
+  const rows = data.rows || [];
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const isMatch = r.match === 'СОВПАДЕНИЕ';
+    if (isMatch) tr.classList.add('match-row');
+
+    const kpCell = document.createElement('td');
+    kpCell.textContent = r.kpNum || '';
+    if (r.kpNum) kpCell.classList.add('kp-cell');
+    else kpCell.classList.add('empty');
+
+    const orderCell = document.createElement('td');
+    orderCell.textContent = r.orderNum || '';
+    if (!r.orderNum) orderCell.classList.add('empty');
+
+    const payCell = document.createElement('td');
+    payCell.textContent = r.payNum || '';
+    if (!r.payNum) payCell.classList.add('empty');
+
+    const purposeCell = document.createElement('td');
+    purposeCell.textContent = r.purposeNum || '';
+    if (!r.purposeNum) purposeCell.classList.add('empty');
+
+    const matchCell = document.createElement('td');
+    matchCell.textContent = r.match || '';
+    if (isMatch) matchCell.classList.add('match-cell');
+
+    tr.append(kpCell, orderCell, payCell, purposeCell, matchCell);
+    matchTableBody.appendChild(tr);
+  });
+
+  const total = rows.length;
+  const matched = rows.filter(r => r.match === 'СОВПАДЕНИЕ').length;
+  matchTableStatus.textContent =
+    `Всего строк: ${total} | Совпадений: ${matched} | ` +
+    `Заказы: скан ${data.ordersScanComplete ? 'полный' : 'неполный'}, ` +
+    `Платежи: скан ${data.paymentsScanComplete ? 'полный' : 'неполный'}`;
+}
+
+loadMatchTableBtn && loadMatchTableBtn.addEventListener('click', async () => {
+  try {
+    loadMatchTableBtn.disabled = true;
+    loadMatchTableBtn.textContent = 'Загружаю...';
+    matchTableStatus.textContent = 'Идёт сканирование 1С — это может занять 1–2 минуты...';
+    matchTableWrap.classList.remove('hidden');
+    matchTableBody.innerHTML = '';
+
+    const data = await api('/api/admin/payment-match-table');
+    renderMatchTable(data);
+  } catch (err) {
+    matchTableStatus.textContent = `Ошибка: ${err.message}`;
+  } finally {
+    loadMatchTableBtn.disabled = false;
+    loadMatchTableBtn.textContent = 'Загрузить таблицу';
+  }
+});
