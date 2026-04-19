@@ -3797,22 +3797,6 @@ async def on_startup() -> None:
     if not _cached_rows:
         _cached_rows = load_seed_rows()
     
-    # Pre-seed order→KP mappings from known data (for КП 229 and others where Document_ЗаказКлиента unavailable)
-    # These are HARDCODED based on 1C export analysis: КП229 → orders УТ-198, УТ-199
-    _load_order_cache()  # Load from disk if exists
-    kp229_ref = "6c133ed3-2290-11f1-8d55-bc97e15eb091"
-    if not _order_to_kp_cache:
-        # Seed with known order→KP mappings: payment docs ПСУТ-000116/117 match orders УТ-198/199 → КП229
-        _order_to_kp_cache = {
-            # These refs are placeholders for order ПСУТ-000198 and ПСУТ-000199 (exact refs vary by 1C config)
-            # The matching works via НазначениеПлатежа text pattern "УТ-198"/"УТ-199"
-            "ordre-ut-198": {"kp": kp229_ref, "num": "198", "compact": "ut198"},
-            "ordre-ut-199": {"kp": kp229_ref, "num": "199", "compact": "ut199"},
-        }
-        with _order_cache_lock:
-            _save_order_cache()
-        log("[startup] pre-seeded order→KP cache with known КП229 orders")
-    
     # Enrich loaded rows with group flags (orders/invoices/payments) — no blocking
     # but essential for payment detection to work without requiring separate refresh
     try:
