@@ -3901,8 +3901,6 @@ async def debug_logs():
     return {"lines": list(_log_buffer)}
 
 
-@app.get("/api/debug/odata-test")
-async def debug_odata_test():
 @app.get("/api/debug/orders-test")
 async def debug_orders_test():
     """Test Document_ЗаказКлиента fetch strategies for KP 229."""
