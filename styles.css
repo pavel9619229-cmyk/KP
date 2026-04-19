@@ -91,15 +91,18 @@ body {
 
 .controls {
   margin-top: 20px;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: minmax(240px, 1fr) 220px 220px repeat(7, max-content);
+  align-items: end;
 }
 
 .controls label {
   display: grid;
   gap: 6px;
   font-size: 0.92rem;
+  min-width: 180px;
+  flex: 1 1 180px;
 }
 
 input,
@@ -357,7 +360,8 @@ body.dark .tag {
 
 @media (max-width: 860px) {
   .controls {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   #rulesStorageBtn {
