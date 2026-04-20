@@ -744,14 +744,28 @@ def _push_access_rights_to_github(payload: dict) -> None:
 def _push_runtime_cache_to_github(rows: list, meta_payload: dict | None = None) -> None:
     """Push kp_runtime_cache.json + kp_runtime_meta.json to GitHub so enriched
     data survives the next Render deploy. Throttled to once per hour. [skip ci]."""
+    _push_runtime_cache_to_github_sync(rows, meta_payload)
+
+
+def _push_runtime_cache_to_github_sync(
+    rows: list,
+    meta_payload: dict | None = None,
+    *,
+    force: bool = False,
+) -> bool:
+    """Synchronously push kp_runtime_cache.json + kp_runtime_meta.json to GitHub.
+
+    Returns True only when both files are updated successfully.
+    """
     global _last_cache_push
 
     if not GITHUB_TOKEN or not GITHUB_REPO:
-        return
+        log("GitHub cache push skipped: GITHUB_TOKEN or GITHUB_REPO not set")
+        return False
 
     now = datetime.now()
-    if _last_cache_push and (now - _last_cache_push).total_seconds() < CACHE_PUSH_MIN_INTERVAL:
-        return  # throttled
+    if not force and _last_cache_push and (now - _last_cache_push).total_seconds() < CACHE_PUSH_MIN_INTERVAL:
+        return False
 
     gh_headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -759,7 +773,7 @@ def _push_runtime_cache_to_github(rows: list, meta_payload: dict | None = None) 
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    def _push_one(file_path: str, content_bytes: bytes, label: str) -> None:
+    def _push_one(file_path: str, content_bytes: bytes, label: str) -> bool:
         api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
         content_b64 = base64.b64encode(content_bytes).decode("ascii")
         current_sha = ""
@@ -781,20 +795,69 @@ def _push_runtime_cache_to_github(rows: list, meta_payload: dict | None = None) 
             r = requests.put(api_url, headers=gh_headers, json=body, timeout=20)
             if r.status_code in (200, 201):
                 log(f"GitHub cache push OK: {label}")
-            else:
-                log(f"GitHub cache push failed ({label}): HTTP {r.status_code}: {r.text[:200]}")
+                return True
+            log(f"GitHub cache push failed ({label}): HTTP {r.status_code}: {r.text[:200]}")
+            return False
         except Exception as exc:
             log(f"GitHub cache push error ({label}): {exc}")
+            return False
 
     try:
         cache_bytes = json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8")
-        _push_one("data/kp_runtime_cache.json", cache_bytes, "kp_runtime_cache.json")
+        cache_ok = _push_one("data/kp_runtime_cache.json", cache_bytes, "kp_runtime_cache.json")
         meta = meta_payload or {"generatedAt": now.isoformat(), "rowCount": len(rows)}
         meta_bytes = json.dumps(meta, ensure_ascii=False, indent=2).encode("utf-8")
-        _push_one("data/kp_runtime_meta.json", meta_bytes, "kp_runtime_meta.json")
-        _last_cache_push = now
+        meta_ok = _push_one("data/kp_runtime_meta.json", meta_bytes, "kp_runtime_meta.json")
+        if cache_ok and meta_ok:
+            _last_cache_push = now
+            return True
+        return False
     except Exception as exc:
         log(f"GitHub cache push unexpected error: {exc}")
+        return False
+
+
+def _write_runtime_snapshot_files(rows: list, meta_payload: dict) -> None:
+    runtime_path = Path(RUNTIME_DATA_FILE)
+    runtime_meta_path = Path(RUNTIME_META_FILE)
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_meta_path.parent.mkdir(parents=True, exist_ok=True)
+
+    normalized_rows = []
+    for row in list(rows or []):
+        copied = dict(row)
+        apply_storage_defaults(copied)
+        normalized_rows.append(copied)
+
+    with runtime_path.open("w", encoding="utf-8") as f:
+        json.dump(normalized_rows, f, ensure_ascii=False, indent=2)
+    with runtime_meta_path.open("w", encoding="utf-8") as f:
+        json.dump(meta_payload or {}, f, ensure_ascii=False, indent=2)
+
+
+def _sync_runtime_cache_via_github_or_raise() -> tuple[list, dict]:
+    rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+    if not rows:
+        raise RuntimeError("runtime snapshot is empty after 1C refresh")
+
+    meta = _read_runtime_meta()
+    if not meta:
+        raise RuntimeError("runtime metadata is missing after 1C refresh")
+
+    pushed = _push_runtime_cache_to_github_sync(rows, meta, force=True)
+    if not pushed:
+        raise RuntimeError("GitHub runtime sync failed")
+
+    github_rows = _load_runtime_rows_from_github()
+    if not github_rows:
+        raise RuntimeError("GitHub runtime readback returned no rows")
+
+    github_meta = _load_runtime_meta_from_github()
+    if not github_meta:
+        raise RuntimeError("GitHub runtime meta readback failed")
+
+    _write_runtime_snapshot_files(github_rows, github_meta)
+    return github_rows, github_meta
 
 
 def _load_runtime_rows_from_github() -> list:
@@ -3619,6 +3682,7 @@ def refresh_cache_and_file(
     include_stage6: bool = True,
     page_size: int = 300,
     use_known_cache: bool = True,
+    push_to_github: bool = True,
 ) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
     refresh_started_at = datetime.now(timezone.utc)
@@ -3639,6 +3703,7 @@ def refresh_cache_and_file(
                     fetched,
                     refresh_started_at=refresh_started_at,
                     write_source="full-refresh",
+                    push_to_github=push_to_github,
                 )
                 if not saved:
                     latest_rows = load_fresh_runtime_rows()
@@ -3684,6 +3749,7 @@ def refresh_cache_and_file(
                             partial_rows,
                             refresh_started_at=refresh_started_at,
                             write_source="full-refresh-partial-fallback",
+                            push_to_github=push_to_github,
                         )
                         if not saved:
                             latest_rows = load_fresh_runtime_rows()
@@ -4130,14 +4196,28 @@ async def manual_refresh(request: Request):
         )
 
     async def _run_manual_refresh() -> None:
+        global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"manual refresh requested by {username} from {client_host}")
         try:
+            previous_rows = _load_runtime_rows_from_github() or load_fresh_runtime_rows() or list(_cached_rows)
+            previous_meta = _load_runtime_meta_from_github() or _read_runtime_meta() or {
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "rowCount": len(previous_rows),
+            }
+            previous_last_refresh = _last_refresh
+
             await asyncio.wait_for(
                 # Run full pipeline refresh from 1C and rebuild runtime cache.
-                asyncio.to_thread(refresh_cache_and_file),
+                asyncio.to_thread(refresh_cache_and_file, True, True, 300, True, False),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
+
+            github_rows, _ = await asyncio.to_thread(_sync_runtime_cache_via_github_or_raise)
+            _cached_rows = list(github_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _last_refresh_error = None
             ok = bool(_cached_rows) and not _last_refresh_error
             error_text = None if ok else str(_last_refresh_error or "refresh failed")
             _set_manual_refresh_state(lastOk=ok, lastError=error_text)
@@ -4145,7 +4225,7 @@ async def manual_refresh(request: Request):
             if ok:
                 log(
                     "manual refresh finished: "
-                    f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, user={username}, host={client_host}"
+                    f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, source=github-readback, user={username}, host={client_host}"
                 )
             else:
                 payload = {
@@ -4156,12 +4236,17 @@ async def manual_refresh(request: Request):
                 }
                 log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
         except Exception as exc:
+            _cached_rows = list(previous_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _write_runtime_snapshot_files(_cached_rows, previous_meta)
+            _last_refresh = previous_last_refresh
+            _last_refresh_error = str(exc)
             if isinstance(exc, asyncio.TimeoutError):
                 _set_manual_refresh_state(lastOk=False, lastError="manual refresh timed out")
                 log("manual refresh timed out")
             else:
                 _set_manual_refresh_state(lastOk=False, lastError=str(exc))
-                log(f"manual refresh crashed: {type(exc).__name__}: {exc}")
+                log(f"manual refresh crashed and rolled back to previous snapshot: {type(exc).__name__}: {exc}")
         finally:
             _set_manual_refresh_state(
                 running=False,
