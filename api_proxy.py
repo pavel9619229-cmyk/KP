@@ -2321,9 +2321,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                     if order_type == "StandardODATA.Document_ЗаказКлиента" and order_ref in target_order_refs:
                         invoice_order_refs.add(order_ref)
 
-    payment_order_refs: set[str] = set()
-    # UI block3-equivalent: KP is matched if any linked order number is present
-    # in purposeNums extracted from payment purpose text.
+    # Strict block3 rule: KP is matched only when any linked order number
+    # is present in purpose numbers extracted from payment purpose text.
     block3_ui_kp_hits: set[str] = set()
     purpose_num_set: set[str] = set()
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
@@ -2378,51 +2377,10 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     for batch in payment_pages:
         for item in batch:
-            settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
-            if settlement_order in target_order_refs:
-                payment_order_refs.add(settlement_order)
-                continue
-
-            direct_order = str(item.get("ЗаказКлиента") or "")
-            direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
-            if direct_order in target_order_refs and (
-                not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")
-            ):
-                payment_order_refs.add(direct_order)
-                continue
-
-            base_type = str(item.get("ДокументОснование_Type") or "")
-            base_ref = str(item.get("ДокументОснование") or "")
-            if base_ref in target_order_refs and base_type.endswith("Document_ЗаказКлиента"):
-                payment_order_refs.add(base_ref)
-                continue
-
-            breakdown_order_refs = _extract_order_refs_from_payment_breakdown(item)
-            if breakdown_order_refs:
-                matched_breakdown_ref = next((ref for ref in breakdown_order_refs if ref in target_order_refs), "")
-                if matched_breakdown_ref:
-                    payment_order_refs.add(matched_breakdown_ref)
-                    continue
-
-            # Fallback for 1C group documents: payment purpose often references short order number.
-            # Match compact full order number first (e.g. "ПСУТ-000226" -> "псут000226"),
-            # then explicit "...ут-<number>" style to avoid broad false positives.
             purpose = str(item.get("НазначениеПлатежа") or "").lower()
             if not purpose:
                 continue
-            purpose_compact = "".join(ch for ch in purpose if ch.isalnum())
-            for order_ref, digits_trim in order_short_numbers.items():
-                if order_ref in payment_order_refs:
-                    continue
-                compact_order = order_compact_numbers.get(order_ref, "")
-                if compact_order and compact_order in purpose_compact:
-                    payment_order_refs.add(order_ref)
-                    break
-                if re.search(rf"\b(?:[а-яa-z]*ут)[\s\-_/]*0*{re.escape(digits_trim)}\b", purpose):
-                    payment_order_refs.add(order_ref)
-                    break
-
-            # Extract purpose numbers exactly as in admin payment-match table block2.
+            # Extract purpose numbers exactly as in admin block3 payment-match table.
             for m in re.finditer(r"[а-яa-z]*ут[\s\-_/]*0*(\d+)", purpose):
                 purpose_num = (m.group(1) or "").lstrip("0")
                 if purpose_num:
@@ -2435,11 +2393,6 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         kp_ref = order_to_kp.get(order_ref)
         if kp_ref:
             kp_invoice_map[kp_ref] = True
-
-    for order_ref in payment_order_refs:
-        kp_ref = order_to_kp.get(order_ref)
-        if kp_ref:
-            kp_payment_map[kp_ref] = True
 
     # Apply block3 UI logic: KP is in block3 when any of its order numbers
     # appears in purposeNum set extracted from payment purposes.
