@@ -2424,8 +2424,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             elif kp_invoice_map.get(kp_ref, False):
                 # Partial orders/invoices scan: only upgrade to True; do not force False.
                 row["invoiceCreated"] = True
-
-                row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+            row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
 
 
 def _normalize_kp_number(value: str) -> str:
