@@ -2382,7 +2382,10 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
     if not payments_complete and not payment_pages:
-        return
+        # Payment scan completely failed — no data to confirm any payment.
+        # Continue to row update loop so stale cached True values are reset to False,
+        # consistent with Block 3 showing "нет совпадений" when data unavailable.
+        log("[payments] scan completely unavailable; treating all KPs as unpaid (no stale cache)")
 
     for batch in payment_pages:
         for item in batch:
