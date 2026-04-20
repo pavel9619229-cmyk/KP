@@ -873,7 +873,7 @@ function renderBoard() {
 
 function fillManagers(data) {
   const selectedManager = managerFilter.value;
-  managerFilter.innerHTML = '<option value="">ПРОДАВЦЫ</option>';
+  managerFilter.innerHTML = '<option value="">ВСЕ</option>';
 
   const managers = [...new Set((data || []).map((row) => getManagerName(row)))].sort((a, b) => a.localeCompare(b, 'ru'));
   for (const manager of managers) {

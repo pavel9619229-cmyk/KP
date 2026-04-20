@@ -133,7 +133,7 @@ body.light .updated-at-inline {
 
 .search-box input::placeholder {
   color: #fff;
-  font-weight: 800;
+  font-weight: 400;
   opacity: 1;
 }
 
