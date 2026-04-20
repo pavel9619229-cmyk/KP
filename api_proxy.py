@@ -2200,14 +2200,6 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         return
 
     kp_ref_set = set(target_refs)
-    # Rule 4 (loading rules): if KP number appears in block 3 (payment purpose),
-    # paymentReceived for that KP must be promoted to True.
-    kp_number_to_refs: dict[str, set[str]] = {}
-    for row in rows:
-        kp_ref = str(row.get("refKey") or "")
-        kp_number = _normalize_kp_number(str(row.get("number") or ""))
-        if kp_ref and kp_number:
-            kp_number_to_refs.setdefault(kp_number, set()).add(kp_ref)
 
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
@@ -2326,7 +2318,10 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                         invoice_order_refs.add(order_ref)
 
     payment_order_refs: set[str] = set()
-    block3_kp_hits: set[str] = set()
+    # UI block3-equivalent: KP is matched if any linked order number is present
+    # in purposeNums extracted from payment purpose text.
+    block3_ui_kp_hits: set[str] = set()
+    purpose_num_set: set[str] = set()
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
@@ -2423,15 +2418,11 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                     payment_order_refs.add(order_ref)
                     break
 
-            # Block 3 rule: purpose may directly contain KP number (e.g. "ут-229").
-            # If so, promote paymentReceived for that KP regardless of order-link availability.
+            # Extract purpose numbers exactly as in UI block2 to build block3 matches.
             for m in re.finditer(r"\b(?:[а-яa-z]*ут)[\s\-_/]*0*(\d+)\b", purpose):
-                kp_num = (m.group(1) or "").lstrip("0")
-                if not kp_num:
-                    continue
-                for kp_ref in kp_number_to_refs.get(kp_num, set()):
-                    if kp_ref in kp_ref_set:
-                        block3_kp_hits.add(kp_ref)
+                purpose_num = (m.group(1) or "").lstrip("0")
+                if purpose_num:
+                    purpose_num_set.add(purpose_num)
 
     kp_invoice_map = {kp: False for kp in kp_ref_set}
     kp_payment_map = {kp: False for kp in kp_ref_set}
@@ -2446,8 +2437,16 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         if kp_ref:
             kp_payment_map[kp_ref] = True
 
-    # Apply block-3 direct KP-number hits from payment purpose.
-    for kp_ref in block3_kp_hits:
+    # Apply block3 UI logic: KP is in block3 when any of its order numbers
+    # appears in purposeNum set extracted from payment purposes.
+    for order_ref, order_num in order_short_numbers.items():
+        if not order_num or order_num not in purpose_num_set:
+            continue
+        kp_ref = order_to_kp.get(order_ref)
+        if kp_ref and kp_ref in kp_ref_set:
+            block3_ui_kp_hits.add(kp_ref)
+
+    for kp_ref in block3_ui_kp_hits:
         kp_payment_map[kp_ref] = True
 
     for row in rows:
