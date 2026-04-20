@@ -2210,6 +2210,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         "Document_ЗаказКлиента",
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
+        page_size=50,
+        timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
     log(f"[orders] scan: complete={orders_complete}, pages={len(order_pages)}, rows={sum(len(p) for p in order_pages)}")
     _load_order_cache()
@@ -2306,6 +2308,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             "Document_РеализацияТоваровУслуг",
             headers,
             ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
+            page_size=50,
+            timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
         )
         if not invoices_complete and not invoice_pages:
             log("[invoices] scan unavailable; keeping invoiceCreated as-is")
