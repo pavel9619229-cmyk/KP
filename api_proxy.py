@@ -2439,15 +2439,32 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     # Apply block3 UI logic: KP is in block3 when any of its order numbers
     # appears in purposeNum set extracted from payment purposes.
-    for order_ref, order_num in order_short_numbers.items():
-        if not order_num or order_num not in purpose_num_set:
-            continue
-        kp_ref = order_to_kp.get(order_ref)
-        if kp_ref and kp_ref in kp_ref_set:
-            block3_ui_kp_hits.add(kp_ref)
+    # This works only when orders_complete=True; for incomplete scans use fallback.
+    if orders_complete:
+        for order_ref, order_num in order_short_numbers.items():
+            if not order_num or order_num not in purpose_num_set:
+                continue
+            kp_ref = order_to_kp.get(order_ref)
+            if kp_ref and kp_ref in kp_ref_set:
+                block3_ui_kp_hits.add(kp_ref)
 
-    for kp_ref in block3_ui_kp_hits:
-        kp_payment_map[kp_ref] = True
+        for kp_ref in block3_ui_kp_hits:
+            kp_payment_map[kp_ref] = True
+    else:
+        # Fallback: when orders are incomplete, directly match КП numbers in payment purposes.
+        # Build КП number → ref map for quick lookup.
+        kp_number_to_refs: dict[str, set[str]] = {}
+        for row in rows:
+            kp_ref = str(row.get("refKey") or "")
+            kp_number = _normalize_kp_number(str(row.get("number") or ""))
+            if kp_ref and kp_number:
+                kp_number_to_refs.setdefault(kp_number, set()).add(kp_ref)
+        
+        # Match КП numbers extracted from payment purposes.
+        for kp_num in purpose_num_set:
+            for kp_ref in kp_number_to_refs.get(kp_num, set()):
+                if kp_ref in kp_ref_set:
+                    kp_payment_map[kp_ref] = True
 
     for row in rows:
         kp_ref = row.get("refKey")
