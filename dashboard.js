@@ -133,7 +133,7 @@ managerFilter.addEventListener('change', () => {
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ';
   const pollIntervalMs = 2000;
-  // Backend manual refresh timeout is now 600s (10 min) to handle slow 1C API read timeouts.
+  // Backend manual refresh timeout is now 900s (15 min) to handle slow 1C API read timeouts.
   const maxWaitMs = 900000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   const isAdmin = String(currentUserRole || '').toLowerCase() === 'admin';
@@ -152,7 +152,7 @@ refreshBtn.addEventListener('click', async () => {
       return;
     }
     const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-    updatedAtLabel.textContent = `ИДЕТ ОБНОВЛЕНИЕ · ${formatElapsed(elapsedSec)}`;
+    updatedAtLabel.textContent = formatElapsed(elapsedSec);
   };
 
   refreshBtn.disabled = true;
