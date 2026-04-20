@@ -4556,6 +4556,30 @@ async def debug_logs():
     return {"lines": list(_log_buffer)}
 
 
+@app.get("/api/debug/runtime-state")
+async def debug_runtime_state():
+    """Show current runtime cache state and GitHub pointer for diagnostics."""
+    local_pointer = _read_runtime_current_pointer()
+    local_meta = _read_runtime_meta()
+    github_pointer = await asyncio.to_thread(_load_runtime_current_pointer_from_github)
+    return {
+        "cachedRows": len(_cached_rows),
+        "cachedFp": _cached_fp[:12] if _cached_fp else None,
+        "lastRefresh": _last_refresh,
+        "lastRefreshError": _last_refresh_error,
+        "manualRefreshState": dict(_manual_refresh_state),
+        "localMeta": local_meta,
+        "localPointer": local_pointer,
+        "githubPointer": github_pointer,
+        "githubRuntimeBranch": _github_runtime_ref(),
+        "githubRuntimeCurrentPath": GITHUB_RUNTIME_CURRENT_PATH,
+        "githubRuntimeVersionsDir": GITHUB_RUNTIME_VERSIONS_DIR,
+        "githubRepo": GITHUB_REPO,
+        "githubTokenSet": bool(GITHUB_TOKEN),
+        "logTail": list(_log_buffer)[-30:],
+    }
+
+
 @app.get("/api/debug/orders-test")
 async def debug_orders_test():
     """Test Document_ЗаказКлиента fetch strategies for KP 229."""
