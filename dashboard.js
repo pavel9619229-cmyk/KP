@@ -104,6 +104,7 @@ let activeTab = ALL_TAB_KEY;
 let lastFingerprint = '';
 let lastSyncAt = null;
 let statusRules = createDefaultStatusRules();
+let currentUserRole = 'manager';
 
 initTheme();
 
@@ -667,6 +668,39 @@ function formatUpdatedAt(value) {
   });
 }
 
+function formatUpdatedAtForRole(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return 'Нет данных';
+  }
+  if (String(currentUserRole || '').toLowerCase() === 'admin') {
+    return formatUpdatedAt(value);
+  }
+  return 'Обновлено';
+}
+
+async function loadCurrentUserRole() {
+  try {
+    const response = await fetch('/api/auth/session', {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+    if (!response.ok) {
+      currentUserRole = 'manager';
+      return;
+    }
+    const payload = await response.json().catch(() => ({}));
+    const role = String(payload?.user?.role || '').trim().toLowerCase();
+    currentUserRole = role || 'manager';
+  } catch {
+    currentUserRole = 'manager';
+  }
+}
+
 function buildMetaChips(row) {
   const chips = [];
 
@@ -780,7 +814,7 @@ function renderBoard() {
 
   renderTabs(counts, rowsForCounts.length);
 
-  updatedAtLabel.textContent = formatUpdatedAt(lastSyncAt);
+  updatedAtLabel.textContent = formatUpdatedAtForRole(lastSyncAt);
 
   if (!filtered.length) {
     boardContent.innerHTML = '<div class="board-empty">По текущему фильтру подходящих КП нет.</div>';
@@ -941,6 +975,7 @@ function connectWebSocket() {
 
 async function init() {
   updateClearSearchButton();
+  await loadCurrentUserRole();
   await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();
