@@ -4069,10 +4069,20 @@ async def dashboard(request: Request):
 
 @app.get("/admin/dashboard")
 async def admin_dashboard(request: Request):
-    try:
-        user = _get_user_from_request(request)
-    except HTTPException:
-        return RedirectResponse(url="/login", status_code=302)
+    # Prefer explicit admin session cookie to avoid mixed-cookie downgrade
+    # (e.g. old manager user-session + fresh admin-session in same browser).
+    admin_username = _get_admin_username(request)
+    if admin_username:
+        user = {
+            "username": admin_username,
+            "role": "admin",
+            "allowedManagers": "*",
+        }
+    else:
+        try:
+            user = _get_user_from_request(request)
+        except HTTPException:
+            return RedirectResponse(url="/login", status_code=302)
 
     role = str(user.get("role") or "manager").lower()
     if role != "admin":
@@ -4090,15 +4100,14 @@ async def admin_dashboard(request: Request):
 
     # Keep frontend auth flows consistent: admin dashboard also gets user-session cookie.
     # This avoids blank UI when only admin cookie is present (e.g. after /api/admin/login).
-    if not request.cookies.get(USER_SESSION_COOKIE):
-        response.set_cookie(
-            key=USER_SESSION_COOKIE,
-            value=_issue_user_token(str(user.get("username") or "")),
-            httponly=True,
-            samesite="lax",
-            secure=True,
-            max_age=max(300, USER_SESSION_TTL_SECONDS),
-        )
+    response.set_cookie(
+        key=USER_SESSION_COOKIE,
+        value=_issue_user_token(str(user.get("username") or "")),
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        max_age=max(300, USER_SESSION_TTL_SECONDS),
+    )
 
     return response
 
