@@ -75,6 +75,14 @@ const STATUS_ORDER = [
   'ОБРАБОТАТЬ',
 ];
 
+function isCurrentOriginSource(url) {
+  try {
+    return new URL(url, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 const STATUS_LABELS_COMPACT = {
   '__all__': 'Все',
   'ПРОБЛЕМА': 'Пробл.',
@@ -833,9 +841,12 @@ async function loadRows() {
   for (const src of sources) {
     try {
       const nextResponse = await fetch(src, { cache: 'no-store', credentials: 'include' });
-      if (nextResponse.status === 401) {
+      if (nextResponse.status === 401 && isCurrentOriginSource(src)) {
         window.location.href = '/login';
         return [];
+      }
+      if (nextResponse.status === 401) {
+        throw new Error('Unauthorized fallback source');
       }
       if (!nextResponse.ok) {
         throw new Error(`HTTP ${nextResponse.status}`);

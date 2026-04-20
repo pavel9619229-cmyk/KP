@@ -75,6 +75,14 @@ const RULE_FIELDS = new Set([
   'productSpecified',
   'priceFilled',
 ]);
+
+function isCurrentOriginSource(url) {
+  try {
+    return new URL(url, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
 const RULE_FIELD_ALIASES = new Map([
   ['problem', 'problem'],
   ['проблема', 'problem'],
@@ -438,10 +446,11 @@ async function loadVersionInfo() {
   for (const src of sources) {
     try {
       const r = await fetch(src, { cache: 'no-store', credentials: 'include' });
-      if (r.status === 401) {
+      if (r.status === 401 && isCurrentOriginSource(src)) {
         window.location.href = '/login';
         return null;
       }
+      if (r.status === 401) throw new Error('Unauthorized fallback source');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       response = r;
       break;
@@ -891,10 +900,11 @@ async function loadRows() {
   for (const src of sources) {
     try {
       const r = await fetch(src, { cache: 'no-store', credentials: 'include' });
-      if (r.status === 401) {
+      if (r.status === 401 && isCurrentOriginSource(src)) {
         window.location.href = '/login';
         return [];
       }
+      if (r.status === 401) throw new Error('Unauthorized fallback source');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       response = r;
       break;
