@@ -161,11 +161,18 @@ refreshBtn.addEventListener('click', async () => {
   refreshTimerId = setInterval(setRefreshingLabel, 1000);
 
   try {
-    const startResponse = await fetch('/api/kp/refresh', {
-      method: 'POST',
-      credentials: 'include',
-      cache: 'no-store',
-    });
+    // If server is sleeping (Render cold start), wait up to 90s for it to wake before starting
+    let startResponse;
+    for (let wake = 0; wake < 45; wake += 1) {
+      startResponse = await fetch('/api/kp/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (startResponse.status !== 503) break;
+      refreshBtn.textContent = `Сервер просыпается... (${(wake + 1) * 2}с)`;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
 
     if (startResponse.status === 401) {
       window.location.href = '/login';
@@ -194,13 +201,25 @@ refreshBtn.addEventListener('click', async () => {
           window.location.href = '/login';
           return;
         }
+        if (stateResponse.status === 503) {
+          // Server is waking up (Render cold start) — wait up to 90 seconds
+          consecutiveStatusErrors += 1;
+          refreshBtn.textContent = `Сервер просыпается... (${consecutiveStatusErrors * 2}с)`;
+          if (consecutiveStatusErrors >= 45) {
+            throw new Error('Сервер не отвечает после 90 секунд ожидания');
+          }
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
+        }
         if (!stateResponse.ok) {
           throw new Error(`HTTP ${stateResponse.status}`);
         }
         statePayload = await stateResponse.json().catch(() => ({}));
         lastState = statePayload;
         consecutiveStatusErrors = 0;
+        setRefreshingLabel();
       } catch (statusError) {
+        if (statusError.message.startsWith('Сервер не отвечает')) throw statusError;
         consecutiveStatusErrors += 1;
         if (consecutiveStatusErrors >= 5) {
           throw new Error(`Ошибка статуса обновления: ${statusError.message}`);
