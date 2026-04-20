@@ -32,6 +32,7 @@
       <button id="darkBtn" type="button">🌙 Тёмный фон</button>
       <button id="rulesBtn" type="button">Правила статусов</button>
       <button id="loadingRulesBtn" type="button">ПРАВИЛА ЗАГРУЗКИ</button>
+      <button id="copilotRulesBtn" type="button">ПРАВИЛА ОГРАНИЧЕНИЯ ДЛЯ COPILOT</button>
       <button id="versionNumbersBtn" type="button">НОМЕРА ВЕРСИЙ ЗАГРУЗКИ</button>
       <button id="rulesStorageBtn" type="button">МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ</button>
       <button id="payMatchBtn" type="button">СОПОСТАВЛЕНИЕ ПЛАТЕЖЕЙ</button>
@@ -69,6 +70,35 @@
   4.3) При ошибке/неполной загрузке из 1С ранее выставленные флаги не обнуляются.
 5) После загрузки данные сохраняются в runtime-кеш и отдаются в дашборд.
 6) При ошибке загрузки старые данные не считаются подтвержденным обновлением.</textarea>
+      </div>
+    </section>
+
+    <section id="copilotRulesPanel" class="rules-panel" hidden aria-label="Правила ограничения для Copilot">
+      <div class="rules-storage-block">
+        <strong>правила ограничения для copilot</strong>
+        <textarea
+          id="copilotRulesInput"
+          class="rules-storage-input"
+          rows="16"
+          spellcheck="false"
+          readonly
+        >1. Адрес хранения файла:
+   c:\Users\Server\Documents\API\.github\copilot-instructions.md
+
+2. Путь в репозитории:
+   .github/copilot-instructions.md
+
+3. Правила простым языком:
+   - Не менять загрузку из 1С без прямого указания пользователя.
+   - Не менять refresh, timeout, polling, маршрут кнопки "Обновить" и фронтенд, если задача не про это.
+   - Если задача касается статуса, менять только логику вычисления этого статуса.
+   - Если пользователь явно указал источник данных для статуса, использовать только этот источник.
+   - Для статуса "Оплата получена" брать данные только из блока 3 на странице /admin/dashboard, если пользователь не указал иное.
+   - Не расширять область изменений по собственной инициативе.
+   - Если предполагаемая причина лежит вне указанного слоя, сначала остановиться и спросить пользователя.
+   - Перед правками сначала фиксировать границы: "Меняю только" и "Не трогаю".
+   - Если пользователь просит только анализ, не вносить изменения до подтверждения.
+   - Любое отклонение от указанных пользователем границ считать ошибкой.</textarea>
       </div>
     </section>
 
@@ -193,6 +223,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ const resetBtn = document.getElementById('resetBtn');
 const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
 const loadingRulesBtn = document.getElementById('loadingRulesBtn');
+const copilotRulesBtn = document.getElementById('copilotRulesBtn');
 const versionNumbersBtn = document.getElementById('versionNumbersBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const payMatchBtn = document.getElementById('payMatchBtn');
@@ -19,6 +20,7 @@ const payMatchBlock2Body = document.getElementById('payMatchBlock2Body');
 const payMatchBlock3Body = document.getElementById('payMatchBlock3Body');
 const rulesPanel = document.getElementById('rulesPanel');
 const loadingRulesPanel = document.getElementById('loadingRulesPanel');
+const copilotRulesPanel = document.getElementById('copilotRulesPanel');
 const versionNumbersPanel = document.getElementById('versionNumbersPanel');
 const rulesStoragePanel = document.getElementById('rulesStoragePanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
@@ -1041,6 +1043,16 @@ loadingRulesBtn?.addEventListener('click', () => {
     loadingRulesPanel.hidden = false;
   } else {
     loadingRulesPanel.hidden = true;
+  }
+});
+
+copilotRulesBtn?.addEventListener('click', () => {
+  if (copilotRulesPanel?.hidden) {
+    copilotRulesPanel.hidden = false;
+    copilotRulesBtn.textContent = 'СКРЫТЬ ПРАВИЛА ОГРАНИЧЕНИЯ ДЛЯ COPILOT';
+  } else {
+    copilotRulesPanel.hidden = true;
+    copilotRulesBtn.textContent = 'ПРАВИЛА ОГРАНИЧЕНИЯ ДЛЯ COPILOT';
   }
 });
 
