@@ -8,6 +8,7 @@ const darkBtn = document.getElementById('darkBtn');
 const rulesBtn = document.getElementById('rulesBtn');
 const loadingRulesBtn = document.getElementById('loadingRulesBtn');
 const copilotRulesBtn = document.getElementById('copilotRulesBtn');
+const requestTemplateBtn = document.getElementById('requestTemplateBtn');
 const versionNumbersBtn = document.getElementById('versionNumbersBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const payMatchBtn = document.getElementById('payMatchBtn');
@@ -21,6 +22,7 @@ const payMatchBlock3Body = document.getElementById('payMatchBlock3Body');
 const rulesPanel = document.getElementById('rulesPanel');
 const loadingRulesPanel = document.getElementById('loadingRulesPanel');
 const copilotRulesPanel = document.getElementById('copilotRulesPanel');
+const requestTemplatePanel = document.getElementById('requestTemplatePanel');
 const versionNumbersPanel = document.getElementById('versionNumbersPanel');
 const rulesStoragePanel = document.getElementById('rulesStoragePanel');
 const closeRulesBtn = document.getElementById('closeRulesBtn');
@@ -1053,6 +1055,16 @@ copilotRulesBtn?.addEventListener('click', () => {
   } else {
     copilotRulesPanel.hidden = true;
     copilotRulesBtn.textContent = 'ПРАВИЛА ОГРАНИЧЕНИЯ ДЛЯ COPILOT';
+  }
+});
+
+requestTemplateBtn?.addEventListener('click', () => {
+  if (requestTemplatePanel?.hidden) {
+    requestTemplatePanel.hidden = false;
+    requestTemplateBtn.textContent = 'СКРЫТЬ ШАБЛОН ДЛЯ КАЖДОГО ЗАПРОСА';
+  } else {
+    requestTemplatePanel.hidden = true;
+    requestTemplateBtn.textContent = 'ШАБЛОН ДЛЯ КАЖДОГО ЗАПРОСА';
   }
 });
 

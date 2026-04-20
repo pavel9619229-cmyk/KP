@@ -33,6 +33,7 @@
       <button id="rulesBtn" type="button">Правила статусов</button>
       <button id="loadingRulesBtn" type="button">ПРАВИЛА ЗАГРУЗКИ</button>
       <button id="copilotRulesBtn" type="button">ПРАВИЛА ОГРАНИЧЕНИЯ ДЛЯ COPILOT</button>
+      <button id="requestTemplateBtn" type="button">ШАБЛОН ДЛЯ КАЖДОГО ЗАПРОСА</button>
       <button id="versionNumbersBtn" type="button">НОМЕРА ВЕРСИЙ ЗАГРУЗКИ</button>
       <button id="rulesStorageBtn" type="button">МЕСТА ХРАНЕНИЯ ПРАВИЛ СТАТУСОВ</button>
       <button id="payMatchBtn" type="button">СОПОСТАВЛЕНИЕ ПЛАТЕЖЕЙ</button>
@@ -99,6 +100,33 @@
    - Перед правками сначала фиксировать границы: "Меняю только" и "Не трогаю".
    - Если пользователь просит только анализ, не вносить изменения до подтверждения.
    - Любое отклонение от указанных пользователем границ считать ошибкой.</textarea>
+      </div>
+    </section>
+
+    <section id="requestTemplatePanel" class="rules-panel" hidden aria-label="Шаблон для каждого запроса">
+      <div class="rules-storage-block">
+        <strong>шаблон для каждого запроса</strong>
+        <textarea
+          id="requestTemplateInput"
+          class="rules-storage-input"
+          rows="12"
+          spellcheck="false"
+          readonly
+        >Задача:
+исправить только ...
+
+Менять только:
+- ...
+
+Не трогать:
+- загрузку из 1С
+- refresh
+- timeout
+- polling
+- frontend
+
+Если видишь проблему вне этих границ:
+остановись и сначала спроси</textarea>
       </div>
     </section>
 
@@ -223,6 +251,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=8"></script>
 </body>
 </html>
