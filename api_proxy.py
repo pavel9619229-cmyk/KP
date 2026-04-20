@@ -50,6 +50,7 @@ SEED_DATA_FILE = os.getenv(
 )
 RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
 RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
+RUNTIME_CURRENT_FILE = os.getenv("RUNTIME_CURRENT_FILE", "data/kp_runtime_current.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
@@ -86,6 +87,9 @@ STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 GITHUB_REPO = os.getenv("GITHUB_REPO", "pavel9619229-cmyk/KP").strip()
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main").strip()
+GITHUB_RUNTIME_BRANCH = os.getenv("GITHUB_RUNTIME_BRANCH", GITHUB_BRANCH).strip() or GITHUB_BRANCH
+GITHUB_RUNTIME_CURRENT_PATH = os.getenv("GITHUB_RUNTIME_CURRENT_PATH", "data/kp_runtime_current.json").strip()
+GITHUB_RUNTIME_VERSIONS_DIR = os.getenv("GITHUB_RUNTIME_VERSIONS_DIR", "data/runtime_versions").strip().strip("/")
 GITHUB_RULES_PATH = os.getenv("GITHUB_RULES_PATH", "data/status_rules.json").strip()
 ACCESS_RIGHTS_FILE = os.getenv("ACCESS_RIGHTS_FILE", "data/access_rights.json").strip()
 ADMIN_USER = os.getenv("ADMIN_USER", "admin").strip()
@@ -157,6 +161,7 @@ _refresh_lock = threading.Lock()
 _partial_refresh_lock = threading.Lock()
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _last_cache_push: Optional[datetime] = None
+_last_confirmed_runtime_sync_check = 0.0
 
 # Persistent order→KP mapping cache.  Survives incomplete orders scans so
 # payment matching still works even when Document_ЗаказКлиента times out.
@@ -165,9 +170,11 @@ _order_to_kp_cache: dict[str, dict] = {}   # order_ref -> {"kp": kp_ref, "num": 
 _order_cache_loaded: bool = False
 _order_cache_lock = threading.Lock()
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
+CONFIRMED_RUNTIME_SYNC_TTL_SECONDS = int(os.getenv("CONFIRMED_RUNTIME_SYNC_TTL_SECONDS", "5"))
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 _runtime_write_guard_lock = threading.Lock()
+_confirmed_runtime_sync_lock = threading.Lock()
 _enrich_cursor = 0
 _partial_refresh_cursor = 0
 _manual_refresh_state_lock = threading.Lock()
@@ -906,29 +913,7 @@ def _load_runtime_rows_from_github() -> list:
 
 
 def _recover_runtime_cache_from_github_if_needed(reason: str) -> bool:
-    global _cached_rows, _cached_fp, _last_refresh_error
-
-    if _cached_rows:
-        return True
-
-    rows = _load_runtime_rows_from_github()
-    if not rows:
-        return False
-
-    saved = save_rows(
-        rows,
-        refresh_started_at=datetime.now(timezone.utc),
-        write_source=f"github-recovery:{reason}",
-        push_to_github=False,
-    )
-    if not saved:
-        rows = load_fresh_runtime_rows() or rows
-
-    _cached_rows = rows
-    _cached_fp = rows_fingerprint(rows)
-    _last_refresh_error = None
-    log(f"runtime cache recovered from GitHub: rows={len(rows)}, reason={reason}")
-    return True
+    return _sync_confirmed_runtime_cache_from_github_if_needed(reason, force=not bool(_cached_rows))
 
 
 def save_status_rules_text(rules_text: str) -> None:
@@ -3179,6 +3164,263 @@ def _read_runtime_meta(meta_path: Path | None = None) -> dict:
         return {}
 
 
+def _read_runtime_current_pointer(path: Path | None = None) -> dict:
+    current_path = path or Path(RUNTIME_CURRENT_FILE)
+    if not current_path.exists():
+        return {}
+    try:
+        with current_path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_runtime_current_pointer(pointer: dict, path: Path | None = None) -> None:
+    current_path = path or Path(RUNTIME_CURRENT_FILE)
+    current_path.parent.mkdir(parents=True, exist_ok=True)
+    with current_path.open("w", encoding="utf-8") as f:
+        json.dump(pointer or {}, f, ensure_ascii=False, indent=2)
+
+
+def _github_runtime_ref() -> str:
+    return GITHUB_RUNTIME_BRANCH or GITHUB_BRANCH
+
+
+def _load_json_from_github_path(file_path: str) -> object | None:
+    if not GITHUB_REPO or not file_path:
+        return None
+
+    gh_headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if GITHUB_TOKEN:
+        gh_headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    try:
+        resp = requests.get(api_url, headers=gh_headers, params={"ref": _github_runtime_ref()}, timeout=20)
+        if resp.status_code == 200:
+            payload = resp.json()
+            content_b64 = str(payload.get("content") or "").replace("\n", "")
+            if content_b64:
+                decoded = base64.b64decode(content_b64.encode("ascii")).decode("utf-8")
+                return json.loads(decoded)
+    except Exception as exc:
+        log(f"github json API fetch failed ({file_path}): {exc}")
+
+    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{_github_runtime_ref()}/{file_path}"
+    try:
+        resp = requests.get(raw_url, timeout=20)
+        if resp.status_code != 200:
+            return None
+        return resp.json()
+    except Exception as exc:
+        log(f"github json RAW fetch failed ({file_path}): {exc}")
+        return None
+
+
+def _push_json_to_github_path(file_path: str, payload: object, message: str) -> bool:
+    if not GITHUB_TOKEN or not GITHUB_REPO or not file_path:
+        log(f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set")
+        return False
+
+    gh_headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    content_b64 = base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")).decode("ascii")
+
+    current_sha = ""
+    try:
+        resp = requests.get(api_url, headers=gh_headers, params={"ref": _github_runtime_ref()}, timeout=10)
+        if resp.status_code == 200:
+            current_sha = str(resp.json().get("sha") or "")
+    except Exception as exc:
+        log(f"GitHub SHA fetch failed ({file_path}): {exc}")
+
+    body: dict = {
+        "message": message,
+        "content": content_b64,
+        "branch": _github_runtime_ref(),
+    }
+    if current_sha:
+        body["sha"] = current_sha
+
+    try:
+        resp = requests.put(api_url, headers=gh_headers, json=body, timeout=20)
+        if resp.status_code in (200, 201):
+            return True
+        log(f"GitHub push failed ({file_path}): HTTP {resp.status_code}: {resp.text[:200]}")
+        return False
+    except Exception as exc:
+        log(f"GitHub push error ({file_path}): {exc}")
+        return False
+
+
+def _build_runtime_version_paths(meta: dict) -> tuple[int, str, str]:
+    cycle_version = _to_int_or_none(meta.get("cycleVersion")) or 0
+    if cycle_version <= 0:
+        raise RuntimeError("runtime metadata has no valid cycleVersion")
+    suffix = f"v{cycle_version:06d}"
+    cache_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_cache_{suffix}.json"
+    meta_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_meta_{suffix}.json"
+    return cycle_version, cache_path, meta_path
+
+
+def _build_runtime_current_pointer(rows: list, meta: dict) -> dict:
+    cycle_version, cache_path, meta_path = _build_runtime_version_paths(meta)
+    return {
+        "version": cycle_version,
+        "status": "confirmed",
+        "cachePath": cache_path,
+        "metaPath": meta_path,
+        "generatedAt": str(meta.get("generatedAt") or ""),
+        "writeSource": str(meta.get("writeSource") or ""),
+        "rowCount": len(rows),
+        "rowsFingerprint": rows_fingerprint(rows),
+        "branch": _github_runtime_ref(),
+    }
+
+
+def _load_runtime_rows_from_github_path(file_path: str) -> list:
+    payload = _load_json_from_github_path(file_path)
+    if not isinstance(payload, list):
+        return []
+    for row in payload:
+        apply_storage_defaults(row)
+    payload.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    return payload
+
+
+def _load_runtime_meta_from_github_path(file_path: str) -> dict:
+    payload = _load_json_from_github_path(file_path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_runtime_current_pointer_from_github() -> dict:
+    payload = _load_json_from_github_path(GITHUB_RUNTIME_CURRENT_PATH)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _write_local_confirmed_runtime(rows: list, meta_payload: dict, pointer: dict) -> None:
+    _write_runtime_snapshot_files(rows, meta_payload)
+    _write_runtime_current_pointer(pointer)
+
+
+def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
+    pointer = _load_runtime_current_pointer_from_github()
+    if pointer:
+        cache_path = str(pointer.get("cachePath") or "").strip()
+        meta_path = str(pointer.get("metaPath") or "").strip()
+        rows = _load_runtime_rows_from_github_path(cache_path) if cache_path else []
+        meta = _load_runtime_meta_from_github_path(meta_path) if meta_path else {}
+        expected_version = _to_int_or_none(pointer.get("version")) or 0
+        meta_version = _to_int_or_none(meta.get("cycleVersion")) or 0
+        expected_fp = str(pointer.get("rowsFingerprint") or "")
+        if rows and meta and expected_version and meta_version == expected_version:
+            if not expected_fp or rows_fingerprint(rows) == expected_fp:
+                return rows, meta, pointer
+
+    rows = _load_runtime_rows_from_github()
+    meta = _load_runtime_meta_from_github()
+    if rows and meta:
+        return rows, meta, {}
+    return [], {}, {}
+
+
+def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict]:
+    rows = list(candidate_rows or load_rows_from_path(Path(RUNTIME_DATA_FILE)))
+    if not rows:
+        raise RuntimeError("runtime snapshot is empty after 1C refresh")
+
+    meta = dict(candidate_meta or _read_runtime_meta())
+    if not meta:
+        raise RuntimeError("runtime metadata is missing after 1C refresh")
+
+    pointer = _build_runtime_current_pointer(rows, meta)
+    version = pointer.get("version")
+    cache_path = str(pointer.get("cachePath") or "")
+    meta_path = str(pointer.get("metaPath") or "")
+    message_prefix = f"Runtime snapshot v{version}"
+
+    if not _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]"):
+        raise RuntimeError("GitHub cache version push failed")
+    if not _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]"):
+        raise RuntimeError("GitHub meta version push failed")
+
+    github_rows = _load_runtime_rows_from_github_path(cache_path)
+    github_meta = _load_runtime_meta_from_github_path(meta_path)
+    if not github_rows or not github_meta:
+        raise RuntimeError("GitHub version readback failed")
+    if rows_fingerprint(github_rows) != str(pointer.get("rowsFingerprint") or ""):
+        raise RuntimeError("GitHub version readback fingerprint mismatch")
+    if (_to_int_or_none(github_meta.get("cycleVersion")) or 0) != (_to_int_or_none(pointer.get("version")) or 0):
+        raise RuntimeError("GitHub version readback cycleVersion mismatch")
+
+    if not _push_json_to_github_path(
+        GITHUB_RUNTIME_CURRENT_PATH,
+        pointer,
+        f"Promote runtime current v{version} [skip ci]",
+    ):
+        raise RuntimeError("GitHub current pointer update failed")
+
+    confirmed_pointer = _load_runtime_current_pointer_from_github()
+    confirmed_version = _to_int_or_none(confirmed_pointer.get("version")) or 0
+    if confirmed_version != (_to_int_or_none(pointer.get("version")) or 0):
+        raise RuntimeError("GitHub current pointer readback mismatch")
+
+    _write_local_confirmed_runtime(github_rows, github_meta, confirmed_pointer)
+    return github_rows, github_meta, confirmed_pointer
+
+
+def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
+    global _cached_rows, _cached_fp, _last_refresh_error, _last_confirmed_runtime_sync_check
+
+    now = time.time()
+    if not force and _cached_rows and (now - _last_confirmed_runtime_sync_check) < CONFIRMED_RUNTIME_SYNC_TTL_SECONDS:
+        return True
+
+    with _confirmed_runtime_sync_lock:
+        now = time.time()
+        if not force and _cached_rows and (now - _last_confirmed_runtime_sync_check) < CONFIRMED_RUNTIME_SYNC_TTL_SECONDS:
+            return True
+
+        github_rows, github_meta, github_pointer = _load_confirmed_runtime_from_github()
+        local_pointer = _read_runtime_current_pointer()
+        github_version = _to_int_or_none(github_pointer.get("version")) or 0
+        local_version = _to_int_or_none(local_pointer.get("version")) or 0
+        github_fp = str(github_pointer.get("rowsFingerprint") or "")
+
+        if github_rows and github_meta:
+            needs_update = (
+                force
+                or not _cached_rows
+                or github_version != local_version
+                or (github_fp and _cached_fp != github_fp)
+            )
+            if needs_update:
+                _write_local_confirmed_runtime(github_rows, github_meta, github_pointer or _build_runtime_current_pointer(github_rows, github_meta))
+                _cached_rows = list(github_rows)
+                _cached_fp = rows_fingerprint(_cached_rows)
+                _last_refresh_error = None
+                log(f"confirmed runtime synced from GitHub: rows={len(_cached_rows)}, reason={reason}, version={github_version or 'legacy'}")
+            _last_confirmed_runtime_sync_check = now
+            return True
+
+        local_rows = load_fresh_runtime_rows()
+        if local_rows:
+            _cached_rows = list(local_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _last_confirmed_runtime_sync_check = now
+            return True
+
+        return False
+
+
 def _load_runtime_meta_from_github() -> dict:
     if not GITHUB_REPO:
         return {}
@@ -3683,6 +3925,7 @@ def refresh_cache_and_file(
     page_size: int = 300,
     use_known_cache: bool = True,
     push_to_github: bool = True,
+    update_live_cache: bool = True,
 ) -> None:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
     refresh_started_at = datetime.now(timezone.utc)
@@ -3707,16 +3950,17 @@ def refresh_cache_and_file(
                 )
                 if not saved:
                     latest_rows = load_fresh_runtime_rows()
-                    if latest_rows:
+                    if update_live_cache and latest_rows:
                         _cached_rows = latest_rows
                         _cached_fp = rows_fingerprint(latest_rows)
                     _last_refresh_error = "full refresh skipped: newer runtime snapshot already exists"
                     log(_last_refresh_error)
                     return
-                _cached_rows = fetched
-                _cached_fp = rows_fingerprint(fetched)
-                _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
-                _last_refresh_error = None
+                if update_live_cache:
+                    _cached_rows = fetched
+                    _cached_fp = rows_fingerprint(fetched)
+                    _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                    _last_refresh_error = None
                 log(f"refresh success: {len(fetched)} rows")
                 # Disabled runtime cache auto-push to GitHub: it creates a deploy loop
                 # on Render (new commit -> new deploy -> new commit...).
@@ -3753,16 +3997,17 @@ def refresh_cache_and_file(
                         )
                         if not saved:
                             latest_rows = load_fresh_runtime_rows()
-                            if latest_rows:
+                            if update_live_cache and latest_rows:
                                 _cached_rows = latest_rows
                                 _cached_fp = rows_fingerprint(latest_rows)
                             _last_refresh_error = "partial fallback skipped: newer runtime snapshot already exists"
                             log(_last_refresh_error)
                             return
-                        _cached_rows = partial_rows
-                        _cached_fp = rows_fingerprint(partial_rows)
-                        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
-                        _last_refresh_error = None
+                        if update_live_cache:
+                            _cached_rows = partial_rows
+                            _cached_fp = rows_fingerprint(partial_rows)
+                            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                            _last_refresh_error = None
                         log(f"partial refresh success from cached refs: touched={touched}, rows={len(partial_rows)}")
                         return
                     else:
@@ -3977,6 +4222,8 @@ async def on_startup() -> None:
     _cached_rows = load_fresh_runtime_rows()
     if not _cached_rows:
         _recover_runtime_cache_from_github_if_needed("startup")
+    else:
+        _sync_confirmed_runtime_cache_from_github_if_needed("startup", force=True)
     if not _cached_rows:
         _cached_rows = load_seed_rows()
     
@@ -4128,7 +4375,9 @@ async def kp_version_info(request: Request):
     _get_user_from_request(request)
 
     local_meta = _read_runtime_meta()
+    local_pointer = _read_runtime_current_pointer()
     github_meta = _load_runtime_meta_from_github()
+    github_pointer = _load_runtime_current_pointer_from_github()
 
     # Ensure all required fields exist with proper defaults
     if "cycleVersion" not in local_meta or not local_meta.get("cycleVersion"):
@@ -4138,9 +4387,9 @@ async def kp_version_info(request: Request):
     if "last1cLoadedAt" not in local_meta or not local_meta.get("last1cLoadedAt"):
         local_meta["last1cLoadedAt"] = local_meta.get("generatedAt") or ""
 
-    current_cycle_version = _to_int_or_none(local_meta.get("cycleVersion")) or 0
+    current_cycle_version = _to_int_or_none(local_pointer.get("version")) or _to_int_or_none(local_meta.get("cycleVersion")) or 0
     last_1c_loaded_version = _to_int_or_none(local_meta.get("last1cLoadedVersion")) or 0
-    last_github_backup_version = _to_int_or_none(github_meta.get("cycleVersion")) or 0
+    last_github_backup_version = _to_int_or_none(github_pointer.get("version")) or _to_int_or_none(github_meta.get("cycleVersion")) or 0
 
     return {
         "frontendRecommendedVersion": current_cycle_version,
@@ -4148,10 +4397,10 @@ async def kp_version_info(request: Request):
         "last1cLoadedVersion": last_1c_loaded_version,
         "last1cLoadedAt": str(local_meta.get("last1cLoadedAt") or local_meta.get("generatedAt") or ""),
         "lastGithubBackupVersion": last_github_backup_version,
-        "runtimeWriteSource": str(local_meta.get("writeSource") or ""),
-        "githubWriteSource": str(github_meta.get("writeSource") or ""),
-        "runtimeGeneratedAt": str(local_meta.get("generatedAt") or ""),
-        "githubGeneratedAt": str(github_meta.get("generatedAt") or ""),
+        "runtimeWriteSource": str(local_meta.get("writeSource") or local_pointer.get("writeSource") or ""),
+        "githubWriteSource": str(github_pointer.get("writeSource") or github_meta.get("writeSource") or ""),
+        "runtimeGeneratedAt": str(local_meta.get("generatedAt") or local_pointer.get("generatedAt") or ""),
+        "githubGeneratedAt": str(github_pointer.get("generatedAt") or github_meta.get("generatedAt") or ""),
     }
 
 
@@ -4192,61 +4441,81 @@ async def manual_refresh(request: Request):
                 "startedAt": None,
                 "finishedAt": None,
                 "lastError": None,
+                "confirmedVersion": None,
             }
         )
 
     async def _run_manual_refresh() -> None:
-        global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+        global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
 
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"manual refresh requested by {username} from {client_host}")
-        try:
-            previous_rows = _load_runtime_rows_from_github() or load_fresh_runtime_rows() or list(_cached_rows)
-            previous_meta = _load_runtime_meta_from_github() or _read_runtime_meta() or {
+
+        previous_rows, previous_meta, previous_pointer = _load_confirmed_runtime_from_github()
+        if not previous_rows:
+            previous_rows = load_fresh_runtime_rows() or list(_cached_rows)
+        if not previous_meta:
+            previous_meta = _read_runtime_meta() or {
                 "generatedAt": datetime.now(timezone.utc).isoformat(),
                 "rowCount": len(previous_rows),
             }
-            previous_last_refresh = _last_refresh
+        if not previous_pointer and previous_rows and previous_meta:
+            try:
+                previous_pointer = _build_runtime_current_pointer(previous_rows, previous_meta)
+            except Exception:
+                previous_pointer = {}
 
+        previous_last_refresh = _last_refresh
+        previous_last_refresh_error = _last_refresh_error
+        previous_last_confirmed_sync_check = _last_confirmed_runtime_sync_check
+
+        try:
             await asyncio.wait_for(
-                # Run full pipeline refresh from 1C and rebuild runtime cache.
-                asyncio.to_thread(refresh_cache_and_file, True, True, 300, True, False),
+                asyncio.to_thread(refresh_cache_and_file, True, True, 300, True, False, False),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
 
-            github_rows, _ = await asyncio.to_thread(_sync_runtime_cache_via_github_or_raise)
+            candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+            candidate_meta = _read_runtime_meta()
+            github_rows, _, github_pointer = await asyncio.to_thread(
+                _publish_confirmed_runtime_snapshot_or_raise,
+                candidate_rows,
+                candidate_meta,
+            )
             _cached_rows = list(github_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
+            _last_confirmed_runtime_sync_check = time.time()
             _last_refresh_error = None
-            ok = bool(_cached_rows) and not _last_refresh_error
-            error_text = None if ok else str(_last_refresh_error or "refresh failed")
-            _set_manual_refresh_state(lastOk=ok, lastError=error_text)
+            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 
-            if ok:
-                log(
-                    "manual refresh finished: "
-                    f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, source=github-readback, user={username}, host={client_host}"
-                )
-            else:
-                payload = {
-                    "ok": ok,
-                    "rows": len(_cached_rows),
-                    "lastRefresh": _last_refresh,
-                    "lastRefreshError": _last_refresh_error,
-                }
-                log(f"manual refresh failed: {payload}, user={username}, host={client_host}")
+            confirmed_version = github_pointer.get("version") if github_pointer else None
+            _set_manual_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
+            log(
+                "manual refresh finished: "
+                f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, source=github-current, user={username}, host={client_host}"
+            )
         except Exception as exc:
             _cached_rows = list(previous_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
-            _write_runtime_snapshot_files(_cached_rows, previous_meta)
+            _write_local_confirmed_runtime(_cached_rows, previous_meta, previous_pointer)
             _last_refresh = previous_last_refresh
-            _last_refresh_error = str(exc)
+            _last_refresh_error = previous_last_refresh_error
+            _last_confirmed_runtime_sync_check = previous_last_confirmed_sync_check
+
             if isinstance(exc, asyncio.TimeoutError):
-                _set_manual_refresh_state(lastOk=False, lastError="manual refresh timed out")
+                _set_manual_refresh_state(
+                    confirmedVersion=previous_pointer.get("version") if previous_pointer else None,
+                    lastOk=False,
+                    lastError="manual refresh timed out",
+                )
                 log("manual refresh timed out")
             else:
-                _set_manual_refresh_state(lastOk=False, lastError=str(exc))
-                log(f"manual refresh crashed and rolled back to previous snapshot: {type(exc).__name__}: {exc}")
+                _set_manual_refresh_state(
+                    confirmedVersion=previous_pointer.get("version") if previous_pointer else None,
+                    lastOk=False,
+                    lastError=str(exc),
+                )
+                log(f"manual refresh crashed and kept previous confirmed snapshot: {type(exc).__name__}: {exc}")
         finally:
             _set_manual_refresh_state(
                 running=False,
@@ -4522,8 +4791,7 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
 @app.get("/api/kp/all")
 async def get_all_kp(request: Request):
     user = _get_user_from_request(request)
-    if not _cached_rows:
-        _recover_runtime_cache_from_github_if_needed("api-kp-all")
+    _sync_confirmed_runtime_cache_from_github_if_needed("api-kp-all")
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
 
@@ -4766,11 +5034,12 @@ async def ws_kp(websocket: WebSocket):
 
     try:
         while True:
+            _sync_confirmed_runtime_cache_from_github_if_needed("ws-kp")
             if not _cached_rows:
                 await asyncio.sleep(2)
                 continue
 
-            current_fp = _cached_fp
+            current_fp = rows_fingerprint(_cached_rows)
             if current_fp != previous_fp:
                 previous_fp = current_fp
                 await websocket.send_json(
