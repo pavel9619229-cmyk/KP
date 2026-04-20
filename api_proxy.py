@@ -510,16 +510,8 @@ def _user_password_ok(username: str, password: str) -> bool:
 
 
 def _get_user_from_request(request: Request) -> dict:
-    # Try user session cookie first.
-    token = request.cookies.get(USER_SESSION_COOKIE)
-    payload = _read_user_token(token or "")
-    if payload:
-        username = str(payload.get("u") or "").strip()
-        user = _resolve_effective_user(username)
-        if user:
-            return user
-
-    # Fallback: accept a valid admin session cookie (e.g. from /admin/rights login).
+    # Prefer explicit admin session cookie when present.
+    # This prevents role downgrade if browser still has an old manager user-session.
     admin_token = request.cookies.get(ADMIN_SESSION_COOKIE)
     admin_payload = _read_admin_token(admin_token or "")
     if admin_payload:
@@ -530,6 +522,15 @@ def _get_user_from_request(request: Request) -> dict:
                 "role": "admin",
                 "allowedManagers": "*",
             }
+
+    # Then try regular user session cookie.
+    token = request.cookies.get(USER_SESSION_COOKIE)
+    payload = _read_user_token(token or "")
+    if payload:
+        username = str(payload.get("u") or "").strip()
+        user = _resolve_effective_user(username)
+        if user:
+            return user
 
     raise HTTPException(status_code=401, detail="Login required")
 
