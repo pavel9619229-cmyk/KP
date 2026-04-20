@@ -2200,6 +2200,14 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         return
 
     kp_ref_set = set(target_refs)
+    # Rule 4 (loading rules): if KP number appears in block 3 (payment purpose),
+    # paymentReceived for that KP must be promoted to True.
+    kp_number_to_refs: dict[str, set[str]] = {}
+    for row in rows:
+        kp_ref = str(row.get("refKey") or "")
+        kp_number = _normalize_kp_number(str(row.get("number") or ""))
+        if kp_ref and kp_number:
+            kp_number_to_refs.setdefault(kp_number, set()).add(kp_ref)
 
     kp_to_orders: dict[str, set[str]] = {kp: set() for kp in kp_ref_set}
     order_to_kp: dict[str, str] = {}
@@ -2295,29 +2303,30 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             if target_order_refs:
                 log(f"[orders-lazy] now have {len(target_order_refs)} target orders for {len(kp_ref_set)} KPs")
 
-    if not target_order_refs:
-        # Preserve current flags when order links cannot be resolved.
-        # This avoids destructive false resets during partial/unavailable 1C reads.
-        log("[orders] no order links resolved; preserving existing invoice/payment flags")
-        return
-
     invoice_order_refs: set[str] = set()
-    invoice_pages, invoices_complete = _collect_tail_pages(
-        "Document_РеализацияТоваровУслуг",
-        headers,
-        ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
-    )
-    if not invoices_complete and not invoice_pages:
-        return
-
-    for batch in invoice_pages:
-        for item in batch:
-            order_type = str(item.get("ЗаказКлиента_Type") or "")
-            order_ref = str(item.get("ЗаказКлиента") or "")
-            if order_type == "StandardODATA.Document_ЗаказКлиента" and order_ref in target_order_refs:
-                invoice_order_refs.add(order_ref)
+    invoices_complete = False
+    if not target_order_refs:
+        # Preserve current invoice flags when order links cannot be resolved,
+        # but continue with payments scan so block-3 rule can still promote paymentReceived.
+        log("[orders] no order links resolved; preserving invoice flags, continue with block-3 payment scan")
+    else:
+        invoice_pages, invoices_complete = _collect_tail_pages(
+            "Document_РеализацияТоваровУслуг",
+            headers,
+            ["Ref_Key", "Date", "ЗаказКлиента", "ЗаказКлиента_Type"],
+        )
+        if not invoices_complete and not invoice_pages:
+            log("[invoices] scan unavailable; keeping invoiceCreated as-is")
+        else:
+            for batch in invoice_pages:
+                for item in batch:
+                    order_type = str(item.get("ЗаказКлиента_Type") or "")
+                    order_ref = str(item.get("ЗаказКлиента") or "")
+                    if order_type == "StandardODATA.Document_ЗаказКлиента" and order_ref in target_order_refs:
+                        invoice_order_refs.add(order_ref)
 
     payment_order_refs: set[str] = set()
+    block3_kp_hits: set[str] = set()
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
@@ -2414,6 +2423,16 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                     payment_order_refs.add(order_ref)
                     break
 
+            # Block 3 rule: purpose may directly contain KP number (e.g. "ут-229").
+            # If so, promote paymentReceived for that KP regardless of order-link availability.
+            for m in re.finditer(r"\b(?:[а-яa-z]*ут)[\s\-_/]*0*(\d+)\b", purpose):
+                kp_num = (m.group(1) or "").lstrip("0")
+                if not kp_num:
+                    continue
+                for kp_ref in kp_number_to_refs.get(kp_num, set()):
+                    if kp_ref in kp_ref_set:
+                        block3_kp_hits.add(kp_ref)
+
     kp_invoice_map = {kp: False for kp in kp_ref_set}
     kp_payment_map = {kp: False for kp in kp_ref_set}
 
@@ -2426,6 +2445,10 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         kp_ref = order_to_kp.get(order_ref)
         if kp_ref:
             kp_payment_map[kp_ref] = True
+
+    # Apply block-3 direct KP-number hits from payment purpose.
+    for kp_ref in block3_kp_hits:
+        kp_payment_map[kp_ref] = True
 
     for row in rows:
         kp_ref = row.get("refKey")
