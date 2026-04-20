@@ -136,9 +136,29 @@ refreshBtn.addEventListener('click', async () => {
   // Backend manual refresh timeout is now 600s (10 min) to handle slow 1C API read timeouts.
   const maxWaitMs = 900000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
+  const isAdmin = String(currentUserRole || '').toLowerCase() === 'admin';
+  const startedAt = Date.now();
+  let refreshTimerId = null;
+
+  const formatElapsed = (seconds) => {
+    const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const ss = String(seconds % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  const setRefreshingLabel = () => {
+    if (!isAdmin) {
+      updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
+      return;
+    }
+    const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    updatedAtLabel.textContent = `ИДЕТ ОБНОВЛЕНИЕ · ${formatElapsed(elapsedSec)}`;
+  };
+
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
-  updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
+  setRefreshingLabel();
+  refreshTimerId = setInterval(setRefreshingLabel, 1000);
 
   try {
     const startResponse = await fetch('/api/kp/refresh', {
@@ -190,7 +210,7 @@ refreshBtn.addEventListener('click', async () => {
       }
 
       if (statePayload?.running) {
-        updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
+        setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
@@ -221,6 +241,10 @@ refreshBtn.addEventListener('click', async () => {
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
   } finally {
+    if (refreshTimerId) {
+      clearInterval(refreshTimerId);
+      refreshTimerId = null;
+    }
     refreshBtn.disabled = false;
     refreshBtn.textContent = defaultLabel;
   }
