@@ -2266,50 +2266,39 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         log(f"[orders-cache] merged cache: {len(target_order_refs)} total order→KP entries for {len(kp_ref_set)} KPs")
 
     if not target_order_refs:
-        # Only a complete orders scan can safely downgrade to False.
-        if orders_complete:
-            for row in rows:
-                if row.get("refKey") in kp_ref_set:
-                    row["invoiceCreated"] = False
-                    row["paymentReceived"] = False
-            if not target_order_refs:
-                # Last resort: scan payment purposes, extract order number hints,
-                # then try tail-pages on ЗаказКлиента for those specific numbers.
-                log(f"[orders-lazy] entering last-resort: target_refs empty, {len(kp_ref_set)} KPs to match")
-                purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
-                    "Document_ПоступлениеБезналичныхДенежныхСредств",
-                    headers,
-                    [["Ref_Key", "НазначениеПлатежа"]],
-                    page_size=20,
-                    timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
-                )
-                purpose_number_hints: set[str] = set()
-                for batch in purpose_pages:
-                    for item in batch:
-                        purpose = str(item.get("НазначениеПлатежа") or "").lower()
-                        for m in re.finditer(r"\bут[\s\-_/]*0*(\d+)\b", purpose):
-                            digits = m.group(1).lstrip("0") or "0"
-                            if digits and digits != "0":
-                                purpose_number_hints.add(digits)
-                log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in purpose_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
-                if purpose_number_hints:
-                    lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, kp_ref_set)
-                    log(f"[orders-lazy] tail-page scan found {len(lazy_orders)} order→KP matches")
-                    for order_ref, kp_ref in lazy_orders.items():
-                        order_to_kp[order_ref] = kp_ref
-                        kp_to_orders[kp_ref].add(order_ref)
-                    target_order_refs = set(order_to_kp.keys())
-                    if target_order_refs:
-                        log(f"[orders-lazy] now have {len(target_order_refs)} target orders for {len(kp_ref_set)} KPs")
+        # Last resort: scan payment purposes, extract order number hints,
+        # then try tail-pages on ЗаказКлиента for those specific numbers.
+        log(f"[orders-lazy] entering last-resort: target_refs empty, {len(kp_ref_set)} KPs to match")
+        purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
+            "Document_ПоступлениеБезналичныхДенежныхСредств",
+            headers,
+            [["Ref_Key", "НазначениеПлатежа"]],
+            page_size=20,
+            timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
+        )
+        purpose_number_hints: set[str] = set()
+        for batch in purpose_pages:
+            for item in batch:
+                purpose = str(item.get("НазначениеПлатежа") or "").lower()
+                for m in re.finditer(r"\bут[\s\-_/]*0*(\d+)\b", purpose):
+                    digits = m.group(1).lstrip("0") or "0"
+                    if digits and digits != "0":
+                        purpose_number_hints.add(digits)
+        log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in purpose_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
+        if purpose_number_hints:
+            lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, kp_ref_set)
+            log(f"[orders-lazy] tail-page scan found {len(lazy_orders)} order→KP matches")
+            for order_ref, kp_ref in lazy_orders.items():
+                order_to_kp[order_ref] = kp_ref
+                kp_to_orders[kp_ref].add(order_ref)
+            target_order_refs = set(order_to_kp.keys())
+            if target_order_refs:
+                log(f"[orders-lazy] now have {len(target_order_refs)} target orders for {len(kp_ref_set)} KPs")
 
-            if not target_order_refs:
-                # Only a complete orders scan can safely downgrade to False.
-                if orders_complete:
-                    for row in rows:
-                        if row.get("refKey") in kp_ref_set:
-                            row["invoiceCreated"] = False
-                            row["paymentReceived"] = False
-                return
+    if not target_order_refs:
+        # Preserve current flags when order links cannot be resolved.
+        # This avoids destructive false resets during partial/unavailable 1C reads.
+        log("[orders] no order links resolved; preserving existing invoice/payment flags")
         return
 
     invoice_order_refs: set[str] = set()
