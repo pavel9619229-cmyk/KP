@@ -4219,25 +4219,32 @@ async def on_startup() -> None:
         log("WARNING: ADMIN_SESSION_SECRET is not configured; using ephemeral runtime secret")
     if USER_SESSION_SECRET_IS_EPHEMERAL:
         log("WARNING: USER_SESSION_SECRET is not configured; using ephemeral runtime secret")
+
+    # Load from disk synchronously — fast, no network. This is enough for Render health check.
     _cached_rows = load_fresh_runtime_rows()
     if not _cached_rows:
-        _recover_runtime_cache_from_github_if_needed("startup")
-    else:
-        _sync_confirmed_runtime_cache_from_github_if_needed("startup", force=True)
-    if not _cached_rows:
         _cached_rows = load_seed_rows()
-    
-    # Enrich loaded rows with group flags (orders/invoices/payments) — no blocking
-    # but essential for payment detection to work without requiring separate refresh
-    try:
-        headers = _build_headers()
-        _enrich_group_flags_bulk(_cached_rows, headers)
-        log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
-    except Exception as exc:
-        log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
-    
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
+
+    # All blocking network operations (GitHub sync, 1C enrich) run in a background task
+    # so startup completes immediately and Render health check passes without delay.
+    async def _post_startup_sync():
+        global _cached_rows, _cached_fp
+        try:
+            await asyncio.to_thread(_sync_confirmed_runtime_cache_from_github_if_needed, "startup", True)
+        except Exception as exc:
+            log(f"[startup] GitHub sync failed (non-blocking): {type(exc).__name__}: {exc}")
+        try:
+            headers = _build_headers()
+            await asyncio.to_thread(_enrich_group_flags_bulk, _cached_rows, headers)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
+        except Exception as exc:
+            log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
+
+    app.state.post_startup_task = asyncio.create_task(_post_startup_sync())
+
     # Do NOT await refresh here: blocking startup prevents health-check from reaching the app.
     # Background refresh loops are optional and disabled by default.
     if ENABLE_BACKGROUND_REFRESH:
