@@ -170,7 +170,7 @@ _order_to_kp_cache: dict[str, dict] = {}   # order_ref -> {"kp": kp_ref, "num": 
 _order_cache_loaded: bool = False
 _order_cache_lock = threading.Lock()
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
-CONFIRMED_RUNTIME_SYNC_TTL_SECONDS = int(os.getenv("CONFIRMED_RUNTIME_SYNC_TTL_SECONDS", "5"))
+CONFIRMED_RUNTIME_SYNC_TTL_SECONDS = int(os.getenv("CONFIRMED_RUNTIME_SYNC_TTL_SECONDS", "300"))
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
 _runtime_write_guard_lock = threading.Lock()
@@ -3396,12 +3396,17 @@ def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool
         github_fp = str(github_pointer.get("rowsFingerprint") or "")
 
         if github_rows and github_meta:
-            needs_update = (
-                force
-                or not _cached_rows
-                or github_version != local_version
-                or (github_fp and _cached_fp != github_fp)
-            )
+            # If GitHub has no versioned pointer (legacy fallback), only update
+            # when fingerprint actually differs — not just because version numbers differ.
+            if github_version == 0 and local_version > 0:
+                needs_update = force or not _cached_rows or (github_fp and _cached_fp != github_fp)
+            else:
+                needs_update = (
+                    force
+                    or not _cached_rows
+                    or github_version != local_version
+                    or (github_fp and _cached_fp != github_fp)
+                )
             if needs_update:
                 _write_local_confirmed_runtime(github_rows, github_meta, github_pointer or _build_runtime_current_pointer(github_rows, github_meta))
                 _cached_rows = list(github_rows)
