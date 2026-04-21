@@ -4533,6 +4533,22 @@ async def manual_refresh(request: Request):
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"manual refresh requested by {username} from {client_host}")
 
+        # Hard deadline: github push + readback add up to ~3 min on top of the main refresh.
+        TOTAL_HARD_DEADLINE = max(120, MANUAL_REFRESH_TIMEOUT_SECONDS) + 300
+        deadline_task: asyncio.Task | None = None
+
+        async def _deadline_killer():
+            await asyncio.sleep(TOTAL_HARD_DEADLINE)
+            log(f"[refresh] hard deadline {TOTAL_HARD_DEADLINE}s reached — forcing running=False")
+            _set_manual_refresh_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                lastOk=False,
+                lastError="manual refresh hard deadline exceeded",
+            )
+
+        deadline_task = asyncio.create_task(_deadline_killer())
+
         previous_rows, previous_meta, previous_pointer = _load_confirmed_runtime_from_github()
         if not previous_rows:
             previous_rows = load_fresh_runtime_rows() or list(_cached_rows)
@@ -4599,6 +4615,8 @@ async def manual_refresh(request: Request):
                 )
                 log(f"manual refresh crashed and kept previous confirmed snapshot: {type(exc).__name__}: {exc}")
         finally:
+            if deadline_task and not deadline_task.done():
+                deadline_task.cancel()
             _set_manual_refresh_state(
                 running=False,
                 finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
