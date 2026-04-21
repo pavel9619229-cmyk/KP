@@ -4306,6 +4306,15 @@ async def on_startup() -> None:
             await asyncio.to_thread(_enrich_group_flags_bulk, _cached_rows, headers)
             _cached_fp = rows_fingerprint(_cached_rows)
             log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
+            # Persist enriched rows locally so the next GitHub sync doesn't overwrite
+            # paymentReceived/invoiceCreated values that were just set by enrichment.
+            try:
+                meta = _read_runtime_meta() or {"generatedAt": datetime.now(timezone.utc).isoformat(), "rowCount": len(_cached_rows)}
+                pointer = _build_runtime_current_pointer(_cached_rows, meta)
+                _write_local_confirmed_runtime(_cached_rows, meta, pointer)
+                log(f"[startup] enriched rows saved to local confirmed runtime (v{pointer.get('version')})")
+            except Exception as save_exc:
+                log(f"[startup] saving enriched rows failed (non-blocking): {type(save_exc).__name__}: {save_exc}")
         except Exception as exc:
             log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
 
