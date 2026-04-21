@@ -169,6 +169,13 @@ ORDER_CACHE_FILE = os.getenv("ORDER_CACHE_FILE", "data/kp_order_cache.json")
 _order_to_kp_cache: dict[str, dict] = {}   # order_ref -> {"kp": kp_ref, "num": order_number}
 _order_cache_loaded: bool = False
 _order_cache_lock = threading.Lock()
+
+# Persistent payment seed cache. Manually seeded payments that scans may miss
+# (e.g. early-numbered docs like ДС-76 that live near the start of the DB).
+PAYMENT_SEED_FILE = os.getenv("PAYMENT_SEED_FILE", "data/kp_payment_seed.json")
+_payment_seed: list[dict] = []   # [{"payShort": "76", "purposeNums": ["218"], "purpose": "..."}]
+_payment_seed_loaded: bool = False
+_payment_seed_lock = threading.Lock()
 CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per hour
 CONFIRMED_RUNTIME_SYNC_TTL_SECONDS = int(os.getenv("CONFIRMED_RUNTIME_SYNC_TTL_SECONDS", "300"))
 _render_status_lock = threading.Lock()
@@ -2012,6 +2019,37 @@ def _save_order_cache() -> None:
         pass
 
 
+def _load_payment_seed() -> None:
+    """Load persisted payment seed from disk once per process lifetime."""
+    global _payment_seed, _payment_seed_loaded
+    if _payment_seed_loaded:
+        return
+    with _payment_seed_lock:
+        if _payment_seed_loaded:
+            return
+        try:
+            if os.path.exists(PAYMENT_SEED_FILE):
+                with open(PAYMENT_SEED_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    _payment_seed = data
+        except Exception:
+            pass
+        _payment_seed_loaded = True
+
+
+def _save_payment_seed() -> None:
+    """Persist payment seed to disk (best-effort)."""
+    try:
+        os.makedirs(os.path.dirname(PAYMENT_SEED_FILE), exist_ok=True)
+        tmp = PAYMENT_SEED_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_payment_seed, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, PAYMENT_SEED_FILE)
+    except Exception:
+        pass
+
+
 def _parse_odata_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -2399,6 +2437,13 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 if purpose_num:
                     purpose_num_set.add(purpose_num)
 
+    # Merge payment seed: covers payments missed by tail-page scan (e.g. early-numbered docs).
+    _load_payment_seed()
+    for seed_entry in _payment_seed:
+        for num in seed_entry.get("purposeNums", []):
+            if num:
+                purpose_num_set.add(num)
+
     kp_invoice_map = {kp: False for kp in kp_ref_set}
     kp_payment_map = {kp: False for kp in kp_ref_set}
 
@@ -2783,6 +2828,19 @@ def _build_payment_match_table(headers: dict) -> dict:
                 "payShort": pay_short,
                 "purpose": purpose,
                 "purposeNums": purpose_nums,
+            })
+
+    # Merge payment seed: add seeded entries whose payShort is not already in live scan.
+    _load_payment_seed()
+    live_pay_shorts = {r["payShort"] for r in pay_rows}
+    for seed_entry in _payment_seed:
+        short = str(seed_entry.get("payShort") or "")
+        if short and short not in live_pay_shorts:
+            pay_rows.append({
+                "payRef": f"seed-{short}",
+                "payShort": short,
+                "purpose": seed_entry.get("purpose", ""),
+                "purposeNums": seed_entry.get("purposeNums", []),
             })
 
     # --- build table rows ---
@@ -4949,6 +5007,82 @@ async def admin_payment_match_table(request: Request):
         raise HTTPException(status_code=401, detail="Admin auth required")
     headers = _build_headers()
     result = await asyncio.to_thread(_build_payment_match_table, headers)
+    return {"ok": True, **result}
+
+
+@app.post("/api/admin/seed-payment")
+async def admin_seed_payment(request: Request):
+    """Fetch a payment document from 1C by its short number and add it to the persistent seed cache.
+    Body: {"payNumber": "76"}
+    """
+    ok = False
+    if _get_admin_username(request):
+        ok = True
+    else:
+        try:
+            user = _get_user_from_request(request)
+            if str(user.get("role") or "").lower() == "admin":
+                ok = True
+        except HTTPException:
+            pass
+    if not ok:
+        raise HTTPException(status_code=401, detail="Admin auth required")
+
+    body = await request.json()
+    pay_number_raw = str(body.get("payNumber") or "").strip()
+    if not pay_number_raw:
+        raise HTTPException(status_code=400, detail="payNumber is required")
+
+    pay_short = "".join(ch for ch in pay_number_raw if ch.isdigit()).lstrip("0") or pay_number_raw
+
+    def _fetch_and_seed() -> dict:
+        headers = _build_headers()
+        # Scan payment pages to find the one with this number.
+        pages, complete = _collect_tail_pages(
+            "Document_ПоступлениеБезналичныхДенежныхСредств",
+            headers,
+            ["Ref_Key", "Number", "Date", "НазначениеПлатежа"],
+            page_size=200,
+            timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 60.0),
+        )
+        found = None
+        for batch in pages:
+            for item in batch:
+                raw = str(item.get("Number") or "")
+                short = "".join(ch for ch in raw if ch.isdigit()).lstrip("0") or raw
+                if short == pay_short:
+                    found = item
+                    break
+            if found:
+                break
+
+        if not found:
+            return {"found": False, "payShort": pay_short, "scanComplete": complete}
+
+        purpose = str(found.get("НазначениеПлатежа") or "")
+        purpose_nums: list[str] = []
+        for m in re.finditer(r"(?:[а-яa-z]*ут[\s\-_/]*|№\s*)0*(\d+)", purpose.lower()):
+            d = m.group(1).lstrip("0") or "0"
+            if d and d != "0":
+                purpose_nums.append(d)
+
+        entry = {
+            "payShort": pay_short,
+            "purpose": purpose,
+            "purposeNums": purpose_nums,
+        }
+
+        global _payment_seed, _payment_seed_loaded
+        _load_payment_seed()
+        with _payment_seed_lock:
+            # Replace existing entry with same payShort, or append.
+            _payment_seed = [e for e in _payment_seed if str(e.get("payShort") or "") != pay_short]
+            _payment_seed.append(entry)
+        _save_payment_seed()
+        log(f"[payment-seed] saved payment {pay_short}: purposeNums={purpose_nums}")
+        return {"found": True, "payShort": pay_short, "purpose": purpose, "purposeNums": purpose_nums, "scanComplete": complete}
+
+    result = await asyncio.to_thread(_fetch_and_seed)
     return {"ok": True, **result}
 
 
