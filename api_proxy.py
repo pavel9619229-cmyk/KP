@@ -2473,7 +2473,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             elif kp_invoice_map.get(kp_ref, False):
                 # Partial orders/invoices scan: only upgrade to True; do not force False.
                 row["invoiceCreated"] = True
-            row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+            row["paymentReceived"] = kp_payment_map.get(kp_ref, False) or bool(row.get("paymentReceived"))
 
 
 def _normalize_kp_number(value: str) -> str:
@@ -3831,6 +3831,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         comment_raw = str(doc.get("Комментарий") or "")
         comment_clean = strip_html(comment_raw).replace("\r\n", "\n").replace("\r", "\n").upper()
         comment_top = comment_clean.split("\n")[:5]
+        payment_by_comment = any("ОПЛАТА ПРИШЛА" in line for line in comment_top)
         patch = {
             "refKey": ref_key,
             "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top),
@@ -3841,6 +3842,8 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
             "shipmentPending": "ОТГРУЗИТЬ" in comment_clean,
             "additionalInfoFirstLine": first_line(comment_raw) or row.get("additionalInfoFirstLine") or "",
         }
+        if payment_by_comment:
+            patch["paymentReceived"] = True
         row.update(patch)
         stage2_patch.append(patch)
     _save_stage_patch("stage2_comment_flags", stage2_patch)
