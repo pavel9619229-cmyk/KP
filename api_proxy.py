@@ -3803,15 +3803,36 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
 
     _save_stage_patch("stage1_base", stage1_patch)
 
+    # Determine which rows have unchanged status vs cache → skip re-fetching their docs.
+    # Condition: known row exists, status matches, and the row was previously fully enriched
+    # (additionalInfoFirstLine not None signals at least one full pass was done).
+    cached_refs: set[str] = set()
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        if not ref_key:
+            continue
+        known = known_rows.get(row.get("number", ""), {})
+        if (
+            known
+            and known.get("status", "") == row.get("status", "")
+            and known.get("additionalInfoFirstLine") is not None
+            and known.get("customerName") is not None
+            and known.get("managerFilled") is not None
+        ):
+            cached_refs.add(ref_key)
+
     # Stage 2.5: fetch docs in parallel for per-doc stages.
+    # Skip rows whose status hasn't changed since last refresh (use cached values).
     def _fetch_one(ref_key: str) -> tuple[str, dict]:
         if not ref_key:
             return ref_key, {}
         return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
 
-    ref_keys = [str(row.get("refKey") or "") for row in rows]
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
+    all_ref_keys = [str(row.get("refKey") or "") for row in rows]
+    fetch_ref_keys = [rk for rk in all_ref_keys if rk not in cached_refs]
+    log(f"stage2.5: fetching {len(fetch_ref_keys)} docs, skipping {len(cached_refs)} unchanged (status-cache hit)")
+    with ThreadPoolExecutor(max_workers=25) as pool:
+        futures = {pool.submit(_fetch_one, rk): rk for rk in fetch_ref_keys}
         for future in as_completed(futures):
             rk, doc = future.result()
             docs_by_ref[rk] = doc
@@ -3820,6 +3841,9 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
     stage2_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
+        if ref_key in cached_refs:
+            stage2_patch.append({"refKey": ref_key, "cached": True})
+            continue
         doc = docs_by_ref.get(ref_key) or {}
         comment_raw = str(doc.get("Комментарий") or "")
         comment_clean = strip_html(comment_raw).replace("\r\n", "\n").replace("\r", "\n").upper()
