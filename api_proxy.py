@@ -2393,7 +2393,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             if not purpose:
                 continue
             # Extract purpose numbers exactly as in admin block3 payment-match table.
-            for m in re.finditer(r"[а-яa-z]*ут[\s\-_/]*0*(\d+)", purpose):
+            # Matches: "УТ-226", "ПСУТ-226" and also "№ 226", "№226" (e.g. "СЧЕТ НА ОПЛАТУ № 226").
+            for m in re.finditer(r"(?:[а-яa-z]*ут[\s\-_/]*|№\s*)0*(\d+)", purpose):
                 purpose_num = (m.group(1) or "").lstrip("0")
                 if purpose_num:
                     purpose_num_set.add(purpose_num)
@@ -2771,9 +2772,9 @@ def _build_payment_match_table(headers: dict) -> dict:
             pay_raw = str(item.get("Number") or "")
             pay_short = "".join(ch for ch in pay_raw if ch.isdigit()).lstrip("0") or pay_raw
             purpose = str(item.get("НазначениеПлатежа") or "")
-            # Extract number from "УТ-198" / "ут 198" etc.
+            # Extract number from "УТ-198" / "ут 198" / "№ 226" / "СЧЕТ НА ОПЛАТУ № 226" etc.
             purpose_nums: list[str] = []
-            for m in re.finditer(r"[а-яa-z]*ут[\s\-_/]*0*(\d+)", purpose.lower()):
+            for m in re.finditer(r"(?:[а-яa-z]*ут[\s\-_/]*|№\s*)0*(\d+)", purpose.lower()):
                 d = m.group(1).lstrip("0") or "0"
                 if d and d != "0":
                     purpose_nums.append(d)
