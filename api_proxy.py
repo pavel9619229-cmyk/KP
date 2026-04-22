@@ -3905,6 +3905,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
 
     # Stage 2: quick flags from full comment payload.
+    _t2 = time.time()
     stage2_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
@@ -3928,14 +3929,16 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         row.update(patch)
         stage2_patch.append(patch)
     _save_stage_patch("stage2_comment_flags", stage2_patch)
+    log(f"stage2: done {len(rows)} rows in {time.time()-_t2:.1f}s")
 
     # Stage 3: customer.
+    _t3 = time.time()
     stage3_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
         if doc:
-            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
             if customer_name:
                 row["customerName"] = customer_name
         patch = {
@@ -3946,17 +3949,19 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         row.update(patch)
         stage3_patch.append(patch)
     _save_stage_patch("stage3_customer", stage3_patch)
+    log(f"stage3: done {len(rows)} rows in {time.time()-_t3:.1f}s")
 
     # Stage 4: manager.
+    _t4 = time.time()
     stage4_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
         if doc:
-            manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
             if manager_filled is not None:
                 row["managerFilled"] = manager_filled
-                manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+                manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
                 if manager_name:
                     row["managerName"] = manager_name
         patch = {
@@ -3967,15 +3972,17 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         row.update(patch)
         stage4_patch.append(patch)
     _save_stage_patch("stage4_manager", stage4_patch)
+    log(f"stage4: done {len(rows)} rows in {time.time()-_t4:.1f}s")
 
     # Stage 5: goods/price.
+    _t5 = time.time()
     stage5_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
         if doc:
-            product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
-            price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=True)
+            price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
             if product_specified is not None:
                 row["productSpecified"] = bool(product_specified)
             if price_filled is not None:
@@ -3988,8 +3995,10 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         row.update(patch)
         stage5_patch.append(patch)
     _save_stage_patch("stage5_product_price", stage5_patch)
+    log(f"stage5: done {len(rows)} rows in {time.time()-_t5:.1f}s")
 
     # Stage 6: heavy group flags (orders/invoices/payments).
+    _t6 = time.time()
     stage6_patch: list[dict] = []
     if include_stage6:
         try:
@@ -4009,6 +4018,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
     else:
         _save_stage_patch("stage6_group_flags", [])
         log("stage6_group_flags skipped (fast mode)")
+    log(f"stage6: done in {time.time()-_t6:.1f}s")
 
     for row in rows:
         apply_runtime_defaults(row)
