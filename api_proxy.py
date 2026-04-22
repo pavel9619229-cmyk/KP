@@ -4002,17 +4002,18 @@ def refresh_cache_and_file(
     use_known_cache: bool = True,
     push_to_github: bool = True,
     update_live_cache: bool = True,
-) -> None:
+) -> bool:
+    """Returns True if refresh actually ran, False if skipped (another cycle holds the lock)."""
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
     refresh_started_at = datetime.now(timezone.utc)
 
     if not _refresh_run_lock.acquire(blocking=False):
         log("refresh skipped: another refresh cycle is running")
-        return
+        return False
     if not _refresh_lock.acquire(blocking=False):
         _refresh_run_lock.release()
         log("refresh skipped: previous full cycle is still running")
-        return
+        return False
 
     try:
         try:
@@ -4102,6 +4103,7 @@ def refresh_cache_and_file(
     finally:
         _refresh_lock.release()
         _refresh_run_lock.release()
+    return True
 
 
 def refresh_cached_rows_only() -> dict:
@@ -4578,10 +4580,23 @@ async def manual_refresh(request: Request):
         previous_last_confirmed_sync_check = _last_confirmed_runtime_sync_check
 
         try:
-            await asyncio.wait_for(
+            ran = await asyncio.wait_for(
                 asyncio.to_thread(refresh_cache_and_file, True, True, 300, True, False, False),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
+
+            if not ran:
+                # Another refresh cycle was already running. Wait for it to complete
+                # (up to the hard deadline), then pick up its result from disk.
+                log("[refresh] cycle was skipped — waiting for running cycle to complete")
+                wait_deadline = time.time() + max(120, MANUAL_REFRESH_TIMEOUT_SECONDS)
+                while time.time() < wait_deadline:
+                    await asyncio.sleep(5)
+                    lock_free = _refresh_run_lock.acquire(blocking=False)
+                    if lock_free:
+                        _refresh_run_lock.release()
+                        break
+                log("[refresh] running cycle completed; proceeding to publish from disk")
 
             candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
             candidate_meta = _read_runtime_meta()
