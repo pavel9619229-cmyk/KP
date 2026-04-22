@@ -69,6 +69,9 @@ ENRICH_PER_REFRESH = int(os.getenv("ENRICH_PER_REFRESH", "60"))
 FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20"))
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
+STAGE25_RETRY_TIMEOUT_SECONDS = float(os.getenv("STAGE25_RETRY_TIMEOUT_SECONDS", "12.0"))
+STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
+STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
@@ -3295,31 +3298,44 @@ def _push_json_to_github_path(file_path: str, payload: object, message: str) -> 
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
     content_b64 = base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")).decode("ascii")
 
-    current_sha = ""
-    try:
-        resp = requests.get(api_url, headers=gh_headers, params={"ref": _github_runtime_ref()}, timeout=10)
-        if resp.status_code == 200:
-            current_sha = str(resp.json().get("sha") or "")
-    except Exception as exc:
-        log(f"GitHub SHA fetch failed ({file_path}): {exc}")
+    max_attempts = 4
+    for attempt in range(1, max_attempts + 1):
+        current_sha = ""
+        try:
+            resp = requests.get(api_url, headers=gh_headers, params={"ref": _github_runtime_ref()}, timeout=10)
+            if resp.status_code == 200:
+                current_sha = str(resp.json().get("sha") or "")
+        except Exception as exc:
+            log(f"GitHub SHA fetch failed ({file_path}): {exc}")
 
-    body: dict = {
-        "message": message,
-        "content": content_b64,
-        "branch": _github_runtime_ref(),
-    }
-    if current_sha:
-        body["sha"] = current_sha
+        body: dict = {
+            "message": message,
+            "content": content_b64,
+            "branch": _github_runtime_ref(),
+        }
+        if current_sha:
+            body["sha"] = current_sha
 
-    try:
-        resp = requests.put(api_url, headers=gh_headers, json=body, timeout=20)
-        if resp.status_code in (200, 201):
-            return True
-        log(f"GitHub push failed ({file_path}): HTTP {resp.status_code}: {resp.text[:200]}")
-        return False
-    except Exception as exc:
-        log(f"GitHub push error ({file_path}): {exc}")
-        return False
+        try:
+            resp = requests.put(api_url, headers=gh_headers, json=body, timeout=30)
+            if resp.status_code in (200, 201):
+                return True
+
+            # On conflict (409) or other transient errors, retry a few times.
+            log(f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}")
+            if resp.status_code in (409, 422) or resp.status_code >= 500:
+                if attempt < max_attempts:
+                    time.sleep(0.5 * attempt)
+                    continue
+            return False
+        except Exception as exc:
+            log(f"GitHub push error ({file_path}): {exc}")
+            if attempt < max_attempts:
+                time.sleep(0.5 * attempt)
+                continue
+            return False
+
+    return False
 
 
 def _build_runtime_version_paths(meta: dict) -> tuple[int, str, str]:
@@ -3849,6 +3865,41 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
                 doc_fail += 1
                 failed_refs.append(rk)
     log(f"stage2.5: fetched {doc_ok} ok, {doc_fail} failed/timeout out of {len(ref_keys)} docs")
+
+    # Second pass for failed refs only: slower but much smaller batch,
+    # so we can recover comments for transiently slow documents.
+    if failed_refs:
+        retry_targets = failed_refs[: max(0, STAGE25_RETRY_MAX_DOCS)]
+
+        def _fetch_retry(ref_key: str) -> tuple[str, dict]:
+            if not ref_key:
+                return ref_key, {}
+            return ref_key, _fetch_doc_by_ref(
+                ref_key,
+                headers,
+                timeout=max(STAGE25_RETRY_TIMEOUT_SECONDS, DOC_TIMEOUT_SECONDS, 6.0),
+            )
+
+        recovered = 0
+        still_failed: list[str] = []
+        with ThreadPoolExecutor(max_workers=max(1, STAGE25_RETRY_WORKERS)) as retry_pool:
+            retry_futures = {retry_pool.submit(_fetch_retry, rk): rk for rk in retry_targets}
+            for future in as_completed(retry_futures):
+                rk, doc = future.result()
+                if doc:
+                    docs_by_ref[rk] = doc
+                    recovered += 1
+                else:
+                    still_failed.append(rk)
+
+        doc_ok += recovered
+        doc_fail = max(0, doc_fail - recovered)
+        failed_refs = still_failed + failed_refs[len(retry_targets) :]
+        log(
+            "stage2.5 retry: attempted "
+            f"{len(retry_targets)}, recovered {recovered}, still failed {len(failed_refs)}"
+        )
+
     if failed_refs:
         failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
         log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
