@@ -13,6 +13,8 @@ const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
 const boardContent = document.getElementById('boardContent');
 
+let lastRefreshDurationSec = null;
+
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
 const ALL_TAB_KEY = '__all__';
@@ -277,6 +279,7 @@ refreshBtn.addEventListener('click', async () => {
       throw new Error(String(details));
     }
 
+    lastRefreshDurationSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     await refreshData(false);
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
@@ -736,10 +739,17 @@ function formatUpdatedAtForRole(value) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     return 'Нет данных';
   }
+  const durationSuffix = lastRefreshDurationSec !== null ? ` (${formatElapsedStatic(lastRefreshDurationSec)})` : '';
   if (String(currentUserRole || '').toLowerCase() === 'admin') {
-    return formatUpdatedAt(value);
+    return formatUpdatedAt(value) + durationSuffix;
   }
-  return 'Обновлено';
+  return 'Обновлено' + durationSuffix;
+}
+
+function formatElapsedStatic(seconds) {
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
 }
 
 async function loadCurrentUserRole() {
