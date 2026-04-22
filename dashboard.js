@@ -201,12 +201,12 @@ refreshBtn.addEventListener('click', async () => {
           window.location.href = '/login';
           return;
         }
-        if (stateResponse.status === 503) {
-          // Server is waking up (Render cold start) — wait up to 90 seconds
+        if (stateResponse.status === 502 || stateResponse.status === 503 || stateResponse.status === 504) {
+          // Server is waking up or restarting (Render deploy/cold start) — wait up to 120 seconds
           consecutiveStatusErrors += 1;
-          refreshBtn.textContent = `Сервер просыпается... (${consecutiveStatusErrors * 2}с)`;
-          if (consecutiveStatusErrors >= 45) {
-            throw new Error('Сервер не отвечает после 90 секунд ожидания');
+          refreshBtn.textContent = `Сервер перезапускается... (${consecutiveStatusErrors * 2}с)`;
+          if (consecutiveStatusErrors >= 60) {
+            throw new Error('Сервер не отвечает после 120 секунд ожидания');
           }
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           continue;
@@ -221,7 +221,7 @@ refreshBtn.addEventListener('click', async () => {
       } catch (statusError) {
         if (statusError.message.startsWith('Сервер не отвечает')) throw statusError;
         consecutiveStatusErrors += 1;
-        if (consecutiveStatusErrors >= 5) {
+        if (consecutiveStatusErrors >= 30) {
           throw new Error(`Ошибка статуса обновления: ${statusError.message}`);
         }
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
