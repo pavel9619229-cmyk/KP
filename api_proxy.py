@@ -5410,29 +5410,16 @@ async def ws_kp(websocket: WebSocket):
         return
 
 
-_NO_CACHE_JS_FILES = {
-    "dashboard.js": ("application/javascript", "dashboard.js"),
-    "dashboard.css": ("text/css", "dashboard.css"),
-    "login.js": ("application/javascript", "login.js"),
-    "admin_rights.js": ("application/javascript", "admin_rights.js"),
-    "styles.css": ("text/css", "styles.css"),
-}
+@app.middleware("http")
+async def _add_no_cache_for_assets(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith(".js") or path.endswith(".css"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
-@app.get("/{filename:path}")
-async def static_no_cache(filename: str):
-    entry = _NO_CACHE_JS_FILES.get(filename.lstrip("/"))
-    if entry:
-        media_type, disk_name = entry
-        return FileResponse(
-            disk_name,
-            media_type=media_type,
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
-    raise HTTPException(status_code=404)
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 

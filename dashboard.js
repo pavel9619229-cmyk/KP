@@ -189,6 +189,7 @@ refreshBtn.addEventListener('click', async () => {
     let done = false;
     let lastState = null;
     let consecutiveStatusErrors = 0;
+    let restartRetries = 0;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let stateResponse;
       let statePayload;
@@ -233,6 +234,25 @@ refreshBtn.addEventListener('click', async () => {
         setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
+      }
+
+      // Server restarted mid-refresh: it has no memory of our request.
+      // Detect by: not running, no finishedAt, no lastOk, no lastError, no requestedAt.
+      if (!statePayload.running && !statePayload.finishedAt && statePayload.lastOk == null && !statePayload.lastError && !statePayload.requestedAt) {
+        if (restartRetries < 2) {
+          restartRetries += 1;
+          refreshBtn.textContent = `Перезапуск после рестарта (${restartRetries}/2)...`;
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          try {
+            const retryResp = await fetch('/api/kp/refresh', { method: 'POST', credentials: 'include', cache: 'no-store' });
+            if (retryResp.status === 401) { window.location.href = '/login'; return; }
+          } catch { /* ignore, keep polling */ }
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
+        }
+        // Gave up retrying after restarts — load whatever data is on server.
+        done = true;
+        break;
       }
 
       if (statePayload?.lastOk === true || (statePayload?.lastRefresh && !statePayload?.lastRefreshError)) {
