@@ -169,8 +169,9 @@ refreshBtn.addEventListener('click', async () => {
         credentials: 'include',
         cache: 'no-store',
       });
-      if (startResponse.status !== 503) break;
-      refreshBtn.textContent = `Сервер просыпается... (${(wake + 1) * 2}с)`;
+      if (startResponse.status !== 503 && startResponse.status !== 502 && startResponse.status !== 504) break;
+      const wakeLabel = startResponse.status === 503 ? 'Сервер просыпается' : 'Сервер перезапускается';
+      refreshBtn.textContent = `${wakeLabel}... (${(wake + 1) * 2}с)`;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
@@ -1016,12 +1017,26 @@ function connectWebSocket() {
   };
 }
 
+// Periodic HTTP ping to prevent Render free tier from sleeping the server.
+// Render sleeps after 15 min of no HTTP requests; WS connections don't count.
+const KEEP_ALIVE_MS = 10 * 60 * 1000; // 10 minutes
+function startKeepAlive() {
+  setInterval(async () => {
+    try {
+      await fetch('/api/kp/refresh/status', { method: 'GET', credentials: 'include', cache: 'no-store' });
+    } catch {
+      // ignore — next ping will retry
+    }
+  }, KEEP_ALIVE_MS);
+}
+
 async function init() {
   updateClearSearchButton();
   await loadCurrentUserRole();
   await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();
+  startKeepAlive();
 }
 
 init();
