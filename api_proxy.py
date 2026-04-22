@@ -4576,7 +4576,7 @@ async def admin_rights():
     return FileResponse("admin_rights.html", media_type="text/html")
 
 
-@app.get("/healthz")
+@app.api_route("/healthz", methods=["GET", "HEAD"])
 async def healthz():
     return {
         "ok": True,
