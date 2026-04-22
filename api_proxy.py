@@ -3834,8 +3834,10 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
 
     ref_keys = [str(row.get("refKey") or "") for row in rows]
+    ref_key_to_number = {str(row.get("refKey") or ""): str(row.get("number") or "") for row in rows}
     doc_ok = 0
     doc_fail = 0
+    failed_refs: list[str] = []
     with ThreadPoolExecutor(max_workers=25) as pool:
         futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
         for future in as_completed(futures):
@@ -3845,7 +3847,11 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
                 doc_ok += 1
             else:
                 doc_fail += 1
+                failed_refs.append(rk)
     log(f"stage2.5: fetched {doc_ok} ok, {doc_fail} failed/timeout out of {len(ref_keys)} docs")
+    if failed_refs:
+        failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
+        log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
 
     # Stage 2: quick flags from full comment payload.
     stage2_patch: list[dict] = []
