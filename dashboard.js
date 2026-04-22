@@ -747,9 +747,10 @@ function formatUpdatedAtForRole(value) {
 }
 
 function formatElapsedStatic(seconds) {
-  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
+  const mm = Math.floor(seconds / 60);
+  const ss = seconds % 60;
+  if (mm === 0) return `${ss}с`;
+  return `${mm}м ${ss}с`;
 }
 
 async function loadCurrentUserRole() {
