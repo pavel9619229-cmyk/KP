@@ -4624,11 +4624,17 @@ async def manual_refresh(request: Request):
 
             candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
             candidate_meta = _read_runtime_meta()
-            github_rows, _, github_pointer = await asyncio.to_thread(
-                _publish_confirmed_runtime_snapshot_or_raise,
-                candidate_rows,
-                candidate_meta,
+            _publish_t0 = time.time()
+            log(f"[refresh] starting github publish ({len(candidate_rows)} rows)")
+            github_rows, _, github_pointer = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _publish_confirmed_runtime_snapshot_or_raise,
+                    candidate_rows,
+                    candidate_meta,
+                ),
+                timeout=120,
             )
+            log(f"[refresh] github publish done in {time.time()-_publish_t0:.1f}s")
             _cached_rows = list(github_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
             _last_confirmed_runtime_sync_check = time.time()
