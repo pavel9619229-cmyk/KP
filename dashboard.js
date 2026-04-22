@@ -222,7 +222,7 @@ refreshBtn.addEventListener('click', async () => {
       } catch (statusError) {
         if (statusError.message.startsWith('Сервер не отвечает')) throw statusError;
         consecutiveStatusErrors += 1;
-        if (consecutiveStatusErrors >= 30) {
+        if (consecutiveStatusErrors >= 60) {
           throw new Error(`Ошибка статуса обновления: ${statusError.message}`);
         }
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
