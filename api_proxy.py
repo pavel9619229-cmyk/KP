@@ -3408,19 +3408,43 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     meta_path = str(pointer.get("metaPath") or "")
     message_prefix = f"Runtime snapshot v{version}"
 
-    if not _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]"):
-        raise RuntimeError("GitHub cache version push failed")
-    if not _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]"):
-        raise RuntimeError("GitHub meta version push failed")
+    # Push cache and meta in parallel to save time
+    _push_cache_ok: list[bool] = [False]
+    _push_meta_ok: list[bool] = [False]
+    _push_cache_err: list = [None]
+    _push_meta_err: list = [None]
 
-    github_rows = _load_runtime_rows_from_github_path(cache_path)
-    github_meta = _load_runtime_meta_from_github_path(meta_path)
-    if not github_rows or not github_meta:
-        raise RuntimeError("GitHub version readback failed")
-    if rows_fingerprint(github_rows) != str(pointer.get("rowsFingerprint") or ""):
-        raise RuntimeError("GitHub version readback fingerprint mismatch")
-    if (_to_int_or_none(github_meta.get("cycleVersion")) or 0) != (_to_int_or_none(pointer.get("version")) or 0):
-        raise RuntimeError("GitHub version readback cycleVersion mismatch")
+    def _do_push_cache() -> None:
+        try:
+            _push_cache_ok[0] = _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]")
+        except Exception as e:
+            _push_cache_err[0] = e
+
+    def _do_push_meta() -> None:
+        try:
+            _push_meta_ok[0] = _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]")
+        except Exception as e:
+            _push_meta_err[0] = e
+
+    t_cache = threading.Thread(target=_do_push_cache, daemon=True)
+    t_meta = threading.Thread(target=_do_push_meta, daemon=True)
+    t_cache.start()
+    t_meta.start()
+    t_cache.join()
+    t_meta.join()
+
+    if not _push_cache_ok[0]:
+        raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0]}")
+    if not _push_meta_ok[0]:
+        raise RuntimeError(f"GitHub meta version push failed: {_push_meta_err[0]}")
+
+    # Skip readback of versioned cache/meta files (trust 200/201 push response).
+    # Use in-memory rows and meta — they are exactly what was pushed.
+    # Local fingerprint sanity check (no network call needed):
+    if rows_fingerprint(rows) != str(pointer.get("rowsFingerprint") or ""):
+        raise RuntimeError("publish: in-memory fingerprint mismatch (should never happen)")
+
+    log(f"publish: versioned snapshot v{version} pushed ({len(rows)} rows), promoting pointer")
 
     if not _push_json_to_github_path(
         GITHUB_RUNTIME_CURRENT_PATH,
@@ -3434,8 +3458,8 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     if confirmed_version != (_to_int_or_none(pointer.get("version")) or 0):
         raise RuntimeError("GitHub current pointer readback mismatch")
 
-    _write_local_confirmed_runtime(github_rows, github_meta, confirmed_pointer)
-    return github_rows, github_meta, confirmed_pointer
+    _write_local_confirmed_runtime(rows, meta, confirmed_pointer)
+    return rows, meta, confirmed_pointer
 
 
 def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
