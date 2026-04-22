@@ -72,6 +72,7 @@ DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 STAGE25_RETRY_TIMEOUT_SECONDS = float(os.getenv("STAGE25_RETRY_TIMEOUT_SECONDS", "12.0"))
 STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
 STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
+STAGE34_WORKERS = int(os.getenv("STAGE34_WORKERS", "20"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
@@ -3931,16 +3932,32 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
     _save_stage_patch("stage2_comment_flags", stage2_patch)
     log(f"stage2: done {len(rows)} rows in {time.time()-_t2:.1f}s")
 
-    # Stage 3: customer.
+    # Stage 3: customer — parallel nav-link resolution.
     _t3 = time.time()
+    def _resolve_customer(row: dict) -> dict:
+        ref_key = str(row.get("refKey") or "")
+        doc = docs_by_ref.get(ref_key) or {}
+        customer_name = ""
+        if doc:
+            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=True) or ""
+        return {
+            "refKey": ref_key,
+            "customerName": customer_name or row.get("customerName") or "",
+        }
+
+    stage3_results: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s3_pool:
+        s3_futures = {s3_pool.submit(_resolve_customer, row): row for row in rows}
+        for future in as_completed(s3_futures):
+            result = future.result()
+            stage3_results[result["refKey"]] = result
+
     stage3_patch: list[dict] = []
     for row in rows:
         ref_key = str(row.get("refKey") or "")
-        doc = docs_by_ref.get(ref_key) or {}
-        if doc:
-            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
-            if customer_name:
-                row["customerName"] = customer_name
+        resolved = stage3_results.get(ref_key, {})
+        if resolved.get("customerName"):
+            row["customerName"] = resolved["customerName"]
         patch = {
             "refKey": ref_key,
             "customerName": row.get("customerName") or "",
@@ -3951,19 +3968,36 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
     _save_stage_patch("stage3_customer", stage3_patch)
     log(f"stage3: done {len(rows)} rows in {time.time()-_t3:.1f}s")
 
-    # Stage 4: manager.
+    # Stage 4: manager — parallel nav-link resolution.
     _t4 = time.time()
-    stage4_patch: list[dict] = []
-    for row in rows:
+    def _resolve_manager(row: dict) -> dict:
         ref_key = str(row.get("refKey") or "")
         doc = docs_by_ref.get(ref_key) or {}
+        result: dict = {"refKey": ref_key}
         if doc:
             manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
             if manager_filled is not None:
-                row["managerFilled"] = manager_filled
+                result["managerFilled"] = manager_filled
                 manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
                 if manager_name:
-                    row["managerName"] = manager_name
+                    result["managerName"] = manager_name
+        return result
+
+    stage4_results: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s4_pool:
+        s4_futures = {s4_pool.submit(_resolve_manager, row): row for row in rows}
+        for future in as_completed(s4_futures):
+            result = future.result()
+            stage4_results[result["refKey"]] = result
+
+    stage4_patch: list[dict] = []
+    for row in rows:
+        ref_key = str(row.get("refKey") or "")
+        resolved = stage4_results.get(ref_key, {})
+        if resolved.get("managerFilled") is not None:
+            row["managerFilled"] = resolved["managerFilled"]
+        if resolved.get("managerName"):
+            row["managerName"] = resolved["managerName"]
         patch = {
             "refKey": ref_key,
             "managerName": row.get("managerName") or UNKNOWN_MANAGER_NAME,
