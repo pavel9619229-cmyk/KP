@@ -417,7 +417,7 @@ function escapeHtml(text) {
 function linkifyPhones(text) {
   const escaped = escapeHtml(text);
   return escaped.replace(
-    /((?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/g,
+    /(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g,
     (match) => {
       const digits = match.replace(/\D/g, '');
       const normalized = digits.startsWith('8') ? '+7' + digits.slice(1) : '+' + digits;
