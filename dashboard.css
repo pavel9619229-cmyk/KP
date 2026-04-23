@@ -132,6 +132,7 @@ body.light .manager-filter select {
   color: var(--muted);
   font-weight: 700;
   white-space: nowrap;
+  flex: 2 2 0;
 }
 
 body.light .updated-at-inline {
