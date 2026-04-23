@@ -12,36 +12,11 @@ const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
 
-let lastDurationBtn = null;
-document.addEventListener('DOMContentLoaded', () => {
-  lastDurationBtn = document.getElementById('lastDurationBtn');
-  if (!lastDurationBtn) {
-    console.error('lastDurationBtn не найден в DOM');
-  } else {
-    // Временная отладочная подсветка
-    lastDurationBtn.style.background = '#ffcccc';
-  }
-  updateLastDurationBtn();
-});
 const boardContent = document.getElementById('boardContent');
 
 let lastRefreshDurationSec = null;
 
-function updateLastDurationBtn() {
-  if (!lastDurationBtn) return;
-  const isAdmin = String(currentUserRole || '').toLowerCase() === 'admin';
-  if (isAdmin) {
-    lastDurationBtn.style.display = '';
-    if (lastRefreshDurationSec !== null) {
-      lastDurationBtn.textContent = formatElapsedStatic(lastRefreshDurationSec);
-    } else {
-      lastDurationBtn.textContent = '—';
-    }
-  } else {
-    lastDurationBtn.style.display = 'none';
-    lastDurationBtn.textContent = '';
-  }
-}
+function updateLastDurationBtn() {}
 
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
