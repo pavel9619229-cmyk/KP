@@ -310,7 +310,14 @@ refreshBtn.addEventListener('click', async () => {
     lastRefreshDurationSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     // После обновления длительности сразу обновляем отдельную кнопку
     updateLastDurationBtn();
+    const _savedTab = activeTab;
+    const _savedSearch = searchInput.value;
     await refreshData(false);
+    // Восстанавливаем состояние фильтра и поиска после обновления
+    activeTab = _savedTab;
+    searchInput.value = _savedSearch;
+    updateClearSearchButton();
+    renderBoard();
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
   } finally {
