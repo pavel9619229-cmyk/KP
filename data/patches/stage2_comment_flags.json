@@ -572,8 +572,7 @@
     "receiptConfirmed": false,
     "edoSent": false,
     "rejected": false,
-    "problem": false,
-    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО."
+    "problem": false
   },
   {
     "refKey": "2bf3813f-335a-11f1-8d55-bc97e15eb091",
