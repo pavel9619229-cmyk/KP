@@ -11,9 +11,37 @@ const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
+
+let lastDurationBtn = null;
+document.addEventListener('DOMContentLoaded', () => {
+  lastDurationBtn = document.getElementById('lastDurationBtn');
+  if (!lastDurationBtn) {
+    console.error('lastDurationBtn не найден в DOM');
+  } else {
+    // Временная отладочная подсветка
+    lastDurationBtn.style.background = '#ffcccc';
+  }
+  updateLastDurationBtn();
+});
 const boardContent = document.getElementById('boardContent');
 
 let lastRefreshDurationSec = null;
+
+function updateLastDurationBtn() {
+  if (!lastDurationBtn) return;
+  const isAdmin = String(currentUserRole || '').toLowerCase() === 'admin';
+  if (isAdmin) {
+    lastDurationBtn.style.display = '';
+    if (lastRefreshDurationSec !== null) {
+      lastDurationBtn.textContent = formatElapsedStatic(lastRefreshDurationSec);
+    } else {
+      lastDurationBtn.textContent = '—';
+    }
+  } else {
+    lastDurationBtn.style.display = 'none';
+    lastDurationBtn.textContent = '';
+  }
+}
 
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
@@ -280,6 +308,8 @@ refreshBtn.addEventListener('click', async () => {
     }
 
     lastRefreshDurationSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    // После обновления длительности сразу обновляем отдельную кнопку
+    updateLastDurationBtn();
     await refreshData(false);
   } catch (error) {
     updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
@@ -766,13 +796,16 @@ async function loadCurrentUserRole() {
     }
     if (!response.ok) {
       currentUserRole = 'manager';
+      updateLastDurationBtn();
       return;
     }
     const payload = await response.json().catch(() => ({}));
     const role = String(payload?.user?.role || '').trim().toLowerCase();
     currentUserRole = role || 'manager';
+    updateLastDurationBtn();
   } catch {
     currentUserRole = 'manager';
+    updateLastDurationBtn();
   }
 }
 
@@ -890,6 +923,7 @@ function renderBoard() {
   renderTabs(counts, rowsForCounts.length);
 
   updatedAtLabel.textContent = formatUpdatedAtForRole(lastSyncAt);
+  updateLastDurationBtn();
 
   if (!filtered.length) {
     boardContent.innerHTML = '<div class="board-empty">По текущему фильтру подходящих КП нет.</div>';
@@ -1068,6 +1102,9 @@ async function init() {
   await refreshData(true);
   connectWebSocket();
   startKeepAlive();
+
+  // При инициализации обновить кнопку длительности
+  updateLastDurationBtn();
 }
 
 init();
