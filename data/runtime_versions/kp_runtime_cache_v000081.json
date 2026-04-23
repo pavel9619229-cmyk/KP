@@ -2086,7 +2086,7 @@
     "problem": false,
     "shipmentPending": false,
     "statusKp": "",
-    "additionalInfoFirstLine": "КП ОТПРАВЛЕНО.",
+    "additionalInfoFirstLine": "ОТКАЗ ДУБЛЬ_ЗАПРОС ОБРАБОТАН КП ПСУТ-000326",
     "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "",
