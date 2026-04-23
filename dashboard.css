@@ -520,6 +520,20 @@ body.light .kp-card__status {
   color: var(--text);
 }
 
+.phone-link {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.phone-link:hover {
+  text-decoration: underline;
+}
+
+body.light .phone-link {
+  color: var(--accent-2);
+}
+
 .board-empty {
   padding: 36px 20px;
   text-align: center;

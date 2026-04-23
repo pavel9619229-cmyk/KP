@@ -414,6 +414,18 @@ function escapeHtml(text) {
     .replaceAll("'", '&#039;');
 }
 
+function linkifyPhones(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(
+    /((?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/g,
+    (match) => {
+      const digits = match.replace(/\D/g, '');
+      const normalized = digits.startsWith('8') ? '+7' + digits.slice(1) : '+' + digits;
+      return `<a href="tel:${normalized}" class="phone-link">${match}</a>`;
+    }
+  );
+}
+
 function parseKpNumber(value) {
   const raw = String(value || '').trim();
   if (!raw) return Number.NEGATIVE_INFINITY;
@@ -948,7 +960,7 @@ function renderBoard() {
             <span class="kp-cell__value kp-card__status">${escapeHtml(status)}</span>
           </div>
           <div class="kp-cell kp-cell--note">
-            <span class="kp-cell__value kp-card__note">${escapeHtml(row.additionalInfoFirstLine || 'Без дополнительной информации')}</span>
+            <span class="kp-cell__value kp-card__note">${linkifyPhones(row.additionalInfoFirstLine || 'Без дополнительной информации')}</span>
           </div>
         </div>
       </article>
