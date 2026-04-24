@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-04-24T16:02:21.859077+00:00",
+  "refreshStartedAt": "2026-04-24T16:00:39.758029+00:00",
+  "rowCount": 243,
+  "writeSource": "full-refresh",
+  "cycleVersion": 123,
+  "last1cLoadedVersion": 123,
+  "last1cLoadedAt": "2026-04-24T16:02:21.859077+00:00"
+}
