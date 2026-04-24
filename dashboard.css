@@ -197,6 +197,7 @@ body.light .search-box input {
   cursor: pointer;
   font-weight: 700;
   width: 100%;
+  white-space: nowrap;
 }
 
 .logout-button {
