@@ -126,7 +126,7 @@ APP_BRANCH = (
 )
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
-TARGET_END = datetime(2026, 4, 30, 23, 59, 59)
+TARGET_END = datetime(2026, 6, 30, 23, 59, 59)
 
 LIGHT_SELECT_FIELDS = [
     "Number",
