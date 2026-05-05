@@ -3918,12 +3918,12 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         payment_by_comment = any("ОПЛАТА ПРИШЛА" in line for line in comment_top)
         patch = {
             "refKey": ref_key,
-            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top),
-            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top),
-            "edoSent": "В ЭДО ОТПРАВЛЕНО" in comment_clean,
-            "rejected": "ОТКАЗ" in comment_clean,
-            "problem": "ПРОБЛЕМА" in comment_clean,
-            "shipmentPending": "ОТГРУЗИТЬ" in comment_clean,
+            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top) if comment_raw else row.get("kpSent", False),
+            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top) if comment_raw else row.get("receiptConfirmed", False),
+            "edoSent": ("В ЭДО ОТПРАВЛЕНО" in comment_clean) if comment_raw else row.get("edoSent", False),
+            "rejected": ("ОТКАЗ" in comment_clean) if comment_raw else row.get("rejected", False),
+            "problem": ("ПРОБЛЕМА" in comment_clean) if comment_raw else row.get("problem", False),
+            "shipmentPending": ("ОТГРУЗИТЬ" in comment_clean) if comment_raw else row.get("shipmentPending", False),
             "additionalInfoFirstLine": first_line(comment_raw) or row.get("additionalInfoFirstLine") or "",
         }
         if payment_by_comment:
