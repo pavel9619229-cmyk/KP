@@ -828,7 +828,7 @@ function buildMetaChips(row) {
   if (getFlag(row, ['problem']) === true) {
     chips.push({ label: 'Есть проблема', state: 'is-alert' });
   }
-  if (getFlag(row, ['rejected']) === true) {
+  if (hasRejectInComment(row) || getFlag(row, ['rejected']) === true) {
     chips.push({ label: 'Отказ', state: 'is-alert' });
   }
 
