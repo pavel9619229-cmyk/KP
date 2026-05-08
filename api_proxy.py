@@ -3940,7 +3940,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         doc = docs_by_ref.get(ref_key) or {}
         customer_name = ""
         if doc:
-            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=True) or ""
+            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or ""
         return {
             "refKey": ref_key,
             "customerName": customer_name or row.get("customerName") or "",
