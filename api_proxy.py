@@ -3548,12 +3548,17 @@ def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool
             if github_version == 0 and local_version > 0:
                 needs_update = force or not _cached_rows or (github_fp and _cached_fp != github_fp)
             else:
-                needs_update = (
-                    force
-                    or not _cached_rows
-                    or github_version != local_version
-                    or (github_fp and _cached_fp != github_fp)
-                )
+                # Never downgrade local confirmed runtime from a newer version
+                # to an older GitHub snapshot (can happen when GitHub publish failed).
+                if local_version > 0 and github_version > 0 and github_version < local_version:
+                    needs_update = False
+                else:
+                    needs_update = (
+                        force
+                        or not _cached_rows
+                        or github_version > local_version
+                        or (github_version == local_version and github_fp and _cached_fp != github_fp)
+                    )
             if needs_update:
                 _write_local_confirmed_runtime(github_rows, github_meta, github_pointer or _build_runtime_current_pointer(github_rows, github_meta))
                 _cached_rows = list(github_rows)
