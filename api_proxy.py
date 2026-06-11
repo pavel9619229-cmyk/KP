@@ -3287,9 +3287,24 @@ def _load_json_from_github_path(file_path: str) -> object | None:
         return None
 
 
-def _push_json_to_github_path(file_path: str, payload: object, message: str) -> bool:
+def _push_json_to_github_path(
+    file_path: str,
+    payload: object,
+    message: str,
+    error_out: list[str] | None = None,
+) -> bool:
+    def _set_error(value: str) -> None:
+        if error_out is None:
+            return
+        if error_out:
+            error_out[0] = value
+        else:
+            error_out.append(value)
+
     if not GITHUB_TOKEN or not GITHUB_REPO or not file_path:
-        log(f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set")
+        msg = f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set"
+        log(msg)
+        _set_error(msg)
         return False
 
     gh_headers = {
@@ -3324,14 +3339,18 @@ def _push_json_to_github_path(file_path: str, payload: object, message: str) -> 
                 return True
 
             # On conflict (409) or other transient errors, retry a few times.
-            log(f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}")
+            msg = f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}"
+            log(msg)
+            _set_error(msg)
             if resp.status_code in (409, 422) or resp.status_code >= 500:
                 if attempt < max_attempts:
                     time.sleep(0.5 * attempt)
                     continue
             return False
         except Exception as exc:
-            log(f"GitHub push error ({file_path}): {exc}")
+            msg = f"GitHub push error ({file_path}): {exc}"
+            log(msg)
+            _set_error(msg)
             if attempt < max_attempts:
                 time.sleep(0.5 * attempt)
                 continue
@@ -3429,20 +3448,30 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     # Push cache and meta in parallel to save time
     _push_cache_ok: list[bool] = [False]
     _push_meta_ok: list[bool] = [False]
-    _push_cache_err: list = [None]
-    _push_meta_err: list = [None]
+    _push_cache_err: list[str] = [""]
+    _push_meta_err: list[str] = [""]
 
     def _do_push_cache() -> None:
         try:
-            _push_cache_ok[0] = _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]")
+            _push_cache_ok[0] = _push_json_to_github_path(
+                cache_path,
+                rows,
+                f"{message_prefix} cache [skip ci]",
+                error_out=_push_cache_err,
+            )
         except Exception as e:
-            _push_cache_err[0] = e
+            _push_cache_err[0] = str(e)
 
     def _do_push_meta() -> None:
         try:
-            _push_meta_ok[0] = _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]")
+            _push_meta_ok[0] = _push_json_to_github_path(
+                meta_path,
+                meta,
+                f"{message_prefix} meta [skip ci]",
+                error_out=_push_meta_err,
+            )
         except Exception as e:
-            _push_meta_err[0] = e
+            _push_meta_err[0] = str(e)
 
     t_cache = threading.Thread(target=_do_push_cache, daemon=True)
     t_meta = threading.Thread(target=_do_push_meta, daemon=True)
@@ -3452,9 +3481,9 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     t_meta.join()
 
     if not _push_cache_ok[0]:
-        raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0]}")
+        raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0] or 'unknown error'}")
     if not _push_meta_ok[0]:
-        raise RuntimeError(f"GitHub meta version push failed: {_push_meta_err[0]}")
+        raise RuntimeError(f"GitHub meta version push failed: {_push_meta_err[0] or 'unknown error'}")
 
     # Skip readback of versioned cache/meta files (trust 200/201 push response).
     # Use in-memory rows and meta — they are exactly what was pushed.
