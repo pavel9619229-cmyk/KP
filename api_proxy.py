@@ -3430,7 +3430,7 @@ def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
     return [], {}, {}
 
 
-def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict]:
+def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict, str | None]:
     rows = list(candidate_rows or load_rows_from_path(Path(RUNTIME_DATA_FILE)))
     if not rows:
         raise RuntimeError("runtime snapshot is empty after 1C refresh")
@@ -3480,10 +3480,19 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     t_cache.join()
     t_meta.join()
 
-    if not _push_cache_ok[0]:
-        raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0] or 'unknown error'}")
-    if not _push_meta_ok[0]:
-        raise RuntimeError(f"GitHub meta version push failed: {_push_meta_err[0] or 'unknown error'}")
+    publish_warning: str | None = None
+    if not _push_cache_ok[0] or not _push_meta_ok[0]:
+        cache_error = _push_cache_err[0] or (None if _push_cache_ok[0] else "unknown cache publish error")
+        meta_error = _push_meta_err[0] or (None if _push_meta_ok[0] else "unknown meta publish error")
+        publish_warning = "; ".join(
+            part
+            for part in [
+                f"GitHub cache publish warning: {cache_error}" if cache_error else "",
+                f"GitHub meta publish warning: {meta_error}" if meta_error else "",
+            ]
+            if part
+        ) or None
+        log(f"publish: non-blocking warning: {publish_warning}")
 
     # Skip readback of versioned cache/meta files (trust 200/201 push response).
     # Use in-memory rows and meta — they are exactly what was pushed.
@@ -3498,15 +3507,21 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
         pointer,
         f"Promote runtime current v{version} [skip ci]",
     ):
-        raise RuntimeError("GitHub current pointer update failed")
+        current_pointer_warning = "GitHub current pointer update failed"
+        publish_warning = f"{publish_warning}; {current_pointer_warning}" if publish_warning else current_pointer_warning
+        log(f"publish: non-blocking warning: {current_pointer_warning}")
 
     confirmed_pointer = _load_runtime_current_pointer_from_github()
     confirmed_version = _to_int_or_none(confirmed_pointer.get("version")) or 0
-    if confirmed_version != (_to_int_or_none(pointer.get("version")) or 0):
-        raise RuntimeError("GitHub current pointer readback mismatch")
+    expected_version = _to_int_or_none(pointer.get("version")) or 0
+    if confirmed_version != expected_version:
+        readback_warning = "GitHub current pointer readback mismatch"
+        publish_warning = f"{publish_warning}; {readback_warning}" if publish_warning else readback_warning
+        log(f"publish: non-blocking warning: {readback_warning}")
+        confirmed_pointer = pointer
 
     _write_local_confirmed_runtime(rows, meta, confirmed_pointer)
-    return rows, meta, confirmed_pointer
+    return rows, meta, confirmed_pointer, publish_warning
 
 
 def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
@@ -4757,7 +4772,7 @@ async def manual_refresh(request: Request):
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()
             log(f"[refresh] starting github publish ({len(candidate_rows)} rows)")
-            github_rows, _, github_pointer = await asyncio.wait_for(
+            github_rows, _, github_pointer, publish_warning = await asyncio.wait_for(
                 asyncio.to_thread(
                     _publish_confirmed_runtime_snapshot_or_raise,
                     candidate_rows,
@@ -4773,7 +4788,11 @@ async def manual_refresh(request: Request):
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 
             confirmed_version = github_pointer.get("version") if github_pointer else None
-            _set_manual_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
+            _set_manual_refresh_state(
+                confirmedVersion=confirmed_version,
+                lastOk=True,
+                lastError=publish_warning,
+            )
             log(
                 "manual refresh finished: "
                 f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, source=github-current, user={username}, host={client_host}"
