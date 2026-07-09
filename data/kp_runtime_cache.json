@@ -2,7 +2,7 @@
   {
     "refKey": "1f631e9a-7b65-11f1-b566-bc97e15e6af5",
     "number": "ПСУТ-000654",
-    "createdAt": "2026-07-09 17:54:12",
+    "createdAt": "2026-07-09 18:05:57",
     "customerName": "\"СТД \"Саныч\" (Строительный Торговый Дом «Саныч») скидк (г.Москва)",
     "managerName": "Татьяна",
     "status": "Действует",
@@ -6811,7 +6811,7 @@
     "refKey": "eb26f4d4-371a-11f1-b563-bc97e15e6af5",
     "number": "ПСУТ-000365",
     "createdAt": "2026-04-13 10:00:00",
-    "customerName": "Павел",
+    "customerName": "руб.",
     "managerName": "Павел",
     "status": "Черновик",
     "managerFilled": true,
