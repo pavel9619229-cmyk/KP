@@ -126,8 +126,25 @@ APP_BRANCH = (
 )
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
-# Keep upper bound rolling to avoid hard cutoffs (e.g. after June 2026).
-TARGET_END = datetime.now() + timedelta(days=7)
+# Leave TARGET_END empty for open-ended loading (recommended).
+# Optional format for explicit bound: YYYY-MM-DD or full ISO datetime.
+_target_end_raw = os.getenv("TARGET_END", "").strip()
+TARGET_END: Optional[datetime] = None
+if _target_end_raw:
+    _target_end_norm = _target_end_raw + "T23:59:59" if len(_target_end_raw) == 10 else _target_end_raw
+    try:
+        TARGET_END = datetime.fromisoformat(_target_end_norm.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception as exc:
+        raise RuntimeError(f"Invalid TARGET_END value: '{_target_end_raw}'") from exc
+
+if TARGET_END is not None:
+    # Safety rail: prevents accidental short hardcoded windows (e.g. "end of May").
+    min_safe_end = datetime.now() + timedelta(days=365)
+    if TARGET_END < min_safe_end:
+        raise RuntimeError(
+            "TARGET_END is too close and will cut off new KP records. "
+            "Leave TARGET_END empty for open-ended loading."
+        )
 
 LIGHT_SELECT_FIELDS = [
     "Number",
@@ -3699,9 +3716,19 @@ def build_known_rows_lookup() -> dict:
     return known
 
 
+def _in_target_window(dt: datetime) -> bool:
+    if dt < TARGET_START:
+        return False
+    if TARGET_END is not None and dt > TARGET_END:
+        return False
+    return True
+
+
 def _build_date_filter() -> str:
-    """Build OData $filter for TARGET_START..TARGET_END date range."""
+    """Build OData $filter for TARGET_START..TARGET_END (if bounded)."""
     start_str = TARGET_START.strftime("%Y-%m-%dT%H:%M:%S")
+    if TARGET_END is None:
+        return f"Date ge datetime'{start_str}'"
     end_str = TARGET_END.strftime("%Y-%m-%dT%H:%M:%S")
     return f"Date ge datetime'{start_str}' and Date le datetime'{end_str}'"
 
@@ -3833,7 +3860,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
         dt = _parse_odata_datetime(str(dt_raw))
         if dt is None:
             continue
-        if not (TARGET_START <= dt <= TARGET_END):
+        if not _in_target_window(dt):
             continue
 
         known_row = known_rows.get(number, {})
@@ -4207,7 +4234,7 @@ def refresh_cache_and_file(
                     for r in _cached_rows:
                         try:
                             dt = datetime.strptime(r.get("createdAt", ""), "%Y-%m-%d %H:%M:%S")
-                            if TARGET_START <= dt <= TARGET_END:
+                            if _in_target_window(dt):
                                 valid_cached.append(r)
                         except (ValueError, TypeError):
                             pass
@@ -4980,7 +5007,7 @@ async def debug_odata_test():
                 dt_raw = it.get("Date", "")
                 try:
                     dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
-                    if TARGET_START <= dt <= TARGET_END:
+                    if _in_target_window(dt):
                         matched += 1
                 except Exception:
                     pass
