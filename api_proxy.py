@@ -126,7 +126,8 @@ APP_BRANCH = (
 )
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
-TARGET_END = datetime(2026, 6, 30, 23, 59, 59)
+# Keep upper bound rolling to avoid hard cutoffs (e.g. after June 2026).
+TARGET_END = datetime.now() + timedelta(days=7)
 
 LIGHT_SELECT_FIELDS = [
     "Number",
