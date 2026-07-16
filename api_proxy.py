@@ -3480,13 +3480,25 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
 
     def _do_push_cache() -> None:
         try:
-            _push_cache_ok[0] = _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]")
+            ok = _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]")
+            _push_cache_ok[0] = ok
+            if not ok and _push_cache_err[0] is None:
+                _push_cache_err[0] = (
+                    f"push returned False for {cache_path}; "
+                    f"check previous 'GitHub push attempt ... failed' logs"
+                )
         except Exception as e:
             _push_cache_err[0] = e
 
     def _do_push_meta() -> None:
         try:
-            _push_meta_ok[0] = _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]")
+            ok = _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]")
+            _push_meta_ok[0] = ok
+            if not ok and _push_meta_err[0] is None:
+                _push_meta_err[0] = (
+                    f"push returned False for {meta_path}; "
+                    f"check previous 'GitHub push attempt ... failed' logs"
+                )
         except Exception as e:
             _push_meta_err[0] = e
 
