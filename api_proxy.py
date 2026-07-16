@@ -4802,15 +4802,33 @@ async def manual_refresh(request: Request):
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()
             log(f"[refresh] starting github publish ({len(candidate_rows)} rows)")
-            github_rows, _, github_pointer = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _publish_confirmed_runtime_snapshot_or_raise,
-                    candidate_rows,
-                    candidate_meta,
-                ),
-                timeout=120,
-            )
-            log(f"[refresh] github publish done in {time.time()-_publish_t0:.1f}s")
+            publish_source = "github-current"
+            try:
+                github_rows, _, github_pointer = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _publish_confirmed_runtime_snapshot_or_raise,
+                        candidate_rows,
+                        candidate_meta,
+                    ),
+                    timeout=120,
+                )
+                log(f"[refresh] github publish done in {time.time()-_publish_t0:.1f}s")
+            except Exception as publish_exc:
+                log(
+                    f"[refresh] versioned github publish failed: {type(publish_exc).__name__}: {publish_exc}; "
+                    "trying legacy runtime sync"
+                )
+                github_rows, github_meta = await asyncio.wait_for(
+                    asyncio.to_thread(_sync_runtime_cache_via_github_or_raise),
+                    timeout=120,
+                )
+                try:
+                    github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                except Exception:
+                    github_pointer = {}
+                publish_source = "github-legacy"
+                log(f"[refresh] legacy github sync done in {time.time()-_publish_t0:.1f}s")
+
             _cached_rows = list(github_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
             _last_confirmed_runtime_sync_check = time.time()
@@ -4821,7 +4839,7 @@ async def manual_refresh(request: Request):
             _set_manual_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
             log(
                 "manual refresh finished: "
-                f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, source=github-current, user={username}, host={client_host}"
+                f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, source={publish_source}, user={username}, host={client_host}"
             )
         except Exception as exc:
             _cached_rows = list(previous_rows)
