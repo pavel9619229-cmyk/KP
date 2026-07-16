@@ -126,7 +126,7 @@ APP_BRANCH = (
 )
 
 TARGET_START = datetime(2026, 3, 1, 0, 0, 0)
-TARGET_END = datetime(2100, 12, 31, 23, 59, 59)
+TARGET_END = datetime(2026, 6, 30, 23, 59, 59)
 
 LIGHT_SELECT_FIELDS = [
     "Number",
@@ -2228,6 +2228,8 @@ def _extract_order_refs_from_payment_breakdown(item: dict) -> set[str]:
         if basis_ref and (not basis_type or basis_type.endswith("Document_ЗаказКлиента")):
             refs.add(basis_ref)
 
+    return refs
+
 
 def _fetch_orders_by_number_hints(
     number_hints: set[str], headers: dict, kp_ref_set: set[str]
@@ -2415,6 +2417,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     # Strict block3 rule: KP is matched only when any linked order number
     # is present in purpose numbers extracted from payment purpose text.
     block3_ui_kp_hits: set[str] = set()
+    payment_order_hits: set[str] = set()
     purpose_num_set: set[str] = set()
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
@@ -2432,6 +2435,26 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     for batch in payment_pages:
         for item in batch:
+            settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
+            if settlement_order in target_order_refs:
+                payment_order_hits.add(settlement_order)
+
+            direct_order = str(item.get("ЗаказКлиента") or "")
+            direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
+            if direct_order in target_order_refs and (
+                not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")
+            ):
+                payment_order_hits.add(direct_order)
+
+            base_order = str(item.get("ДокументОснование") or "")
+            base_order_type = str(item.get("ДокументОснование_Type") or "")
+            if base_order in target_order_refs and base_order_type.endswith("Document_ЗаказКлиента"):
+                payment_order_hits.add(base_order)
+
+            for breakdown_ref in _extract_order_refs_from_payment_breakdown(item):
+                if breakdown_ref in target_order_refs:
+                    payment_order_hits.add(breakdown_ref)
+
             purpose = str(item.get("НазначениеПлатежа") or "").lower()
             if not purpose:
                 continue
@@ -2456,6 +2479,11 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         kp_ref = order_to_kp.get(order_ref)
         if kp_ref:
             kp_invoice_map[kp_ref] = True
+
+    for order_ref in payment_order_hits:
+        kp_ref = order_to_kp.get(order_ref)
+        if kp_ref:
+            kp_payment_map[kp_ref] = True
 
     # Apply block3 UI logic: KP is in block3 when any of its order numbers
     # appears in purposeNum set extracted from payment purposes.
@@ -3287,24 +3315,9 @@ def _load_json_from_github_path(file_path: str) -> object | None:
         return None
 
 
-def _push_json_to_github_path(
-    file_path: str,
-    payload: object,
-    message: str,
-    error_out: list[str] | None = None,
-) -> bool:
-    def _set_error(value: str) -> None:
-        if error_out is None:
-            return
-        if error_out:
-            error_out[0] = value
-        else:
-            error_out.append(value)
-
+def _push_json_to_github_path(file_path: str, payload: object, message: str) -> bool:
     if not GITHUB_TOKEN or not GITHUB_REPO or not file_path:
-        msg = f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set"
-        log(msg)
-        _set_error(msg)
+        log(f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set")
         return False
 
     gh_headers = {
@@ -3339,18 +3352,14 @@ def _push_json_to_github_path(
                 return True
 
             # On conflict (409) or other transient errors, retry a few times.
-            msg = f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}"
-            log(msg)
-            _set_error(msg)
+            log(f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}")
             if resp.status_code in (409, 422) or resp.status_code >= 500:
                 if attempt < max_attempts:
                     time.sleep(0.5 * attempt)
                     continue
             return False
         except Exception as exc:
-            msg = f"GitHub push error ({file_path}): {exc}"
-            log(msg)
-            _set_error(msg)
+            log(f"GitHub push error ({file_path}): {exc}")
             if attempt < max_attempts:
                 time.sleep(0.5 * attempt)
                 continue
@@ -3430,7 +3439,7 @@ def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
     return [], {}, {}
 
 
-def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict, str | None]:
+def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict]:
     rows = list(candidate_rows or load_rows_from_path(Path(RUNTIME_DATA_FILE)))
     if not rows:
         raise RuntimeError("runtime snapshot is empty after 1C refresh")
@@ -3448,30 +3457,20 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     # Push cache and meta in parallel to save time
     _push_cache_ok: list[bool] = [False]
     _push_meta_ok: list[bool] = [False]
-    _push_cache_err: list[str] = [""]
-    _push_meta_err: list[str] = [""]
+    _push_cache_err: list = [None]
+    _push_meta_err: list = [None]
 
     def _do_push_cache() -> None:
         try:
-            _push_cache_ok[0] = _push_json_to_github_path(
-                cache_path,
-                rows,
-                f"{message_prefix} cache [skip ci]",
-                error_out=_push_cache_err,
-            )
+            _push_cache_ok[0] = _push_json_to_github_path(cache_path, rows, f"{message_prefix} cache [skip ci]")
         except Exception as e:
-            _push_cache_err[0] = str(e)
+            _push_cache_err[0] = e
 
     def _do_push_meta() -> None:
         try:
-            _push_meta_ok[0] = _push_json_to_github_path(
-                meta_path,
-                meta,
-                f"{message_prefix} meta [skip ci]",
-                error_out=_push_meta_err,
-            )
+            _push_meta_ok[0] = _push_json_to_github_path(meta_path, meta, f"{message_prefix} meta [skip ci]")
         except Exception as e:
-            _push_meta_err[0] = str(e)
+            _push_meta_err[0] = e
 
     t_cache = threading.Thread(target=_do_push_cache, daemon=True)
     t_meta = threading.Thread(target=_do_push_meta, daemon=True)
@@ -3480,19 +3479,10 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     t_cache.join()
     t_meta.join()
 
-    publish_warning: str | None = None
-    if not _push_cache_ok[0] or not _push_meta_ok[0]:
-        cache_error = _push_cache_err[0] or (None if _push_cache_ok[0] else "unknown cache publish error")
-        meta_error = _push_meta_err[0] or (None if _push_meta_ok[0] else "unknown meta publish error")
-        publish_warning = "; ".join(
-            part
-            for part in [
-                f"GitHub cache publish warning: {cache_error}" if cache_error else "",
-                f"GitHub meta publish warning: {meta_error}" if meta_error else "",
-            ]
-            if part
-        ) or None
-        log(f"publish: non-blocking warning: {publish_warning}")
+    if not _push_cache_ok[0]:
+        raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0]}")
+    if not _push_meta_ok[0]:
+        raise RuntimeError(f"GitHub meta version push failed: {_push_meta_err[0]}")
 
     # Skip readback of versioned cache/meta files (trust 200/201 push response).
     # Use in-memory rows and meta — they are exactly what was pushed.
@@ -3507,21 +3497,15 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
         pointer,
         f"Promote runtime current v{version} [skip ci]",
     ):
-        current_pointer_warning = "GitHub current pointer update failed"
-        publish_warning = f"{publish_warning}; {current_pointer_warning}" if publish_warning else current_pointer_warning
-        log(f"publish: non-blocking warning: {current_pointer_warning}")
+        raise RuntimeError("GitHub current pointer update failed")
 
     confirmed_pointer = _load_runtime_current_pointer_from_github()
     confirmed_version = _to_int_or_none(confirmed_pointer.get("version")) or 0
-    expected_version = _to_int_or_none(pointer.get("version")) or 0
-    if confirmed_version != expected_version:
-        readback_warning = "GitHub current pointer readback mismatch"
-        publish_warning = f"{publish_warning}; {readback_warning}" if publish_warning else readback_warning
-        log(f"publish: non-blocking warning: {readback_warning}")
-        confirmed_pointer = pointer
+    if confirmed_version != (_to_int_or_none(pointer.get("version")) or 0):
+        raise RuntimeError("GitHub current pointer readback mismatch")
 
     _write_local_confirmed_runtime(rows, meta, confirmed_pointer)
-    return rows, meta, confirmed_pointer, publish_warning
+    return rows, meta, confirmed_pointer
 
 
 def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
@@ -3548,17 +3532,12 @@ def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool
             if github_version == 0 and local_version > 0:
                 needs_update = force or not _cached_rows or (github_fp and _cached_fp != github_fp)
             else:
-                # Never downgrade local confirmed runtime from a newer version
-                # to an older GitHub snapshot (can happen when GitHub publish failed).
-                if local_version > 0 and github_version > 0 and github_version < local_version:
-                    needs_update = False
-                else:
-                    needs_update = (
-                        force
-                        or not _cached_rows
-                        or github_version > local_version
-                        or (github_version == local_version and github_fp and _cached_fp != github_fp)
-                    )
+                needs_update = (
+                    force
+                    or not _cached_rows
+                    or github_version != local_version
+                    or (github_fp and _cached_fp != github_fp)
+                )
             if needs_update:
                 _write_local_confirmed_runtime(github_rows, github_meta, github_pointer or _build_runtime_current_pointer(github_rows, github_meta))
                 _cached_rows = list(github_rows)
@@ -4777,7 +4756,7 @@ async def manual_refresh(request: Request):
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()
             log(f"[refresh] starting github publish ({len(candidate_rows)} rows)")
-            github_rows, _, github_pointer, publish_warning = await asyncio.wait_for(
+            github_rows, _, github_pointer = await asyncio.wait_for(
                 asyncio.to_thread(
                     _publish_confirmed_runtime_snapshot_or_raise,
                     candidate_rows,
@@ -4793,11 +4772,7 @@ async def manual_refresh(request: Request):
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 
             confirmed_version = github_pointer.get("version") if github_pointer else None
-            _set_manual_refresh_state(
-                confirmedVersion=confirmed_version,
-                lastOk=True,
-                lastError=publish_warning,
-            )
+            _set_manual_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
             log(
                 "manual refresh finished: "
                 f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, source=github-current, user={username}, host={client_host}"
