@@ -4818,16 +4818,34 @@ async def manual_refresh(request: Request):
                     f"[refresh] versioned github publish failed: {type(publish_exc).__name__}: {publish_exc}; "
                     "trying legacy runtime sync"
                 )
-                github_rows, github_meta = await asyncio.wait_for(
-                    asyncio.to_thread(_sync_runtime_cache_via_github_or_raise),
-                    timeout=120,
-                )
                 try:
-                    github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
-                except Exception:
-                    github_pointer = {}
-                publish_source = "github-legacy"
-                log(f"[refresh] legacy github sync done in {time.time()-_publish_t0:.1f}s")
+                    github_rows, github_meta = await asyncio.wait_for(
+                        asyncio.to_thread(_sync_runtime_cache_via_github_or_raise),
+                        timeout=120,
+                    )
+                    try:
+                        github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                    except Exception:
+                        github_pointer = {}
+                    publish_source = "github-legacy"
+                    log(f"[refresh] legacy github sync done in {time.time()-_publish_t0:.1f}s")
+                except Exception as legacy_exc:
+                    log(
+                        f"[refresh] legacy github sync failed: {type(legacy_exc).__name__}: {legacy_exc}; "
+                        "using local runtime snapshot"
+                    )
+                    github_rows = list(candidate_rows)
+                    github_meta = dict(candidate_meta or {})
+                    try:
+                        github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                    except Exception:
+                        github_pointer = {}
+                    if github_pointer:
+                        _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
+                    else:
+                        _write_runtime_snapshot_files(github_rows, github_meta)
+                    publish_source = "local-runtime"
+                    log(f"[refresh] local runtime fallback done in {time.time()-_publish_t0:.1f}s")
 
             _cached_rows = list(github_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
