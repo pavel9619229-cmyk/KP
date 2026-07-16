@@ -3369,11 +3369,17 @@ def _push_json_to_github_path(file_path: str, payload: object, message: str) -> 
             if resp.status_code in (200, 201):
                 return True
 
-            # On conflict (409) or other transient errors, retry a few times.
+            # On conflicts/throttling/transient errors, retry a few times.
             log(f"GitHub push attempt {attempt} failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}")
-            if resp.status_code in (409, 422) or resp.status_code >= 500:
+            if resp.status_code in (403, 409, 422, 429) or resp.status_code >= 500:
                 if attempt < max_attempts:
-                    time.sleep(0.5 * attempt)
+                    retry_after_raw = str(resp.headers.get("Retry-After") or "").strip()
+                    try:
+                        retry_after = float(retry_after_raw) if retry_after_raw else 0.0
+                    except Exception:
+                        retry_after = 0.0
+                    sleep_seconds = max(0.5 * attempt, retry_after)
+                    time.sleep(sleep_seconds)
                     continue
             return False
         except Exception as exc:
