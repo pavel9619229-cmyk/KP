@@ -3558,9 +3558,23 @@ def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool
 
         github_rows, github_meta, github_pointer = _load_confirmed_runtime_from_github()
         local_pointer = _read_runtime_current_pointer()
+        local_meta = _read_runtime_meta()
         github_version = _to_int_or_none(github_pointer.get("version")) or 0
         local_version = _to_int_or_none(local_pointer.get("version")) or 0
         github_fp = str(github_pointer.get("rowsFingerprint") or "")
+        local_generated_at = _parse_iso_datetime_utc(local_meta.get("generatedAt"))
+        github_generated_at = _parse_iso_datetime_utc(github_meta.get("generatedAt"))
+
+        if (
+            github_rows
+            and github_meta
+            and local_generated_at
+            and github_generated_at
+            and github_generated_at < local_generated_at
+        ):
+            log("confirmed runtime GitHub snapshot is older than local snapshot; keeping local runtime")
+            _last_confirmed_runtime_sync_check = now
+            return True
 
         if github_rows and github_meta:
             # If GitHub has no versioned pointer (legacy fallback), only update
@@ -4816,36 +4830,20 @@ async def manual_refresh(request: Request):
             except Exception as publish_exc:
                 log(
                     f"[refresh] versioned github publish failed: {type(publish_exc).__name__}: {publish_exc}; "
-                    "trying legacy runtime sync"
+                    "using local runtime snapshot instead"
                 )
+                github_rows = list(candidate_rows)
+                github_meta = dict(candidate_meta or {})
                 try:
-                    github_rows, github_meta = await asyncio.wait_for(
-                        asyncio.to_thread(_sync_runtime_cache_via_github_or_raise),
-                        timeout=120,
-                    )
-                    try:
-                        github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
-                    except Exception:
-                        github_pointer = {}
-                    publish_source = "github-legacy"
-                    log(f"[refresh] legacy github sync done in {time.time()-_publish_t0:.1f}s")
-                except Exception as legacy_exc:
-                    log(
-                        f"[refresh] legacy github sync failed: {type(legacy_exc).__name__}: {legacy_exc}; "
-                        "using local runtime snapshot"
-                    )
-                    github_rows = list(candidate_rows)
-                    github_meta = dict(candidate_meta or {})
-                    try:
-                        github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
-                    except Exception:
-                        github_pointer = {}
-                    if github_pointer:
-                        _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
-                    else:
-                        _write_runtime_snapshot_files(github_rows, github_meta)
-                    publish_source = "local-runtime"
-                    log(f"[refresh] local runtime fallback done in {time.time()-_publish_t0:.1f}s")
+                    github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                except Exception:
+                    github_pointer = {}
+                if github_pointer:
+                    _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
+                else:
+                    _write_runtime_snapshot_files(github_rows, github_meta)
+                publish_source = "local-runtime"
+                log(f"[refresh] local runtime fallback done in {time.time()-_publish_t0:.1f}s")
 
             _cached_rows = list(github_rows)
             _cached_fp = rows_fingerprint(_cached_rows)
