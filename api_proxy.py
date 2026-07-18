@@ -1217,6 +1217,90 @@ def _find_catalog_item_key_by_description(
     return best_ref, best_name
 
 
+def _find_user_key_by_login_or_name(headers: dict, value: str) -> tuple[str, str]:
+    desired = str(value or "").strip()
+    if not desired:
+        return "", ""
+
+    candidate_fields = ["ИмяПользователя", "Description", "Код"]
+    select_full = "Ref_Key,Description,ИмяПользователя,Код"
+
+    for field in candidate_fields:
+        payload, error = _get_json_with_retry(
+            f"{BASE}/Catalog_Пользователи",
+            headers,
+            params={
+                "$select": select_full,
+                "$filter": f"{field} eq '{_escape_odata_literal(desired)}'",
+                "$top": "1",
+            },
+            timeout=6,
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            continue
+        rows = payload.get("value", [])
+        if not rows:
+            continue
+        first = rows[0] if isinstance(rows[0], dict) else {}
+        ref_key = str(first.get("Ref_Key") or "").strip()
+        if ref_key:
+            name = str(first.get("Description") or first.get("ИмяПользователя") or desired).strip()
+            return ref_key, name
+
+    wanted_norm = _normalize_human_name(desired)
+    best_ref = ""
+    best_name = ""
+
+    for skip in range(0, 2000, 200):
+        payload, error = _get_json_with_retry(
+            f"{BASE}/Catalog_Пользователи",
+            headers,
+            params={"$select": select_full, "$top": "200", "$skip": str(skip)},
+            timeout=8,
+            retries=2,
+        )
+        if (error or not isinstance(payload, dict)) and skip == 0:
+            payload, error = _get_json_with_retry(
+                f"{BASE}/Catalog_Пользователи",
+                headers,
+                params={"$select": "Ref_Key,Description", "$top": "200", "$skip": str(skip)},
+                timeout=8,
+                retries=2,
+            )
+        if error or not isinstance(payload, dict):
+            break
+
+        rows = payload.get("value", [])
+        if not rows:
+            break
+
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            ref_key = str(item.get("Ref_Key") or "").strip()
+            if not ref_key:
+                continue
+
+            names = [
+                str(item.get("Description") or "").strip(),
+                str(item.get("ИмяПользователя") or "").strip(),
+                str(item.get("Код") or "").strip(),
+            ]
+            for name in names:
+                if not name:
+                    continue
+                name_norm = _normalize_human_name(name)
+                if name_norm == wanted_norm:
+                    return ref_key, str(item.get("Description") or name).strip()
+                if wanted_norm and (wanted_norm in name_norm or name_norm in wanted_norm):
+                    if not best_ref:
+                        best_ref = ref_key
+                        best_name = str(item.get("Description") or name).strip()
+
+    return best_ref, best_name
+
+
 def _ensure_catalog_item_key_by_description(
     entity_name: str,
     description: str,
@@ -1392,6 +1476,15 @@ def _resolve_manager_key(headers: dict, manager_name: str | None = None, manager
     ]
     for entity_name in manager_catalogs:
         ref_key, _ = _find_catalog_item_key_by_description(entity_name, preferred_name, headers)
+        if ref_key:
+            return ref_key
+
+    ref_key, _ = _find_user_key_by_login_or_name(headers, preferred_name)
+    if ref_key:
+        return ref_key
+
+    if preferred_name != CREATE_ODATA_USERNAME:
+        ref_key, _ = _find_user_key_by_login_or_name(headers, CREATE_ODATA_USERNAME)
         if ref_key:
             return ref_key
     return ZERO_GUID
