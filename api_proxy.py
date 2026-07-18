@@ -43,6 +43,8 @@ BASE = os.getenv(
 )
 USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
+CREATE_ODATA_USERNAME = os.getenv("CREATE_ODATA_USERNAME", "").strip() or USERNAME
+CREATE_ODATA_PASSWORD = os.getenv("CREATE_ODATA_PASSWORD", "").strip() or PASSWORD
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 SEED_DATA_FILE = os.getenv(
     "SEED_DATA_FILE",
@@ -288,12 +290,18 @@ def log(message: str) -> None:
     print(line, flush=True)
 
 
-def _build_headers() -> dict:
-    creds = base64.b64encode(f"{USERNAME}:{PASSWORD}".encode("utf-8")).decode("ascii")
+def _build_headers(username: str | None = None, password: str | None = None) -> dict:
+    auth_username = USERNAME if username is None else username
+    auth_password = PASSWORD if password is None else password
+    creds = base64.b64encode(f"{auth_username}:{auth_password}".encode("utf-8")).decode("ascii")
     return {
         "Authorization": f"Basic {creds}",
         "Accept": "application/json",
     }
+
+
+def _build_create_headers() -> dict:
+    return _build_headers(CREATE_ODATA_USERNAME, CREATE_ODATA_PASSWORD)
 
 
 class NewRequestPayload(BaseModel):
@@ -1423,7 +1431,7 @@ def _resolve_customer_for_new_request(request_text: str, headers: dict) -> tuple
 
 
 def _create_kp_in_1c_from_request(request_text: str) -> dict:
-    headers = _build_headers()
+    headers = _build_create_headers()
     normalized_request_text = str(request_text).replace("\x00", "").strip()
     client_key, customer_key, resolved_customer_name, requested_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
     manager_key = _resolve_manager_key(headers)
