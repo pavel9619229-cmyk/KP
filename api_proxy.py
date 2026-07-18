@@ -80,7 +80,8 @@ STAGE34_WORKERS = int(os.getenv("STAGE34_WORKERS", "20"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
-MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "300"))
+# <=0 means full target window (no top-N cap).
+MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -3901,14 +3902,15 @@ def _save_stage_patch(stage_name: str, rows: list) -> None:
         log(f"stage patch save failed ({stage_name}): {exc}")
 
 
-def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[int, int, list]:
+def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 0) -> tuple[int, int, list]:
     select_expr = "Ref_Key,Number,Date,Статус,СуммаДокумента"
-    wanted = max(1, page_size)
-    chunk_size = min(50, wanted)
 
     total_count = get_total_count(headers)
     if total_count <= 0:
         return total_count, 0, []
+
+    wanted = total_count if page_size <= 0 else max(1, page_size)
+    chunk_size = min(50, wanted)
 
     skip = max(0, total_count - chunk_size)
     initial_skip = skip
@@ -3954,7 +3956,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 300) -> tuple[in
     return total_count, initial_skip, collected[:wanted]
 
 
-def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> list:
+def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> list:
     """Staged refresh pipeline.
 
     Old legacy path (multi-page backward scan with large skip loop) is removed.
@@ -3969,7 +3971,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 300) -> 
     stage1_error: Exception | None = None
     for attempt in range(1, 4):
         try:
-            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=max(1, page_size))
+            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=page_size)
             stage1_error = None
             break
         except Exception as exc:
@@ -4320,7 +4322,7 @@ def _partial_refresh_from_cached_rows(
 def refresh_cache_and_file(
     allow_partial_fallback: bool = True,
     include_stage6: bool = True,
-    page_size: int = 300,
+    page_size: int = 0,
     use_known_cache: bool = True,
     push_to_github: bool = True,
     update_live_cache: bool = True,
@@ -4903,7 +4905,7 @@ async def manual_refresh(request: Request):
 
         try:
             ran = await asyncio.wait_for(
-                asyncio.to_thread(refresh_cache_and_file, True, True, 300, True, False, False),
+                asyncio.to_thread(refresh_cache_and_file, True, True, MANUAL_REFRESH_PAGE_SIZE, True, False, False),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
 
