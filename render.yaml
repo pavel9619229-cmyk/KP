@@ -21,6 +21,10 @@ services:
         sync: false
       - key: CREATE_ODATA_PASSWORD
         sync: false
+      - key: CREATE_MANAGER_NAME
+        sync: false
+      - key: CREATE_MANAGER_KEY
+        sync: false
       - key: ODATA_ENTITY
         value: Document_КоммерческоеПредложениеКлиенту
       - key: REFRESH_SECONDS

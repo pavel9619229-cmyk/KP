@@ -45,6 +45,8 @@ USERNAME = os.getenv("ODATA_USERNAME", "павел")
 PASSWORD = os.getenv("ODATA_PASSWORD", "1")
 CREATE_ODATA_USERNAME = os.getenv("CREATE_ODATA_USERNAME", "").strip() or USERNAME
 CREATE_ODATA_PASSWORD = os.getenv("CREATE_ODATA_PASSWORD", "").strip() or PASSWORD
+CREATE_MANAGER_NAME = os.getenv("CREATE_MANAGER_NAME", "").strip() or CREATE_ODATA_USERNAME
+CREATE_MANAGER_KEY = os.getenv("CREATE_MANAGER_KEY", "").strip()
 ENTITY = os.getenv("ODATA_ENTITY", "Document_КоммерческоеПредложениеКлиенту")
 SEED_DATA_FILE = os.getenv(
     "SEED_DATA_FILE",
@@ -1377,14 +1379,19 @@ def _try_prefix_status_in_comment(ref_key: str, request_text: str, headers: dict
     return False
 
 
-def _resolve_manager_key(headers: dict) -> str:
+def _resolve_manager_key(headers: dict, manager_name: str | None = None, manager_key: str | None = None) -> str:
+    explicit_key = str(manager_key or "").strip()
+    if explicit_key and explicit_key != ZERO_GUID:
+        return explicit_key
+
+    preferred_name = str(manager_name or "").strip() or UNKNOWN_MANAGER_NAME
     manager_catalogs = [
         "Catalog_Пользователи",
         "Catalog_Сотрудники",
         "Catalog_СотрудникиОрганизаций",
     ]
     for entity_name in manager_catalogs:
-        ref_key, _ = _find_catalog_item_key_by_description(entity_name, UNKNOWN_MANAGER_NAME, headers)
+        ref_key, _ = _find_catalog_item_key_by_description(entity_name, preferred_name, headers)
         if ref_key:
             return ref_key
     return ZERO_GUID
@@ -1434,7 +1441,7 @@ def _create_kp_in_1c_from_request(request_text: str) -> dict:
     headers = _build_create_headers()
     normalized_request_text = str(request_text).replace("\x00", "").strip()
     client_key, customer_key, resolved_customer_name, requested_customer_name, recognized = _resolve_customer_for_new_request(normalized_request_text, headers)
-    manager_key = _resolve_manager_key(headers)
+    manager_key = _resolve_manager_key(headers, CREATE_MANAGER_NAME, CREATE_MANAGER_KEY)
     now = datetime.now()
     create_dt = now + timedelta(hours=2)
     now_iso = create_dt.replace(microsecond=0).isoformat()
