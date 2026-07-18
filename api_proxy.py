@@ -55,6 +55,7 @@ SEED_DATA_FILE = os.getenv(
 RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
 RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 RUNTIME_CURRENT_FILE = os.getenv("RUNTIME_CURRENT_FILE", "data/kp_runtime_current.json")
+MANUAL_REFRESH_STATE_FILE = os.getenv("MANUAL_REFRESH_STATE_FILE", "data/manual_refresh_state.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
@@ -223,6 +224,8 @@ _manual_refresh_state: dict = {
     "lastError": None,
 }
 
+_manual_refresh_state.update(_load_manual_refresh_state() if "_load_manual_refresh_state" in globals() else {})
+
 
 def _manual_refresh_snapshot() -> dict:
     with _manual_refresh_state_lock:
@@ -236,6 +239,37 @@ def _manual_refresh_snapshot() -> dict:
 def _set_manual_refresh_state(**updates: object) -> None:
     with _manual_refresh_state_lock:
         _manual_refresh_state.update(updates)
+        try:
+            path = Path(MANUAL_REFRESH_STATE_FILE)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", encoding="utf-8") as f:
+                json.dump(_manual_refresh_state, f, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            log(f"manual refresh state save failed: {exc}")
+
+
+def _load_manual_refresh_state() -> dict:
+    try:
+        path = Path(MANUAL_REFRESH_STATE_FILE)
+        if not path.exists():
+            return {}
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+_manual_refresh_state.update(_load_manual_refresh_state())
+if _manual_refresh_state.get("running"):
+    _manual_refresh_state.update(
+        {
+            "running": False,
+            "finishedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            "lastOk": False,
+            "lastError": "manual refresh was interrupted by server restart",
+        }
+    )
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
