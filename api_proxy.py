@@ -3585,6 +3585,168 @@ def _write_local_confirmed_runtime(rows: list, meta_payload: dict, pointer: dict
     _write_runtime_current_pointer(pointer)
 
 
+def _runtime_version_of(meta: dict | None, pointer: dict | None) -> int:
+    return (
+        _to_int_or_none((pointer or {}).get("version"))
+        or _to_int_or_none((meta or {}).get("cycleVersion"))
+        or 0
+    )
+
+
+def _runtime_generated_at_from_rows(rows: list) -> Optional[datetime]:
+    latest: Optional[datetime] = None
+    for row in list(rows or []):
+        created_at = str((row or {}).get("createdAt") or "").strip()
+        if not created_at:
+            continue
+        try:
+            parsed = datetime.fromisoformat(created_at.replace(" ", "T")).replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if latest is None or parsed > latest:
+            latest = parsed
+    return latest
+
+
+def _runtime_normalize_meta(
+    meta: dict | None,
+    rows: list,
+    *,
+    pointer: dict | None = None,
+    fallback_source: str,
+) -> dict:
+    normalized = dict(meta or {})
+    pointer = dict(pointer or {})
+
+    row_count = len(list(rows or []))
+    version = _runtime_version_of(normalized, pointer)
+    if version <= 0:
+        version = 1
+
+    generated = _parse_iso_datetime_utc(normalized.get("generatedAt"))
+    pointer_generated = _parse_iso_datetime_utc(pointer.get("generatedAt"))
+    rows_generated = _runtime_generated_at_from_rows(rows)
+    if generated is None:
+        candidates = [dt for dt in (pointer_generated, rows_generated) if dt is not None]
+        generated = max(candidates) if candidates else None
+    else:
+        candidates = [dt for dt in (generated, pointer_generated, rows_generated) if dt is not None]
+        generated = max(candidates) if candidates else generated
+    if generated is None:
+        generated = datetime.now(timezone.utc)
+
+    write_source = str(normalized.get("writeSource") or pointer.get("writeSource") or fallback_source)
+    last_1c_version = _to_int_or_none(normalized.get("last1cLoadedVersion")) or version
+    last_1c_at = str(normalized.get("last1cLoadedAt") or normalized.get("generatedAt") or generated.isoformat())
+    refresh_started_at = str(normalized.get("refreshStartedAt") or generated.isoformat())
+
+    normalized.update(
+        {
+            "generatedAt": generated.isoformat(),
+            "refreshStartedAt": refresh_started_at,
+            "rowCount": row_count,
+            "writeSource": write_source,
+            "cycleVersion": version,
+            "last1cLoadedVersion": last_1c_version,
+            "last1cLoadedAt": last_1c_at,
+        }
+    )
+    return normalized
+
+
+def _runtime_pointer_matches(rows: list, meta: dict, pointer: dict) -> bool:
+    version = _runtime_version_of(meta, pointer)
+    if version <= 0:
+        return False
+    pointer_version = _to_int_or_none((pointer or {}).get("version")) or 0
+    if pointer_version != version:
+        return False
+    expected_fp = rows_fingerprint(rows)
+    pointer_fp = str((pointer or {}).get("rowsFingerprint") or "")
+    if not pointer_fp or pointer_fp != expected_fp:
+        return False
+    if str((pointer or {}).get("generatedAt") or "") != str(meta.get("generatedAt") or ""):
+        return False
+    if int((pointer or {}).get("rowCount") or 0) != len(rows):
+        return False
+    return True
+
+
+def _runtime_load_local_consistent_state() -> tuple[list, dict, dict]:
+    rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+    meta = _read_runtime_meta()
+    pointer = _read_runtime_current_pointer()
+
+    if not rows:
+        return [], meta if isinstance(meta, dict) else {}, pointer if isinstance(pointer, dict) else {}
+
+    normalized_meta = _runtime_normalize_meta(
+        meta,
+        rows,
+        pointer=pointer,
+        fallback_source="consistency-recovery:local",
+    )
+
+    if normalized_meta != (meta if isinstance(meta, dict) else {}):
+        _write_runtime_snapshot_files(rows, normalized_meta)
+        log(
+            "runtime consistency: repaired local runtime meta "
+            f"(version={normalized_meta.get('cycleVersion')}, rows={len(rows)})"
+        )
+
+    normalized_pointer = pointer if isinstance(pointer, dict) else {}
+    if not _runtime_pointer_matches(rows, normalized_meta, normalized_pointer):
+        normalized_pointer = _build_runtime_current_pointer(rows, normalized_meta)
+        _write_runtime_current_pointer(normalized_pointer)
+        log(
+            "runtime consistency: repaired local runtime pointer "
+            f"(version={normalized_pointer.get('version')}, rows={len(rows)})"
+        )
+
+    return rows, normalized_meta, normalized_pointer
+
+
+def _runtime_apply_local_state(rows: list, meta: dict, pointer: dict) -> None:
+    _write_local_confirmed_runtime(rows, meta, pointer)
+
+
+def _runtime_pick_authoritative_state(
+    local_rows: list,
+    local_meta: dict,
+    local_pointer: dict,
+    github_rows: list,
+    github_meta: dict,
+    github_pointer: dict,
+) -> tuple[str, list, dict, dict]:
+    local_version = _runtime_version_of(local_meta, local_pointer)
+    github_version = _runtime_version_of(github_meta, github_pointer)
+    local_generated_at = _parse_iso_datetime_utc(local_meta.get("generatedAt"))
+    github_generated_at = _parse_iso_datetime_utc(github_meta.get("generatedAt"))
+
+    local_ready = bool(local_rows and local_version > 0 and local_generated_at is not None)
+    github_ready = bool(github_rows and github_version > 0 and github_generated_at is not None)
+
+    if local_ready and github_ready:
+        if local_version > github_version:
+            return "local", local_rows, local_meta, local_pointer
+        if github_version > local_version:
+            return "github", github_rows, github_meta, github_pointer
+        if github_generated_at and local_generated_at and github_generated_at > local_generated_at:
+            return "github", github_rows, github_meta, github_pointer
+        return "local", local_rows, local_meta, local_pointer
+
+    if local_ready:
+        return "local", local_rows, local_meta, local_pointer
+    if github_ready:
+        return "github", github_rows, github_meta, github_pointer
+
+    if local_rows:
+        return "local", local_rows, local_meta, local_pointer
+    if github_rows:
+        return "github", github_rows, github_meta, github_pointer
+    return "none", [], {}, {}
+
+
 def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
     pointer = _load_runtime_current_pointer_from_github()
     if pointer:
@@ -3597,12 +3759,28 @@ def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
         expected_fp = str(pointer.get("rowsFingerprint") or "")
         if rows and meta and expected_version and meta_version == expected_version:
             if not expected_fp or rows_fingerprint(rows) == expected_fp:
-                return rows, meta, pointer
+                normalized_meta = _runtime_normalize_meta(
+                    meta,
+                    rows,
+                    pointer=pointer,
+                    fallback_source="consistency-recovery:github-pointer",
+                )
+                normalized_pointer = pointer
+                if not _runtime_pointer_matches(rows, normalized_meta, normalized_pointer):
+                    normalized_pointer = _build_runtime_current_pointer(rows, normalized_meta)
+                return rows, normalized_meta, normalized_pointer
 
     rows = _load_runtime_rows_from_github()
     meta = _load_runtime_meta_from_github()
     if rows and meta:
-        return rows, meta, {}
+        normalized_meta = _runtime_normalize_meta(
+            meta,
+            rows,
+            pointer={},
+            fallback_source="consistency-recovery:github-legacy",
+        )
+        normalized_pointer = _build_runtime_current_pointer(rows, normalized_meta)
+        return rows, normalized_meta, normalized_pointer
     return [], {}, {}
 
 
@@ -3611,9 +3789,23 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     if not rows:
         raise RuntimeError("runtime snapshot is empty after 1C refresh")
 
-    meta = dict(candidate_meta or _read_runtime_meta())
-    if not meta:
-        raise RuntimeError("runtime metadata is missing after 1C refresh")
+    local_rows, local_meta, local_pointer = _runtime_load_local_consistent_state()
+    base_pointer = local_pointer if local_rows else _read_runtime_current_pointer()
+    meta = _runtime_normalize_meta(
+        dict(candidate_meta or _read_runtime_meta()),
+        rows,
+        pointer=base_pointer,
+        fallback_source="consistency-recovery:publish",
+    )
+
+    # Never publish a regressed version.
+    current_local_version = _runtime_version_of(local_meta, local_pointer)
+    publish_version = _runtime_version_of(meta, base_pointer)
+    if publish_version <= current_local_version:
+        meta["cycleVersion"] = current_local_version + 1
+        meta["last1cLoadedVersion"] = current_local_version + 1
+        if not str(meta.get("generatedAt") or "").strip():
+            meta["generatedAt"] = datetime.now(timezone.utc).isoformat()
 
     pointer = _build_runtime_current_pointer(rows, meta)
     version = pointer.get("version")
@@ -3699,55 +3891,40 @@ def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool
         if not force and _cached_rows and (now - _last_confirmed_runtime_sync_check) < CONFIRMED_RUNTIME_SYNC_TTL_SECONDS:
             return True
 
+        local_rows, local_meta, local_pointer = _runtime_load_local_consistent_state()
         github_rows, github_meta, github_pointer = _load_confirmed_runtime_from_github()
-        local_pointer = _read_runtime_current_pointer()
-        local_meta = _read_runtime_meta()
-        github_version = _to_int_or_none(github_pointer.get("version")) or 0
-        local_version = _to_int_or_none(local_pointer.get("version")) or 0
-        github_fp = str(github_pointer.get("rowsFingerprint") or "")
-        local_generated_at = _parse_iso_datetime_utc(local_meta.get("generatedAt"))
-        github_generated_at = _parse_iso_datetime_utc(github_meta.get("generatedAt"))
 
-        if (
-            github_rows
-            and github_meta
-            and local_generated_at
-            and github_generated_at
-            and github_generated_at < local_generated_at
-        ):
-            log("confirmed runtime GitHub snapshot is older than local snapshot; keeping local runtime")
-            _last_confirmed_runtime_sync_check = now
-            return True
+        source, rows, meta, pointer = _runtime_pick_authoritative_state(
+            local_rows,
+            local_meta,
+            local_pointer,
+            github_rows,
+            github_meta,
+            github_pointer,
+        )
 
-        if github_rows and github_meta:
-            # If GitHub has no versioned pointer (legacy fallback), only update
-            # when fingerprint actually differs — not just because version numbers differ.
-            if github_version == 0 and local_version > 0:
-                needs_update = force or not _cached_rows or (github_fp and _cached_fp != github_fp)
-            else:
-                needs_update = (
-                    force
-                    or not _cached_rows
-                    or github_version != local_version
-                    or (github_fp and _cached_fp != github_fp)
-                )
-            if needs_update:
-                _write_local_confirmed_runtime(github_rows, github_meta, github_pointer or _build_runtime_current_pointer(github_rows, github_meta))
-                _cached_rows = list(github_rows)
-                _cached_fp = rows_fingerprint(_cached_rows)
-                _last_refresh_error = None
-                log(f"confirmed runtime synced from GitHub: rows={len(_cached_rows)}, reason={reason}, version={github_version or 'legacy'}")
-            _last_confirmed_runtime_sync_check = now
-            return True
+        if source == "none" or not rows:
+            return False
 
-        local_rows = load_fresh_runtime_rows()
-        if local_rows:
-            _cached_rows = list(local_rows)
-            _cached_fp = rows_fingerprint(_cached_rows)
-            _last_confirmed_runtime_sync_check = now
-            return True
+        # Keep local files strictly aligned with the selected authoritative snapshot.
+        if source == "github":
+            _runtime_apply_local_state(rows, meta, pointer)
+            log(
+                "runtime consistency: selected GitHub confirmed snapshot "
+                f"(reason={reason}, version={_runtime_version_of(meta, pointer)}, rows={len(rows)})"
+            )
+        else:
+            _runtime_apply_local_state(rows, meta, pointer)
+            log(
+                "runtime consistency: selected local snapshot "
+                f"(reason={reason}, version={_runtime_version_of(meta, pointer)}, rows={len(rows)})"
+            )
 
-        return False
+        _cached_rows = list(rows)
+        _cached_fp = rows_fingerprint(_cached_rows)
+        _last_refresh_error = None
+        _last_confirmed_runtime_sync_check = now
+        return True
 
 
 def _load_runtime_meta_from_github() -> dict:
@@ -3836,7 +4013,11 @@ def save_rows(
         if not prev_meta.get("last1cLoadedAt"):
             prev_meta["last1cLoadedAt"] = prev_meta.get("generatedAt") or ""
         
-        prev_cycle = int(prev_meta.get("cycleVersion") or 0)
+        prev_pointer = _read_runtime_current_pointer()
+        prev_cycle = max(
+            int(prev_meta.get("cycleVersion") or 0),
+            int(_to_int_or_none(prev_pointer.get("version")) or 0),
+        )
         prev_last_1c = int(prev_meta.get("last1cLoadedVersion") or 0)
         prev_last_1c_at = str(prev_meta.get("last1cLoadedAt") or prev_meta.get("generatedAt") or "")
 
@@ -4656,8 +4837,9 @@ async def on_startup() -> None:
     if USER_SESSION_SECRET_IS_EPHEMERAL:
         log("WARNING: USER_SESSION_SECRET is not configured; using ephemeral runtime secret")
 
-    # Load from disk synchronously — fast, no network. This is enough for Render health check.
-    _cached_rows = load_fresh_runtime_rows()
+    # Load runtime state through consistency layer first (cache/meta/pointer).
+    local_rows, _, _ = _runtime_load_local_consistent_state()
+    _cached_rows = list(local_rows)
     if not _cached_rows:
         _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
@@ -4977,7 +5159,12 @@ async def manual_refresh(request: Request):
                     "using local runtime snapshot instead"
                 )
                 github_rows = list(candidate_rows)
-                github_meta = dict(candidate_meta or {})
+                github_meta = _runtime_normalize_meta(
+                    dict(candidate_meta or {}),
+                    github_rows,
+                    pointer=previous_pointer,
+                    fallback_source="consistency-recovery:manual-refresh-fallback",
+                )
                 try:
                     github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
                 except Exception:
