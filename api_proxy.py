@@ -83,6 +83,12 @@ BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
 # <=0 means full target window (no top-N cap).
 MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
+REQUIRE_LIVE_REFRESH_AFTER_STARTUP = os.getenv("REQUIRE_LIVE_REFRESH_AFTER_STARTUP", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -224,6 +230,17 @@ _manual_refresh_state: dict = {
     "lastError": None,
 }
 
+_startup_live_refresh_lock = threading.Lock()
+_startup_live_refresh_state: dict = {
+    "required": REQUIRE_LIVE_REFRESH_AFTER_STARTUP,
+    "running": False,
+    "completed": False,
+    "ok": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastError": None,
+}
+
 _manual_refresh_state.update(_load_manual_refresh_state() if "_load_manual_refresh_state" in globals() else {})
 
 
@@ -234,6 +251,34 @@ def _manual_refresh_snapshot() -> dict:
     state["lastRefresh"] = _last_refresh
     state["lastRefreshError"] = _last_refresh_error
     return state
+
+
+def _startup_live_refresh_snapshot() -> dict:
+    with _startup_live_refresh_lock:
+        return dict(_startup_live_refresh_state)
+
+
+def _set_startup_live_refresh_state(**updates: object) -> None:
+    with _startup_live_refresh_lock:
+        _startup_live_refresh_state.update(updates)
+
+
+def _startup_live_refresh_gate_open() -> bool:
+    state = _startup_live_refresh_snapshot()
+    if not bool(state.get("required")):
+        return True
+    return bool(state.get("completed")) and bool(state.get("ok"))
+
+
+def _startup_live_refresh_gate_detail() -> str:
+    state = _startup_live_refresh_snapshot()
+    if not bool(state.get("required")):
+        return "live refresh gate is disabled"
+    if bool(state.get("running")):
+        return "startup live refresh is running"
+    if bool(state.get("completed")) and not bool(state.get("ok")):
+        return str(state.get("lastError") or "startup live refresh failed")
+    return "startup live refresh has not completed yet"
 
 
 def _set_manual_refresh_state(**updates: object) -> None:
@@ -4870,6 +4915,53 @@ async def on_startup() -> None:
         except Exception as exc:
             log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
 
+        if REQUIRE_LIVE_REFRESH_AFTER_STARTUP:
+            _set_startup_live_refresh_state(
+                running=True,
+                completed=False,
+                ok=None,
+                startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                finishedAt=None,
+                lastError=None,
+            )
+            try:
+                ran = await asyncio.to_thread(
+                    refresh_cache_and_file,
+                    False,  # no partial fallback: require live 1C refresh
+                    True,
+                    MANUAL_REFRESH_PAGE_SIZE,
+                    True,
+                    False,
+                    True,
+                )
+                if ran and not _last_refresh_error:
+                    _set_startup_live_refresh_state(
+                        running=False,
+                        completed=True,
+                        ok=True,
+                        finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                        lastError=None,
+                    )
+                    log("[startup] mandatory live refresh completed successfully")
+                else:
+                    _set_startup_live_refresh_state(
+                        running=False,
+                        completed=True,
+                        ok=False,
+                        finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                        lastError=str(_last_refresh_error or "startup live refresh did not produce fresh data"),
+                    )
+                    log("[startup] mandatory live refresh did not complete successfully")
+            except Exception as exc:
+                _set_startup_live_refresh_state(
+                    running=False,
+                    completed=True,
+                    ok=False,
+                    finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                    lastError=str(exc),
+                )
+                log(f"[startup] mandatory live refresh failed: {type(exc).__name__}: {exc}")
+
     app.state.post_startup_task = asyncio.create_task(_post_startup_sync())
 
     # Do NOT await refresh here: blocking startup prevents health-check from reaching the app.
@@ -4997,6 +5089,7 @@ async def healthz():
         "ok": True,
         "rows": len(_cached_rows),
         "backgroundRefreshEnabled": ENABLE_BACKGROUND_REFRESH,
+        "startupLiveRefresh": _startup_live_refresh_snapshot(),
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
         "lastCommentRefresh": _last_comment_refresh,
@@ -5257,6 +5350,7 @@ async def debug_runtime_state():
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
         "manualRefreshState": dict(_manual_refresh_state),
+        "startupLiveRefresh": _startup_live_refresh_snapshot(),
         "localMeta": local_meta,
         "localPointer": local_pointer,
         "githubPointer": github_pointer,
@@ -5511,6 +5605,8 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
 @app.get("/api/kp/all")
 async def get_all_kp(request: Request):
     user = _get_user_from_request(request)
+    if not _startup_live_refresh_gate_open():
+        raise HTTPException(status_code=503, detail=_startup_live_refresh_gate_detail())
     _sync_confirmed_runtime_cache_from_github_if_needed("api-kp-all")
     if not _cached_rows:
         raise HTTPException(status_code=503, detail="KP data is not available yet")
@@ -5830,6 +5926,9 @@ async def ws_kp(websocket: WebSocket):
 
     try:
         while True:
+            if not _startup_live_refresh_gate_open():
+                await asyncio.sleep(2)
+                continue
             _sync_confirmed_runtime_cache_from_github_if_needed("ws-kp")
             if not _cached_rows:
                 await asyncio.sleep(2)
