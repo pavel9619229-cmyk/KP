@@ -4169,8 +4169,8 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 0) -> tuple[int,
     if total_count <= 0:
         return total_count, 0, []
 
-    wanted = total_count if page_size <= 0 else max(1, page_size)
-    chunk_size = min(50, wanted)
+    # page_size controls request chunk size only; do not use it as a top-N cap.
+    chunk_size = min(50, max(1, page_size)) if page_size > 0 else 50
 
     skip = max(0, total_count - chunk_size)
     initial_skip = skip
@@ -4178,7 +4178,7 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 0) -> tuple[int,
 
     # 1C OData-specific stable strategy:
     # read from the tail in small pages and move backwards.
-    while len(collected) < wanted:
+    while True:
         top = chunk_size
         payload, error = _get_json_with_retry(
             f"{BASE}/{ENTITY}",
@@ -4208,12 +4208,15 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 0) -> tuple[int,
 
         if skip == 0:
             break
-        skip = max(0, skip - chunk_size)
+        next_skip = max(0, skip - chunk_size)
+        if next_skip == skip:
+            break
+        skip = next_skip
 
         if len(batch) < top:
             break
 
-    return total_count, initial_skip, collected[:wanted]
+    return total_count, initial_skip, collected
 
 
 def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> list:
