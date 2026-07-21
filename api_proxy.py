@@ -923,6 +923,9 @@ def _resolve_manager_email_for_rule(manager_name: str, rule: dict) -> str:
         if _looks_like_email(mapped):
             return mapped
 
+        if bool(rule.get("useAccessRightsFallback", True)) is False:
+            return ""
+
     return _resolve_manager_email_from_rights(name)
 
 
