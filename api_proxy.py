@@ -9,10 +9,12 @@ import hmac
 import json
 import os
 import re
+import smtplib
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from html import unescape
 from pathlib import Path
 from typing import Optional
@@ -57,6 +59,15 @@ RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 RUNTIME_CURRENT_FILE = os.getenv("RUNTIME_CURRENT_FILE", "data/kp_runtime_current.json")
 MANUAL_REFRESH_STATE_FILE = os.getenv("MANUAL_REFRESH_STATE_FILE", "data/manual_refresh_state.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
+COMMENT_AUTOMATION_RULES_FILE = os.getenv("COMMENT_AUTOMATION_RULES_FILE", "data/comment_automation_rules.json")
+COMMENT_AUTOMATION_STATE_FILE = os.getenv("COMMENT_AUTOMATION_STATE_FILE", "data/comment_automation_state.json")
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", "").strip()
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
+SMTP_TIMEOUT_SECONDS = float(os.getenv("SMTP_TIMEOUT_SECONDS", "20"))
 SEED_MAX_AGE_SECONDS = int(os.getenv("SEED_MAX_AGE_SECONDS", "600"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
 FAST_PARTIAL_REFRESH_SECONDS = int(os.getenv("FAST_PARTIAL_REFRESH_SECONDS", "120"))
@@ -214,6 +225,7 @@ CACHE_PUSH_MIN_INTERVAL = 3600  # push runtime cache to GitHub at most once per 
 CONFIRMED_RUNTIME_SYNC_TTL_SECONDS = int(os.getenv("CONFIRMED_RUNTIME_SYNC_TTL_SECONDS", "300"))
 _render_status_lock = threading.Lock()
 _status_rules_lock = threading.Lock()
+_comment_automation_rules_lock = threading.Lock()
 _runtime_write_guard_lock = threading.Lock()
 _confirmed_runtime_sync_lock = threading.Lock()
 _enrich_cursor = 0
@@ -413,6 +425,14 @@ class AccessRightsPayload(BaseModel):
 
 def _status_rules_path() -> Path:
     return Path(STATUS_RULES_FILE)
+
+
+def _comment_automation_rules_path() -> Path:
+    return Path(COMMENT_AUTOMATION_RULES_FILE)
+
+
+def _comment_automation_state_path() -> Path:
+    return Path(COMMENT_AUTOMATION_STATE_FILE)
 
 
 def _access_rights_path() -> Path:
@@ -767,6 +787,312 @@ def load_status_rules_text() -> str:
     except Exception as exc:
         log(f"status rules read failed, using default: {exc}")
         return _effective_default_rules()
+
+
+def load_comment_automation_rules() -> dict:
+    path = _comment_automation_rules_path()
+    default_payload = {"rules": [], "updatedAt": None}
+    if not path.exists():
+        return default_payload
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            return default_payload
+        rules = payload.get("rules")
+        if not isinstance(rules, list):
+            rules = []
+        updated_at = str(payload.get("updatedAt") or "") or None
+        return {"rules": rules, "updatedAt": updated_at}
+    except Exception as exc:
+        log(f"comment automation rules read failed: {exc}")
+        return default_payload
+
+
+def _load_comment_automation_state() -> dict:
+    path = _comment_automation_state_path()
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if isinstance(payload, dict):
+            return payload
+    except Exception as exc:
+        log(f"comment automation state read failed: {exc}")
+    return {}
+
+
+def _save_comment_automation_state(state: dict) -> None:
+    path = _comment_automation_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(state or {}, f, ensure_ascii=False, indent=2)
+
+
+def _render_rule_template(template: str, values: dict) -> str:
+    result = str(template or "")
+    for key, value in (values or {}).items():
+        result = result.replace("{" + str(key) + "}", str(value or ""))
+    return result.strip()
+
+
+def _to_dative_case(name: str, overrides: dict | None = None) -> str:
+    source_name = str(name or "").strip()
+    if not source_name:
+        return source_name
+
+    mapped = overrides.get(source_name) if isinstance(overrides, dict) else None
+    if mapped:
+        return str(mapped).strip()
+
+    parts = source_name.split()
+    if not parts:
+        return source_name
+
+    first = parts[0]
+    lowered = first.lower()
+    if lowered.endswith("ия"):
+        parts[0] = first[:-2] + "ии"
+    elif lowered.endswith("а"):
+        parts[0] = first[:-1] + "е"
+    elif lowered.endswith("я"):
+        parts[0] = first[:-1] + "е"
+    elif lowered.endswith("й"):
+        parts[0] = first[:-1] + "ю"
+    elif lowered.endswith("ь"):
+        parts[0] = first[:-1] + "ю"
+    else:
+        parts[0] = first + "у"
+    return " ".join(parts)
+
+
+def _looks_like_email(value: str) -> bool:
+    return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", str(value or "").strip()))
+
+
+def _resolve_manager_email_from_rights(manager_name: str) -> str:
+    wanted = _normalize_manager_name_for_acl(manager_name)
+    if not wanted:
+        return ""
+
+    rights = load_access_rights()
+    exact_candidates: list[str] = []
+    wildcard_candidates: list[str] = []
+
+    for user in rights.get("users", []):
+        if not isinstance(user, dict):
+            continue
+        if str(user.get("role") or "").strip().lower() != "manager":
+            continue
+        username = str(user.get("username") or "").strip()
+        if not _looks_like_email(username):
+            continue
+        allowed = user.get("allowedManagers")
+        if isinstance(allowed, list):
+            allowed_norm = {_normalize_manager_name_for_acl(v) for v in allowed}
+            if wanted in allowed_norm:
+                exact_candidates.append(username)
+        elif allowed == "*":
+            wildcard_candidates.append(username)
+
+    if len(exact_candidates) == 1:
+        return exact_candidates[0]
+    if len(exact_candidates) > 1:
+        return ""
+    if len(wildcard_candidates) == 1:
+        return wildcard_candidates[0]
+    return ""
+
+
+def _resolve_manager_email_for_rule(manager_name: str, rule: dict) -> str:
+    name = str(manager_name or "").strip()
+    if _looks_like_email(name):
+        return name
+
+    mapping = rule.get("managerEmailByName")
+    if isinstance(mapping, dict):
+        direct = str(mapping.get(name) or "").strip()
+        if _looks_like_email(direct):
+            return direct
+        normalized_map = {
+            _normalize_manager_name_for_acl(k): str(v).strip() for k, v in mapping.items() if _looks_like_email(str(v).strip())
+        }
+        mapped = normalized_map.get(_normalize_manager_name_for_acl(name), "")
+        if _looks_like_email(mapped):
+            return mapped
+
+    return _resolve_manager_email_from_rights(name)
+
+
+def _patch_comment_prefix_line(ref_key: str, existing_comment: str, prefix_line: str, headers: dict) -> bool:
+    ref_key = str(ref_key or "").strip()
+    first_prefix = str(prefix_line or "").strip()
+    if not ref_key or not first_prefix:
+        return False
+
+    existing = str(existing_comment or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = existing.split("\n") if existing else []
+    current_first = first_line(existing)
+    if current_first == first_prefix:
+        return True
+
+    body = existing
+    if lines:
+        first_clean = strip_html(lines[0]).strip().lower()
+        marker = "отправлен емайл с напоминанием записать текущую ситуацию"
+        if marker in first_clean:
+            body = "\n".join(lines[1:]).lstrip("\n")
+
+    new_comment = first_prefix if not body.strip() else f"{first_prefix}\n{body}"
+    response = requests.patch(
+        f"{BASE}/{ENTITY}(guid'{ref_key}')",
+        headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        json={"Комментарий": new_comment},
+        timeout=20,
+        verify=False,
+    )
+    if response.status_code in (200, 204):
+        return True
+
+    log(
+        "Comment rule patch failed for "
+        f"{ref_key}: HTTP {response.status_code}: {response.text[:300]}"
+    )
+    return False
+
+
+def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str]:
+    recipient = str(to_email or "").strip()
+    if not _looks_like_email(recipient):
+        return False, "invalid recipient email"
+    if not SMTP_HOST or not SMTP_FROM:
+        return False, "SMTP is not configured"
+
+    msg = EmailMessage()
+    msg["From"] = SMTP_FROM
+    msg["To"] = recipient
+    msg["Subject"] = str(subject or "").strip() or "Напоминание по КП"
+    msg.set_content(str(body_text or "").strip())
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT_SECONDS) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            if SMTP_USERNAME:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True, ""
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[str, dict], headers: dict) -> None:
+    with _comment_automation_rules_lock:
+        payload = load_comment_automation_rules()
+    rules = payload.get("rules") if isinstance(payload, dict) else []
+    if not isinstance(rules, list) or not rules:
+        return
+
+    rule = None
+    for item in rules:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("id") or "").strip() == "client_thinking_reminder_v1":
+            rule = item
+            break
+    if not isinstance(rule, dict) or not bool(rule.get("enabled", True)):
+        return
+
+    trigger_status = str(rule.get("triggerStatus") or "КЛИЕНТ ДУМАЕТ").strip()
+    comment_tpl = str(rule.get("commentPrefixTemplate") or "").strip()
+    subject_tpl = str(rule.get("emailSubjectTemplate") or "").strip()
+    body_tpl = str(rule.get("emailBodyTemplate") or "").strip()
+    if not trigger_status or not comment_tpl or not body_tpl:
+        log("client-thinking rule skipped: invalid templates")
+        return
+
+    with _status_rules_lock:
+        status_rules = _parse_status_rules_text(load_status_rules_text())
+
+    state = _load_comment_automation_state()
+    if not isinstance(state, dict):
+        state = {}
+    state_items = state.get("items")
+    if not isinstance(state_items, dict):
+        state_items = {}
+
+    active_refs: set[str] = set()
+    sent_count = 0
+    skipped_count = 0
+
+    for row in list(rows or []):
+        ref_key = str(row.get("refKey") or "").strip()
+        kp_number = str(row.get("number") or "").strip()
+        manager_name = str(row.get("managerName") or "").strip() or UNKNOWN_MANAGER_NAME
+        if not ref_key or not kp_number:
+            continue
+
+        computed_status = _compute_status_for_row(row, status_rules)
+        if computed_status != trigger_status:
+            continue
+        active_refs.add(ref_key)
+
+        existing_entry = state_items.get(ref_key)
+        if isinstance(existing_entry, dict) and str(existing_entry.get("status") or "") == trigger_status:
+            skipped_count += 1
+            continue
+
+        dative_name = _to_dative_case(manager_name, rule.get("dativeOverrides"))
+        values = {
+            "managerName": manager_name,
+            "managerNameDative": dative_name,
+            "kpNumber": kp_number,
+        }
+        comment_line = _render_rule_template(comment_tpl, values)
+        subject = _render_rule_template(subject_tpl, values)
+        body = _render_rule_template(body_tpl, values)
+
+        doc = docs_by_ref.get(ref_key) or {}
+        existing_comment = str(doc.get("Комментарий") or "")
+        patched = _patch_comment_prefix_line(ref_key, existing_comment, comment_line, headers)
+        if not patched:
+            log(f"client-thinking rule: comment patch failed for KP {kp_number}")
+            continue
+
+        manager_email = _resolve_manager_email_for_rule(manager_name, rule)
+        if not manager_email:
+            log(f"client-thinking rule: manager email is not resolved for KP {kp_number} ({manager_name})")
+            continue
+
+        sent, err = _send_email(manager_email, subject, body)
+        if not sent:
+            log(f"client-thinking rule: email send failed for KP {kp_number}: {err}")
+            continue
+
+        sent_count += 1
+        state_items[ref_key] = {
+            "status": trigger_status,
+            "kpNumber": kp_number,
+            "managerName": manager_name,
+            "managerEmail": manager_email,
+            "sentAt": datetime.now(timezone.utc).isoformat(),
+            "ruleId": "client_thinking_reminder_v1",
+        }
+
+    stale_refs = [rk for rk, entry in state_items.items() if isinstance(entry, dict) and str(entry.get("status") or "") == trigger_status and rk not in active_refs]
+    for rk in stale_refs:
+        state_items.pop(rk, None)
+
+    state["items"] = state_items
+    state["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    _save_comment_automation_state(state)
+
+    if sent_count or skipped_count:
+        log(
+            "client-thinking rule run: "
+            f"sent={sent_count}, skipped={skipped_count}, active={len(active_refs)}"
+        )
 
 
 def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
@@ -4518,6 +4844,12 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
         _save_stage_patch("stage6_group_flags", [])
         log("stage6_group_flags skipped (fast mode)")
     log(f"stage6: done in {time.time()-_t6:.1f}s")
+
+    # Rule automation: comment/email for specific computed status.
+    try:
+        _execute_client_thinking_reminder_rule(rows, docs_by_ref, headers)
+    except Exception as exc:
+        log(f"client-thinking rule failed: {type(exc).__name__}: {exc}")
 
     for row in rows:
         apply_runtime_defaults(row)

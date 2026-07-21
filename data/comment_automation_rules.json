@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "id": "client_thinking_reminder_v1",
+      "enabled": true,
+      "triggerStatus": "КЛИЕНТ ДУМАЕТ",
+      "commentPrefixTemplate": "({managerNameDative}) отправлен емайл с напоминанием записать текущую ситуацию",
+      "emailSubjectTemplate": "Напоминание по КП {kpNumber}",
+      "emailBodyTemplate": "{managerName}, КП {kpNumber} отправлено клиенту давно. Информации о решении клиента нет. Прошу записать в первой строчке комментария в скобках вместо моего комментария - кратко, что произошло, а также удалить старый статус",
+      "dativeOverrides": {},
+      "managerEmailByName": {}
+    }
+  ],
+  "updatedAt": "2026-07-22T00:00:00"
+}
