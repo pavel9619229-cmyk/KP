@@ -265,6 +265,9 @@ def _set_startup_live_refresh_state(**updates: object) -> None:
 
 def _startup_live_refresh_gate_open() -> bool:
     state = _startup_live_refresh_snapshot()
+    # If cache is already populated (seed/runtime snapshot), allow serving rows.
+    if _cached_rows:
+        return True
     if not bool(state.get("required")):
         return True
     return bool(state.get("completed")) and bool(state.get("ok"))
