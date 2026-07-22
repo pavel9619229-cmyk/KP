@@ -197,7 +197,6 @@ refreshBtn.addEventListener('click', async () => {
     let done = false;
     let lastState = null;
     let consecutiveStatusErrors = 0;
-    let restartRetries = 0;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let stateResponse;
       let statePayload;
@@ -253,34 +252,15 @@ refreshBtn.addEventListener('click', async () => {
         continue;
       }
 
-      // Treat blank/non-running state as restart ONLY when instance actually changed.
-      // This avoids false positives on transient status resets.
+      // Treat blank/non-running state as transient while the same manual refresh
+      // is still settling. Do not trigger a second refresh request here.
       if (!statePayload.running && !statePayload.finishedAt && statePayload.lastOk == null && !statePayload.lastError && !statePayload.requestedAt) {
         const restartConfirmed = Boolean(initialInstanceId && stateInstanceId && initialInstanceId !== stateInstanceId);
-        if (!restartConfirmed) {
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-          continue;
+        if (restartConfirmed) {
+          refreshBtn.textContent = 'Идёт обновление...';
         }
-
-        if (restartRetries < 2) {
-          restartRetries += 1;
-          refreshBtn.textContent = `Перезапуск после рестарта (${restartRetries}/2)...`;
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          try {
-            const retryResp = await fetch('/api/kp/refresh', { method: 'POST', credentials: 'include', cache: 'no-store' });
-            if (retryResp.status === 401) { window.location.href = '/login'; return; }
-            const retryPayload = await retryResp.json().catch(() => ({}));
-            const retryRefreshId = String(retryPayload?.refreshId || '');
-            const retryInstanceId = String(retryPayload?.instanceId || '');
-            if (retryRefreshId) expectedRefreshId = retryRefreshId;
-            if (retryInstanceId) initialInstanceId = retryInstanceId;
-          } catch { /* ignore, keep polling */ }
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-          continue;
-        }
-        // Gave up retrying after restarts — load whatever data is on server.
-        done = true;
-        break;
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
       }
 
       if (expectedRefreshId && stateRefreshId && stateRefreshId !== expectedRefreshId && statePayload.lastOk == null && !statePayload.finishedAt) {
