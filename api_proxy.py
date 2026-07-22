@@ -12,6 +12,7 @@ import re
 import smtplib
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -201,6 +202,7 @@ _last_group_enrich = None
 
 _TZ_MSK = timezone(timedelta(hours=3))
 _app_started_at = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+_app_instance_id = uuid.uuid4().hex
 _customer_name_cache = {}
 _additional_info_cache = {}
 _status_kp_value_cache = {}
@@ -247,6 +249,7 @@ _partial_refresh_cursor = 0
 _manual_refresh_state_lock = threading.Lock()
 _manual_refresh_state: dict = {
     "running": False,
+    "refreshId": None,
     "requestedAt": None,
     "requestedBy": None,
     "requestedFrom": None,
@@ -267,8 +270,6 @@ _startup_live_refresh_state: dict = {
     "lastError": None,
 }
 
-_manual_refresh_state.update(_load_manual_refresh_state() if "_load_manual_refresh_state" in globals() else {})
-
 
 def _manual_refresh_snapshot() -> dict:
     with _manual_refresh_state_lock:
@@ -276,6 +277,8 @@ def _manual_refresh_snapshot() -> dict:
     state["rows"] = len(_cached_rows)
     state["lastRefresh"] = _last_refresh
     state["lastRefreshError"] = _last_refresh_error
+    state["instanceId"] = _app_instance_id
+    state["instanceStartedAt"] = _app_started_at
     return state
 
 
@@ -5531,6 +5534,7 @@ async def manual_refresh(request: Request):
         pass
 
     client_host = request.client.host if request.client else "unknown"
+    refresh_id = uuid.uuid4().hex
 
     with _manual_refresh_state_lock:
         if _manual_refresh_state.get("running"):
@@ -5550,12 +5554,14 @@ async def manual_refresh(request: Request):
         _manual_refresh_state.update(
             {
                 "running": True,
+                "refreshId": refresh_id,
                 "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
                 "requestedBy": username,
                 "requestedFrom": client_host,
                 "startedAt": None,
                 "finishedAt": None,
                 "lastError": None,
+                "lastOk": None,
                 "confirmedVersion": None,
             }
         )
@@ -5564,7 +5570,7 @@ async def manual_refresh(request: Request):
         global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
 
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
-        log(f"manual refresh requested by {username} from {client_host}")
+        log(f"manual refresh requested by {username} from {client_host} (refreshId={refresh_id})")
 
         # Hard deadline: github push + readback add up to ~3 min on top of the main refresh.
         TOTAL_HARD_DEADLINE = max(120, MANUAL_REFRESH_TIMEOUT_SECONDS) + 300

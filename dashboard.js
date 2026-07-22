@@ -191,6 +191,9 @@ refreshBtn.addEventListener('click', async () => {
       throw new Error(String(details));
     }
 
+    let expectedRefreshId = String(startPayload?.refreshId || '');
+    let initialInstanceId = String(startPayload?.instanceId || '');
+
     let done = false;
     let lastState = null;
     let consecutiveStatusErrors = 0;
@@ -235,15 +238,30 @@ refreshBtn.addEventListener('click', async () => {
         continue;
       }
 
+      const stateRefreshId = String(statePayload?.refreshId || '');
+      const stateInstanceId = String(statePayload?.instanceId || '');
+      if (!expectedRefreshId && stateRefreshId) {
+        expectedRefreshId = stateRefreshId;
+      }
+      if (!initialInstanceId && stateInstanceId) {
+        initialInstanceId = stateInstanceId;
+      }
+
       if (statePayload?.running) {
         setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
 
-      // Server restarted mid-refresh: it has no memory of our request.
-      // Detect by: not running, no finishedAt, no lastOk, no lastError, no requestedAt.
+      // Treat blank/non-running state as restart ONLY when instance actually changed.
+      // This avoids false positives on transient status resets.
       if (!statePayload.running && !statePayload.finishedAt && statePayload.lastOk == null && !statePayload.lastError && !statePayload.requestedAt) {
+        const restartConfirmed = Boolean(initialInstanceId && stateInstanceId && initialInstanceId !== stateInstanceId);
+        if (!restartConfirmed) {
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
+        }
+
         if (restartRetries < 2) {
           restartRetries += 1;
           refreshBtn.textContent = `Перезапуск после рестарта (${restartRetries}/2)...`;
@@ -251,6 +269,11 @@ refreshBtn.addEventListener('click', async () => {
           try {
             const retryResp = await fetch('/api/kp/refresh', { method: 'POST', credentials: 'include', cache: 'no-store' });
             if (retryResp.status === 401) { window.location.href = '/login'; return; }
+            const retryPayload = await retryResp.json().catch(() => ({}));
+            const retryRefreshId = String(retryPayload?.refreshId || '');
+            const retryInstanceId = String(retryPayload?.instanceId || '');
+            if (retryRefreshId) expectedRefreshId = retryRefreshId;
+            if (retryInstanceId) initialInstanceId = retryInstanceId;
           } catch { /* ignore, keep polling */ }
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           continue;
@@ -258,6 +281,13 @@ refreshBtn.addEventListener('click', async () => {
         // Gave up retrying after restarts — load whatever data is on server.
         done = true;
         break;
+      }
+
+      if (expectedRefreshId && stateRefreshId && stateRefreshId !== expectedRefreshId && statePayload.lastOk == null && !statePayload.finishedAt) {
+        // Another refresh request replaced our context; continue polling instead of failing.
+        expectedRefreshId = stateRefreshId;
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
       }
 
       if (statePayload?.lastOk === true || (statePayload?.lastRefresh && !statePayload?.lastRefreshError)) {
