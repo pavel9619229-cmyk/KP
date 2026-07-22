@@ -87,6 +87,7 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 STAGE25_RETRY_TIMEOUT_SECONDS = float(os.getenv("STAGE25_RETRY_TIMEOUT_SECONDS", "12.0"))
+STAGE25_WORKERS = int(os.getenv("STAGE25_WORKERS", "8"))
 STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
 STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
 STAGE34_WORKERS = int(os.getenv("STAGE34_WORKERS", "20"))
@@ -96,6 +97,18 @@ MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS",
 # <=0 means full target window (no top-N cap).
 MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
 REQUIRE_LIVE_REFRESH_AFTER_STARTUP = os.getenv("REQUIRE_LIVE_REFRESH_AFTER_STARTUP", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+STARTUP_ENRICH_ENABLED = os.getenv("STARTUP_ENRICH_ENABLED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+MANUAL_REFRESH_INCLUDE_STAGE6 = os.getenv("MANUAL_REFRESH_INCLUDE_STAGE6", "false").strip().lower() in {
     "1",
     "true",
     "yes",
@@ -4680,7 +4693,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
     doc_ok = 0
     doc_fail = 0
     failed_refs: list[str] = []
-    with ThreadPoolExecutor(max_workers=25) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, STAGE25_WORKERS)) as pool:
         futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
         for future in as_completed(futures):
             rk, doc = future.result()
@@ -5270,22 +5283,25 @@ async def on_startup() -> None:
             await asyncio.to_thread(_sync_confirmed_runtime_cache_from_github_if_needed, "startup", True)
         except Exception as exc:
             log(f"[startup] GitHub sync failed (non-blocking): {type(exc).__name__}: {exc}")
-        try:
-            headers = _build_headers()
-            await asyncio.to_thread(_enrich_group_flags_bulk, _cached_rows, headers)
-            _cached_fp = rows_fingerprint(_cached_rows)
-            log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
-            # Persist enriched rows locally so the next GitHub sync doesn't overwrite
-            # paymentReceived/invoiceCreated values that were just set by enrichment.
+        if STARTUP_ENRICH_ENABLED:
             try:
-                meta = _read_runtime_meta() or {"generatedAt": datetime.now(timezone.utc).isoformat(), "rowCount": len(_cached_rows)}
-                pointer = _build_runtime_current_pointer(_cached_rows, meta)
-                _write_local_confirmed_runtime(_cached_rows, meta, pointer)
-                log(f"[startup] enriched rows saved to local confirmed runtime (v{pointer.get('version')})")
-            except Exception as save_exc:
-                log(f"[startup] saving enriched rows failed (non-blocking): {type(save_exc).__name__}: {save_exc}")
-        except Exception as exc:
-            log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
+                headers = _build_headers()
+                await asyncio.to_thread(_enrich_group_flags_bulk, _cached_rows, headers)
+                _cached_fp = rows_fingerprint(_cached_rows)
+                log(f"[startup] enriched {len(_cached_rows)} rows with group flags")
+                # Persist enriched rows locally so the next GitHub sync doesn't overwrite
+                # paymentReceived/invoiceCreated values that were just set by enrichment.
+                try:
+                    meta = _read_runtime_meta() or {"generatedAt": datetime.now(timezone.utc).isoformat(), "rowCount": len(_cached_rows)}
+                    pointer = _build_runtime_current_pointer(_cached_rows, meta)
+                    _write_local_confirmed_runtime(_cached_rows, meta, pointer)
+                    log(f"[startup] enriched rows saved to local confirmed runtime (v{pointer.get('version')})")
+                except Exception as save_exc:
+                    log(f"[startup] saving enriched rows failed (non-blocking): {type(save_exc).__name__}: {save_exc}")
+            except Exception as exc:
+                log(f"[startup] group flags enrichment failed (non-blocking): {type(exc).__name__}: {exc}")
+        else:
+            log("[startup] group flags enrichment skipped (STARTUP_ENRICH_ENABLED=false)")
 
         if REQUIRE_LIVE_REFRESH_AFTER_STARTUP:
             _set_startup_live_refresh_state(
@@ -5586,7 +5602,15 @@ async def manual_refresh(request: Request):
 
         try:
             ran = await asyncio.wait_for(
-                asyncio.to_thread(refresh_cache_and_file, True, True, MANUAL_REFRESH_PAGE_SIZE, True, False, False),
+                asyncio.to_thread(
+                    refresh_cache_and_file,
+                    True,
+                    MANUAL_REFRESH_INCLUDE_STAGE6,
+                    MANUAL_REFRESH_PAGE_SIZE,
+                    True,
+                    False,
+                    False,
+                ),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
 

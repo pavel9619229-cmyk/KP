@@ -13,6 +13,11 @@
 - start command: `python -m uvicorn api_proxy:app --host 0.0.0.0 --port $PORT`
 - health check: `/healthz`
 
+Рекомендуемые переменные для стабильности на free-плане:
+- `STARTUP_ENRICH_ENABLED=false` — не выполнять тяжелое обогащение группы на старте.
+- `MANUAL_REFRESH_INCLUDE_STAGE6=false` — ручной refresh без тяжелой stage6 (снижает риск рестартов).
+- `STAGE25_WORKERS=8` — ограничение параллельной загрузки документов на stage2.5.
+
 Фронтенд обслуживается тем же backend. Отдельный fallback на локальный JSON во фронтенде не используется.
 
 ## Данные
