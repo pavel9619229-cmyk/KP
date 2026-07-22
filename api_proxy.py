@@ -123,6 +123,8 @@ MANUAL_REFRESH_LIGHT_MODE = os.getenv("MANUAL_REFRESH_LIGHT_MODE", "true").strip
 }
 LIGHT_STAGE5_WORKERS = int(os.getenv("LIGHT_STAGE5_WORKERS", "6"))
 LIGHT_STAGE5_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE5_DOC_TIMEOUT", "2.5"))
+LIGHT_STAGE3_WORKERS = int(os.getenv("LIGHT_STAGE3_WORKERS", "8"))
+LIGHT_STAGE3_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE3_DOC_TIMEOUT", "2.2"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -4823,7 +4825,56 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0, inclu
             stage3_patch.append(patch)
         _save_stage_patch("stage3_customer", stage3_patch)
     else:
-        _save_stage_patch("stage3_customer", [])
+        # Light mode: refresh customerName for all rows to avoid stale names
+        # after client renames in 1C while heavy stages are disabled.
+        def _resolve_light_customer(row: dict) -> dict:
+            ref_key = str(row.get("refKey") or "")
+            if not ref_key:
+                return {"refKey": ref_key, "customerName": row.get("customerName") or "", "resolved": False}
+
+            doc = _fetch_doc_by_ref_once(ref_key, headers, timeout=max(0.5, LIGHT_STAGE3_DOC_TIMEOUT))
+            if not doc:
+                return {"refKey": ref_key, "customerName": row.get("customerName") or "", "resolved": False}
+
+            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or ""
+            return {
+                "refKey": ref_key,
+                "customerName": customer_name,
+                "resolved": True,
+            }
+
+        stage3_results: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=max(1, LIGHT_STAGE3_WORKERS)) as s3_pool:
+            s3_futures = {s3_pool.submit(_resolve_light_customer, row): row for row in rows}
+            for future in as_completed(s3_futures):
+                result = future.result()
+                stage3_results[result["refKey"]] = result
+
+        stage3_patch: list[dict] = []
+        resolved_count = 0
+        changed_count = 0
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            old_name = str(row.get("customerName") or "")
+            resolved = stage3_results.get(ref_key, {})
+            if resolved.get("resolved"):
+                resolved_count += 1
+                new_name = str(resolved.get("customerName") or "")
+                if new_name != old_name:
+                    changed_count += 1
+                row["customerName"] = new_name
+            patch = {
+                "refKey": ref_key,
+                "customerName": row.get("customerName") or "",
+                "clientFilled": is_client_filled(row.get("customerName") or ""),
+            }
+            row.update(patch)
+            stage3_patch.append(patch)
+        _save_stage_patch("stage3_customer", stage3_patch)
+        log(
+            "stage3 light mode: "
+            f"rows={len(rows)}, resolved={resolved_count}, changed={changed_count}"
+        )
     log(f"stage3: done {len(rows)} rows in {time.time()-_t3:.1f}s")
 
     # Stage 4: manager — parallel nav-link resolution.
