@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Запускается локально (на ПК) по расписанию.
-Тянет данные из 1C через staged pipeline, сохраняет снапшот и пушит в GitHub.
+Тянет данные из 1C через staged pipeline и сохраняет локальный снапшот.
+Git commit/push выключен по умолчанию и включается только явным флагом.
 
 Запуск: python tools/refresh_seed.py
 """
@@ -29,7 +30,7 @@ from api_proxy import (
 REPO_ROOT = ROOT
 
 
-def save_and_push(rows: list) -> None:
+def save_snapshot(rows: list) -> str:
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     runtime_path = REPO_ROOT / RUNTIME_DATA_FILE
@@ -47,15 +48,18 @@ def save_and_push(rows: list) -> None:
         json.dump(rows, f, ensure_ascii=False, indent=2)
 
     print(f"[{now_str}] Сохранено {len(rows)} строк → {runtime_path.name}, {seed_path.name}")
+    return now_str
 
-    # git add + commit + push
+
+def commit_and_push_snapshot(rows_count: int, now_str: str) -> None:
+    # git add + commit + push (opt-in)
     try:
         subprocess.run(
             ["git", "-C", str(REPO_ROOT), "add",
              RUNTIME_DATA_FILE, RUNTIME_META_FILE, SEED_DATA_FILE],
             check=True,
         )
-        commit_msg = f"seed: refresh {len(rows)} rows at {now_str}"
+        commit_msg = f"seed: refresh {rows_count} rows at {now_str}"
         result = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "commit", "-m", commit_msg],
             capture_output=True, text=True,
@@ -77,6 +81,11 @@ def main() -> None:
         action="store_true",
         help="Skip heavy stage6 (invoice/payment group enrichment)",
     )
+    parser.add_argument(
+        "--git-push",
+        action="store_true",
+        help="Also git add/commit/push snapshot files (disabled by default)",
+    )
     args = parser.parse_args()
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Запуск staged refresh...")
@@ -85,7 +94,11 @@ def main() -> None:
         print("Получено 0 строк — данные не сохранены, push не выполнен")
         sys.exit(1)
     print(f"Получено {len(rows)} строк")
-    save_and_push(rows)
+    now_str = save_snapshot(rows)
+    if args.git_push:
+        commit_and_push_snapshot(len(rows), now_str)
+    else:
+        print("git commit/push пропущен (режим по умолчанию). Используйте --git-push для публикации в GitHub.")
 
 
 if __name__ == "__main__":

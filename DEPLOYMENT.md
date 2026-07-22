@@ -26,6 +26,13 @@
 - `tools/fetch_kp_march.py` — ручная выгрузка snapshot в `data/`
 - `tools/auto_update.ps1` — локальный цикл запуска ручной выгрузки
 - `tools/explore_1c.py` — исследовательский скрипт для OData
+- `tools/refresh_seed.py` — локальное обновление snapshot. По умолчанию только сохраняет файлы; git push выполняется только с флагом `--git-push`.
+
+## Обновление данных в API
+- Основной рабочий режим: ручное обновление данных по запросу пользователя.
+- Endpoint ручного запуска: `POST /api/kp/refresh`
+- Endpoint принудительного запуска (явный alias для внешних интеграций): `POST /api/kp/refresh/force`
+- Статус ручного обновления: `GET /api/kp/refresh/status`
 
 ## Локальный запуск
 ```bash

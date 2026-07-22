@@ -95,7 +95,7 @@ BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
 # <=0 means full target window (no top-N cap).
 MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
-REQUIRE_LIVE_REFRESH_AFTER_STARTUP = os.getenv("REQUIRE_LIVE_REFRESH_AFTER_STARTUP", "true").strip().lower() in {
+REQUIRE_LIVE_REFRESH_AFTER_STARTUP = os.getenv("REQUIRE_LIVE_REFRESH_AFTER_STARTUP", "false").strip().lower() in {
     "1",
     "true",
     "yes",
@@ -5668,6 +5668,12 @@ async def manual_refresh(request: Request):
             **_manual_refresh_snapshot(),
         },
     )
+
+
+@app.post("/api/kp/refresh/force")
+async def manual_refresh_force(request: Request):
+    # Explicit endpoint for forced/manual refresh from external automations.
+    return await manual_refresh(request)
 
 
 @app.get("/api/kp/refresh/status")
