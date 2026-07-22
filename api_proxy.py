@@ -121,6 +121,8 @@ MANUAL_REFRESH_LIGHT_MODE = os.getenv("MANUAL_REFRESH_LIGHT_MODE", "true").strip
     "yes",
     "on",
 }
+LIGHT_STAGE5_WORKERS = int(os.getenv("LIGHT_STAGE5_WORKERS", "6"))
+LIGHT_STAGE5_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE5_DOC_TIMEOUT", "2.5"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -4890,7 +4892,68 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0, inclu
             stage5_patch.append(patch)
         _save_stage_patch("stage5_product_price", stage5_patch)
     else:
-        _save_stage_patch("stage5_product_price", [])
+        # Light mode: still recalculate status-critical product/price flags with
+        # a lightweight per-doc fetch to avoid stale "ОБРАБОТАТЬ" statuses.
+        def _resolve_light_stage5(row: dict) -> dict:
+            ref_key = str(row.get("refKey") or "")
+            if not ref_key:
+                return {"refKey": ref_key}
+
+            doc = _fetch_doc_by_ref_once(ref_key, headers, timeout=max(0.5, LIGHT_STAGE5_DOC_TIMEOUT))
+            if not doc:
+                return {
+                    "refKey": ref_key,
+                    "productSpecified": row.get("productSpecified"),
+                    "priceFilled": row.get("priceFilled"),
+                    "resolved": False,
+                }
+
+            product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+            return {
+                "refKey": ref_key,
+                "productSpecified": bool(product_specified) if product_specified is not None else row.get("productSpecified"),
+                "priceFilled": bool(price_filled) if price_filled is not None else row.get("priceFilled"),
+                "resolved": True,
+            }
+
+        stage5_patch: list[dict] = []
+        candidates = [
+            row for row in rows
+            if row.get("productSpecified") is not True or row.get("priceFilled") is not True
+        ]
+
+        resolved_count = 0
+        if candidates:
+            with ThreadPoolExecutor(max_workers=max(1, LIGHT_STAGE5_WORKERS)) as light_pool:
+                futures = {light_pool.submit(_resolve_light_stage5, row): row for row in candidates}
+                results: dict[str, dict] = {}
+                for future in as_completed(futures):
+                    item = future.result()
+                    results[str(item.get("refKey") or "")] = item
+
+            for row in rows:
+                ref_key = str(row.get("refKey") or "")
+                resolved = results.get(ref_key)
+                if not resolved:
+                    continue
+                if resolved.get("resolved"):
+                    resolved_count += 1
+                row["productSpecified"] = resolved.get("productSpecified")
+                row["priceFilled"] = resolved.get("priceFilled")
+                patch = {
+                    "refKey": ref_key,
+                    "productSpecified": row.get("productSpecified"),
+                    "priceFilled": row.get("priceFilled"),
+                }
+                row.update(patch)
+                stage5_patch.append(patch)
+
+        _save_stage_patch("stage5_product_price", stage5_patch)
+        log(
+            "stage5 light mode: "
+            f"candidates={len(candidates)}, resolved={resolved_count}, patched={len(stage5_patch)}"
+        )
     log(f"stage5: done {len(rows)} rows in {time.time()-_t5:.1f}s")
 
     # Stage 6: heavy group flags (orders/invoices/payments).
