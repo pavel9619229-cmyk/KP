@@ -191,12 +191,10 @@ refreshBtn.addEventListener('click', async () => {
       throw new Error(String(details));
     }
 
-    let expectedRefreshId = String(startPayload?.refreshId || '');
-    let initialInstanceId = String(startPayload?.instanceId || '');
-
     let done = false;
     let lastState = null;
     let consecutiveStatusErrors = 0;
+    let restartRetries = 0;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let stateResponse;
       let statePayload;
@@ -237,37 +235,29 @@ refreshBtn.addEventListener('click', async () => {
         continue;
       }
 
-      const stateRefreshId = String(statePayload?.refreshId || '');
-      const stateInstanceId = String(statePayload?.instanceId || '');
-      if (!expectedRefreshId && stateRefreshId) {
-        expectedRefreshId = stateRefreshId;
-      }
-      if (!initialInstanceId && stateInstanceId) {
-        initialInstanceId = stateInstanceId;
-      }
-
       if (statePayload?.running) {
         setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
 
-      // Treat blank/non-running state as transient while the same manual refresh
-      // is still settling. Do not trigger a second refresh request here.
+      // Server restarted mid-refresh: it has no memory of our request.
+      // Detect by: not running, no finishedAt, no lastOk, no lastError, no requestedAt.
       if (!statePayload.running && !statePayload.finishedAt && statePayload.lastOk == null && !statePayload.lastError && !statePayload.requestedAt) {
-        const restartConfirmed = Boolean(initialInstanceId && stateInstanceId && initialInstanceId !== stateInstanceId);
-        if (restartConfirmed) {
-          refreshBtn.textContent = 'Идёт обновление...';
+        if (restartRetries < 2) {
+          restartRetries += 1;
+          refreshBtn.textContent = `Перезапуск после рестарта (${restartRetries}/2)...`;
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          try {
+            const retryResp = await fetch('/api/kp/refresh', { method: 'POST', credentials: 'include', cache: 'no-store' });
+            if (retryResp.status === 401) { window.location.href = '/login'; return; }
+          } catch { /* ignore, keep polling */ }
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
         }
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-        continue;
-      }
-
-      if (expectedRefreshId && stateRefreshId && stateRefreshId !== expectedRefreshId && statePayload.lastOk == null && !statePayload.finishedAt) {
-        // Another refresh request replaced our context; continue polling instead of failing.
-        expectedRefreshId = stateRefreshId;
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-        continue;
+        // Gave up retrying after restarts — load whatever data is on server.
+        done = true;
+        break;
       }
 
       if (statePayload?.lastOk === true || (statePayload?.lastRefresh && !statePayload?.lastRefreshError)) {
