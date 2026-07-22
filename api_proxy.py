@@ -125,6 +125,8 @@ LIGHT_STAGE5_WORKERS = int(os.getenv("LIGHT_STAGE5_WORKERS", "6"))
 LIGHT_STAGE5_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE5_DOC_TIMEOUT", "2.5"))
 LIGHT_STAGE3_WORKERS = int(os.getenv("LIGHT_STAGE3_WORKERS", "8"))
 LIGHT_STAGE3_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE3_DOC_TIMEOUT", "2.2"))
+LIGHT_STAGE2_WORKERS = int(os.getenv("LIGHT_STAGE2_WORKERS", "8"))
+LIGHT_STAGE2_DOC_TIMEOUT = float(os.getenv("LIGHT_STAGE2_DOC_TIMEOUT", "2.2"))
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
@@ -4787,7 +4789,56 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0, inclu
         _save_stage_patch("stage2_comment_flags", stage2_patch)
         log(f"stage2: done {len(rows)} rows in {time.time()-_t2:.1f}s")
     else:
-        _save_stage_patch("stage2_comment_flags", [])
+        # Light mode: still refresh the visible comment line, because it is
+        # user-facing and otherwise can stay stale in the runtime cache.
+        def _resolve_light_comment(row: dict) -> dict:
+            ref_key = str(row.get("refKey") or "")
+            if not ref_key:
+                return {"refKey": ref_key, "additionalInfoFirstLine": row.get("additionalInfoFirstLine") or "", "resolved": False}
+
+            doc = _fetch_doc_by_ref_once(ref_key, headers, timeout=max(0.5, LIGHT_STAGE2_DOC_TIMEOUT))
+            if not doc:
+                return {"refKey": ref_key, "additionalInfoFirstLine": row.get("additionalInfoFirstLine") or "", "resolved": False}
+
+            raw_comment = str(doc.get("Комментарий") or "")
+            return {
+                "refKey": ref_key,
+                "additionalInfoFirstLine": first_line(raw_comment) or row.get("additionalInfoFirstLine") or "",
+                "resolved": True,
+            }
+
+        stage2_results: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=max(1, LIGHT_STAGE2_WORKERS)) as s2_pool:
+            s2_futures = {s2_pool.submit(_resolve_light_comment, row): row for row in rows}
+            for future in as_completed(s2_futures):
+                result = future.result()
+                stage2_results[result["refKey"]] = result
+
+        stage2_patch: list[dict] = []
+        resolved_count = 0
+        changed_count = 0
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            old_value = str(row.get("additionalInfoFirstLine") or "")
+            resolved = stage2_results.get(ref_key, {})
+            if resolved.get("resolved"):
+                resolved_count += 1
+                new_value = str(resolved.get("additionalInfoFirstLine") or "")
+                if new_value != old_value:
+                    changed_count += 1
+                row["additionalInfoFirstLine"] = new_value
+            patch = {
+                "refKey": ref_key,
+                "additionalInfoFirstLine": row.get("additionalInfoFirstLine") or "",
+            }
+            row.update(patch)
+            stage2_patch.append(patch)
+
+        _save_stage_patch("stage2_comment_flags", stage2_patch)
+        log(
+            "stage2 light mode: "
+            f"rows={len(rows)}, resolved={resolved_count}, changed={changed_count}"
+        )
 
     # Stage 3: customer — parallel nav-link resolution.
     _t3 = time.time()
