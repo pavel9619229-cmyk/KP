@@ -2292,11 +2292,35 @@ def resolve_price_filled_for_ref(
     if not row:
         return None
 
-    def _check_price(goods_row: dict) -> bool:
+    def _parse_price_value(raw_value: object) -> float:
+        if isinstance(raw_value, (int, float)):
+            return float(raw_value)
+
+        text = str(raw_value or "").strip()
+        if not text:
+            return 0.0
+
+        text = text.replace("\xa0", " ").replace(" ", "")
+        text = re.sub(r"[^0-9,.-]", "", text)
+        if not text:
+            return 0.0
+
+        if "," in text and "." in text:
+            # Keep the last decimal separator, strip the other as thousands separator.
+            if text.rfind(",") > text.rfind("."):
+                text = text.replace(".", "").replace(",", ".")
+            else:
+                text = text.replace(",", "")
+        elif "," in text:
+            text = text.replace(",", ".")
+
         try:
-            price = float(goods_row.get("Цена") or 0)
+            return float(text)
         except (ValueError, TypeError):
-            price = 0.0
+            return 0.0
+
+    def _check_price(goods_row: dict) -> bool:
+        price = _parse_price_value(goods_row.get("Цена"))
         return price > 1
 
     # Try navigation link first
