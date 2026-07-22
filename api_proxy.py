@@ -5810,7 +5810,7 @@ async def manual_refresh(request: Request):
                     True,
                     False,
                     False,
-                    (not MANUAL_REFRESH_LIGHT_MODE),
+                    True,
                 ),
                 timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
             )
