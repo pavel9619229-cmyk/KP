@@ -138,8 +138,9 @@ managerFilter.addEventListener('change', () => {
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ';
   const pollIntervalMs = 2000;
-  // Backend manual refresh timeout is now 900s (15 min) to handle slow 1C API read timeouts.
-  const maxWaitMs = 900000;
+  // Backend hard deadline is timeout + publish window (~20 min), so frontend
+  // must wait longer than 15 min to avoid false timeout errors.
+  const maxWaitMs = 1260000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   const isAdmin = String(currentUserRole || '').toLowerCase() === 'admin';
   const startedAt = Date.now();
