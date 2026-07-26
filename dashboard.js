@@ -274,6 +274,39 @@ refreshBtn.addEventListener('click', async () => {
     }
 
     if (!done) {
+      // Final safety check: if backend is still running or has just completed,
+      // do not show a false timeout error in UI.
+      try {
+        const finalResp = await fetch('/api/kp/refresh/status', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (finalResp.ok) {
+          const finalState = await finalResp.json().catch(() => ({}));
+          if (finalState?.running) {
+            const _savedTab = activeTab;
+            const _savedSearch = searchInput.value;
+            await refreshData(false);
+            activeTab = _savedTab;
+            searchInput.value = _savedSearch;
+            updateClearSearchButton();
+            renderBoard();
+            done = true;
+          } else if (
+            finalState?.lastOk === true
+            || (finalState?.lastRefresh && !finalState?.lastRefreshError)
+            || (finalState?.finishedAt && !finalState?.lastError && !finalState?.lastRefreshError)
+          ) {
+            done = true;
+          }
+        }
+      } catch {
+        // Keep original behavior below if final status check fails.
+      }
+    }
+
+    if (!done) {
       const details = lastState?.lastError || lastState?.lastRefreshError || 'Превышено время ожидания обновления';
       throw new Error(String(details));
     }
