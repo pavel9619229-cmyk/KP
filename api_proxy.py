@@ -58,6 +58,7 @@ RUNTIME_DATA_FILE = os.getenv("RUNTIME_DATA_FILE", "data/kp_runtime_cache.json")
 RUNTIME_META_FILE = os.getenv("RUNTIME_META_FILE", "data/kp_runtime_meta.json")
 RUNTIME_CURRENT_FILE = os.getenv("RUNTIME_CURRENT_FILE", "data/kp_runtime_current.json")
 MANUAL_REFRESH_STATE_FILE = os.getenv("MANUAL_REFRESH_STATE_FILE", "data/manual_refresh_state.json")
+MANUAL_REFRESH_CHECKPOINT_FILE = os.getenv("MANUAL_REFRESH_CHECKPOINT_FILE", "data/manual_refresh_checkpoint.json")
 STATUS_RULES_FILE = os.getenv("STATUS_RULES_FILE", "data/status_rules.json")
 COMMENT_AUTOMATION_RULES_FILE = os.getenv("COMMENT_AUTOMATION_RULES_FILE", "data/comment_automation_rules.json")
 COMMENT_AUTOMATION_STATE_FILE = os.getenv("COMMENT_AUTOMATION_STATE_FILE", "data/comment_automation_state.json")
@@ -271,6 +272,9 @@ _startup_live_refresh_state: dict = {
 def _manual_refresh_snapshot() -> dict:
     with _manual_refresh_state_lock:
         state = dict(_manual_refresh_state)
+    checkpoint = _load_refresh_checkpoint()
+    state["checkpointStage"] = checkpoint.get("stage") if checkpoint.get("inProgress") else None
+    state["checkpointUpdatedAt"] = checkpoint.get("updatedAt") if checkpoint.get("inProgress") else None
     state["rows"] = len(_cached_rows)
     state["lastRefresh"] = _last_refresh
     state["lastRefreshError"] = _last_refresh_error
@@ -369,6 +373,64 @@ if _manual_refresh_state.get("running"):
         lastOk=False,
         lastError="manual refresh was interrupted by server restart",
     )
+
+
+REFRESH_STAGE_ORDER = [
+    "stage1_base",
+    "stage2_comment_flags",
+    "stage3_customer",
+    "stage4_manager",
+    "stage5_product_price",
+    "stage6_group_flags",
+]
+
+
+def _load_refresh_checkpoint() -> dict:
+    try:
+        path = Path(MANUAL_REFRESH_CHECKPOINT_FILE)
+        if not path.exists():
+            return {}
+        with path.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_refresh_checkpoint(stage: str, rows: list, include_stage6: bool, page_size: int) -> None:
+    try:
+        path = Path(MANUAL_REFRESH_CHECKPOINT_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "inProgress": True,
+            "stage": stage,
+            "rows": rows,
+            "includeStage6": bool(include_stage6),
+            "pageSize": int(page_size),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception as exc:
+        log(f"refresh checkpoint save failed ({stage}): {exc}")
+
+
+def _clear_refresh_checkpoint() -> None:
+    try:
+        path = Path(MANUAL_REFRESH_CHECKPOINT_FILE)
+        if path.exists():
+            path.unlink()
+    except Exception as exc:
+        log(f"refresh checkpoint cleanup failed: {exc}")
+
+
+def _stage_completed(stage_name: str, checkpoint_stage: str | None) -> bool:
+    if not checkpoint_stage or checkpoint_stage not in REFRESH_STAGE_ORDER:
+        return False
+    try:
+        return REFRESH_STAGE_ORDER.index(stage_name) <= REFRESH_STAGE_ORDER.index(checkpoint_stage)
+    except Exception:
+        return False
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
 # статус СТАТУС устанавливается, если Поле - ДА, Поле - НЕТ
@@ -4627,295 +4689,334 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
     """
     headers = _build_headers()
     known_rows = build_known_rows_lookup()
-    rows = []
+    rows: list[dict] = []
     total_count = 0
     skip = 0
-
-    base_batch: list = []
-    stage1_error: Exception | None = None
-    for attempt in range(1, 4):
-        try:
-            total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=page_size)
-            stage1_error = None
-            break
-        except Exception as exc:
-            stage1_error = exc
-            log(f"stage1_base attempt {attempt}/3 failed: {type(exc).__name__}: {exc}")
-            if attempt < 3:
-                time.sleep(2)
-
-    if stage1_error is not None:
-        message = f"stage1_base failed after retries: {type(stage1_error).__name__}: {stage1_error}"
-        log(message)
-        raise RuntimeError(message)
-
-    if total_count <= 0:
-        log(f"stage1_base: total_count={total_count}, aborting")
-        return []
-
-    log(f"stage1_base: total_count={total_count}, skip={skip}, rows={len(base_batch)}")
-
     docs_by_ref: dict[str, dict] = {}
-    stage1_patch: list[dict] = []
-    for item in base_batch:
-        ref_key = str(item.get("Ref_Key") or "")
-        number = str(item.get("Number") or "")
-        dt_raw = item.get("Date") or ""
-        status = str(item.get("Статус") or "")
 
-        dt = _parse_odata_datetime(str(dt_raw))
-        if dt is None:
-            continue
-        if not _in_target_window(dt):
-            continue
+    checkpoint = _load_refresh_checkpoint()
+    checkpoint_stage = None
+    if checkpoint.get("inProgress") and isinstance(checkpoint.get("rows"), list):
+        checkpoint_stage = str(checkpoint.get("stage") or "")
+        rows = [dict(r) for r in checkpoint.get("rows") if isinstance(r, dict)]
+        for row in rows:
+            apply_storage_defaults(row)
+        log(f"resume from checkpoint: stage={checkpoint_stage}, rows={len(rows)}")
 
-        known_row = known_rows.get(number, {})
-        row = {
-            "refKey": ref_key,
-            "number": number,
-            "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "customerName": known_row.get("customerName", ""),
-            "managerName": known_row.get("managerName", UNKNOWN_MANAGER_NAME),
-            "status": status,
-            "managerFilled": known_row.get("managerFilled"),
-            "productSpecified": known_row.get("productSpecified"),
-            "priceFilled": known_row.get("priceFilled"),
-            "kpSent": known_row.get("kpSent"),
-            "receiptConfirmed": known_row.get("receiptConfirmed"),
-            "edoSent": known_row.get("edoSent"),
-            "rejected": known_row.get("rejected"),
-            "problem": known_row.get("problem"),
-            "shipmentPending": known_row.get("shipmentPending"),
-            "statusKp": known_row.get("statusKp", ""),
-            "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
-            "invoiceCreated": known_row.get("invoiceCreated"),
-            "paymentReceived": known_row.get("paymentReceived"),
-            "statusHash": known_row.get("statusHash", ""),
-        }
-        apply_storage_defaults(row)
-        rows.append(row)
+    if not _stage_completed("stage1_base", checkpoint_stage):
+        base_batch: list = []
+        stage1_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                total_count, skip, base_batch = _fetch_latest_kp_base_batch(headers, page_size=page_size)
+                stage1_error = None
+                break
+            except Exception as exc:
+                stage1_error = exc
+                log(f"stage1_base attempt {attempt}/3 failed: {type(exc).__name__}: {exc}")
+                if attempt < 3:
+                    time.sleep(2)
 
-        stage1_patch.append(
-            {
+        if stage1_error is not None:
+            message = f"stage1_base failed after retries: {type(stage1_error).__name__}: {stage1_error}"
+            log(message)
+            raise RuntimeError(message)
+
+        if total_count <= 0:
+            log(f"stage1_base: total_count={total_count}, aborting")
+            return []
+
+        log(f"stage1_base: total_count={total_count}, skip={skip}, rows={len(base_batch)}")
+
+        stage1_patch: list[dict] = []
+        rows = []
+        for item in base_batch:
+            ref_key = str(item.get("Ref_Key") or "")
+            number = str(item.get("Number") or "")
+            dt_raw = item.get("Date") or ""
+            status = str(item.get("Статус") or "")
+
+            dt = _parse_odata_datetime(str(dt_raw))
+            if dt is None:
+                continue
+            if not _in_target_window(dt):
+                continue
+
+            known_row = known_rows.get(number, {})
+            row = {
                 "refKey": ref_key,
                 "number": number,
-                "createdAt": row["createdAt"],
+                "createdAt": dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "customerName": known_row.get("customerName", ""),
+                "managerName": known_row.get("managerName", UNKNOWN_MANAGER_NAME),
                 "status": status,
-                "additionalInfoFirstLine": row["additionalInfoFirstLine"],
+                "managerFilled": known_row.get("managerFilled"),
+                "productSpecified": known_row.get("productSpecified"),
+                "priceFilled": known_row.get("priceFilled"),
+                "kpSent": known_row.get("kpSent"),
+                "receiptConfirmed": known_row.get("receiptConfirmed"),
+                "edoSent": known_row.get("edoSent"),
+                "rejected": known_row.get("rejected"),
+                "problem": known_row.get("problem"),
+                "shipmentPending": known_row.get("shipmentPending"),
+                "statusKp": known_row.get("statusKp", ""),
+                "additionalInfoFirstLine": known_row.get("additionalInfoFirstLine", ""),
+                "invoiceCreated": known_row.get("invoiceCreated"),
+                "paymentReceived": known_row.get("paymentReceived"),
+                "statusHash": known_row.get("statusHash", ""),
             }
-        )
+            apply_storage_defaults(row)
+            rows.append(row)
 
-    _save_stage_patch("stage1_base", stage1_patch)
-
-    # Stage 2.5: fetch docs in parallel for per-doc stages.
-    def _fetch_one(ref_key: str) -> tuple[str, dict]:
-        if not ref_key:
-            return ref_key, {}
-        return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
-
-    ref_keys = [str(row.get("refKey") or "") for row in rows]
-    ref_key_to_number = {str(row.get("refKey") or ""): str(row.get("number") or "") for row in rows}
-    doc_ok = 0
-    doc_fail = 0
-    failed_refs: list[str] = []
-    with ThreadPoolExecutor(max_workers=max(1, STAGE25_WORKERS)) as pool:
-        futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
-        for future in as_completed(futures):
-            rk, doc = future.result()
-            docs_by_ref[rk] = doc
-            if doc:
-                doc_ok += 1
-            else:
-                doc_fail += 1
-                failed_refs.append(rk)
-    log(f"stage2.5: fetched {doc_ok} ok, {doc_fail} failed/timeout out of {len(ref_keys)} docs")
-
-    # Second pass for failed refs only: slower but much smaller batch,
-    # so we can recover comments for transiently slow documents.
-    if failed_refs:
-        retry_targets = failed_refs[: max(0, STAGE25_RETRY_MAX_DOCS)]
-
-        def _fetch_retry(ref_key: str) -> tuple[str, dict]:
-            if not ref_key:
-                return ref_key, {}
-            return ref_key, _fetch_doc_by_ref(
-                ref_key,
-                headers,
-                timeout=max(STAGE25_RETRY_TIMEOUT_SECONDS, DOC_TIMEOUT_SECONDS, 6.0),
-            )
-
-        recovered = 0
-        still_failed: list[str] = []
-        with ThreadPoolExecutor(max_workers=max(1, STAGE25_RETRY_WORKERS)) as retry_pool:
-            retry_futures = {retry_pool.submit(_fetch_retry, rk): rk for rk in retry_targets}
-            for future in as_completed(retry_futures):
-                rk, doc = future.result()
-                if doc:
-                    docs_by_ref[rk] = doc
-                    recovered += 1
-                else:
-                    still_failed.append(rk)
-
-        doc_ok += recovered
-        doc_fail = max(0, doc_fail - recovered)
-        failed_refs = still_failed + failed_refs[len(retry_targets) :]
-        log(
-            "stage2.5 retry: attempted "
-            f"{len(retry_targets)}, recovered {recovered}, still failed {len(failed_refs)}"
-        )
-
-    if failed_refs:
-        failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
-        log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
-
-    # Stage 2: quick flags from full comment payload.
-    _t2 = time.time()
-    stage2_patch: list[dict] = []
-    for row in rows:
-        ref_key = str(row.get("refKey") or "")
-        doc = docs_by_ref.get(ref_key) or {}
-        comment_raw = str(doc.get("Комментарий") or "")
-        comment_clean = strip_html(comment_raw).replace("\r\n", "\n").replace("\r", "\n").upper()
-        comment_top = comment_clean.split("\n")[:5]
-        payment_by_comment = any("ОПЛАТА ПРИШЛА" in line for line in comment_top)
-        patch = {
-            "refKey": ref_key,
-            "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top) if comment_raw else row.get("kpSent", False),
-            "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top) if comment_raw else row.get("receiptConfirmed", False),
-            "edoSent": ("В ЭДО ОТПРАВЛЕНО" in comment_clean) if comment_raw else row.get("edoSent", False),
-            "rejected": ("ОТКАЗ" in comment_clean) if comment_raw else row.get("rejected", False),
-            "problem": ("ПРОБЛЕМА" in comment_clean) if comment_raw else row.get("problem", False),
-            "shipmentPending": ("ОТГРУЗИТЬ" in comment_clean) if comment_raw else row.get("shipmentPending", False),
-            "additionalInfoFirstLine": first_line(comment_raw) or row.get("additionalInfoFirstLine") or "",
-        }
-        if payment_by_comment:
-            patch["paymentReceived"] = True
-        row.update(patch)
-        stage2_patch.append(patch)
-    _save_stage_patch("stage2_comment_flags", stage2_patch)
-    log(f"stage2: done {len(rows)} rows in {time.time()-_t2:.1f}s")
-
-    # Stage 3: customer — parallel nav-link resolution.
-    _t3 = time.time()
-    def _resolve_customer(row: dict) -> dict:
-        ref_key = str(row.get("refKey") or "")
-        doc = docs_by_ref.get(ref_key) or {}
-        customer_name = ""
-        if doc:
-            customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or ""
-        return {
-            "refKey": ref_key,
-            "customerName": customer_name or row.get("customerName") or "",
-        }
-
-    stage3_results: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s3_pool:
-        s3_futures = {s3_pool.submit(_resolve_customer, row): row for row in rows}
-        for future in as_completed(s3_futures):
-            result = future.result()
-            stage3_results[result["refKey"]] = result
-
-    stage3_patch: list[dict] = []
-    for row in rows:
-        ref_key = str(row.get("refKey") or "")
-        resolved = stage3_results.get(ref_key, {})
-        if resolved.get("customerName"):
-            row["customerName"] = resolved["customerName"]
-        patch = {
-            "refKey": ref_key,
-            "customerName": row.get("customerName") or "",
-            "clientFilled": is_client_filled(row.get("customerName") or ""),
-        }
-        row.update(patch)
-        stage3_patch.append(patch)
-    _save_stage_patch("stage3_customer", stage3_patch)
-    log(f"stage3: done {len(rows)} rows in {time.time()-_t3:.1f}s")
-
-    # Stage 4: manager — parallel nav-link resolution.
-    _t4 = time.time()
-    def _resolve_manager(row: dict) -> dict:
-        ref_key = str(row.get("refKey") or "")
-        doc = docs_by_ref.get(ref_key) or {}
-        result: dict = {"refKey": ref_key}
-        if doc:
-            manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
-            if manager_filled is not None:
-                result["managerFilled"] = manager_filled
-                manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
-                if manager_name:
-                    result["managerName"] = manager_name
-        return result
-
-    stage4_results: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s4_pool:
-        s4_futures = {s4_pool.submit(_resolve_manager, row): row for row in rows}
-        for future in as_completed(s4_futures):
-            result = future.result()
-            stage4_results[result["refKey"]] = result
-
-    stage4_patch: list[dict] = []
-    for row in rows:
-        ref_key = str(row.get("refKey") or "")
-        resolved = stage4_results.get(ref_key, {})
-        if resolved.get("managerFilled") is not None:
-            row["managerFilled"] = resolved["managerFilled"]
-        if resolved.get("managerName"):
-            row["managerName"] = resolved["managerName"]
-        patch = {
-            "refKey": ref_key,
-            "managerName": row.get("managerName") or UNKNOWN_MANAGER_NAME,
-            "managerFilled": row.get("managerFilled"),
-        }
-        row.update(patch)
-        stage4_patch.append(patch)
-    _save_stage_patch("stage4_manager", stage4_patch)
-    log(f"stage4: done {len(rows)} rows in {time.time()-_t4:.1f}s")
-
-    # Stage 5: goods/price.
-    _t5 = time.time()
-    stage5_patch: list[dict] = []
-    for row in rows:
-        ref_key = str(row.get("refKey") or "")
-        doc = docs_by_ref.get(ref_key) or {}
-        if doc:
-            product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=True)
-            price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
-            if product_specified is not None:
-                row["productSpecified"] = bool(product_specified)
-            if price_filled is not None:
-                row["priceFilled"] = bool(price_filled)
-        patch = {
-            "refKey": ref_key,
-            "productSpecified": row.get("productSpecified"),
-            "priceFilled": row.get("priceFilled"),
-        }
-        row.update(patch)
-        stage5_patch.append(patch)
-    _save_stage_patch("stage5_product_price", stage5_patch)
-    log(f"stage5: done {len(rows)} rows in {time.time()-_t5:.1f}s")
-
-    # Stage 6: heavy group flags (orders/invoices/payments).
-    _t6 = time.time()
-    stage6_patch: list[dict] = []
-    if include_stage6:
-        try:
-            _enrich_group_flags_bulk(rows, headers)
-        except Exception as exc:
-            log(f"stage6_group_flags failed: {type(exc).__name__}: {exc}")
-
-        for row in rows:
-            stage6_patch.append(
+            stage1_patch.append(
                 {
-                    "refKey": row.get("refKey"),
-                    "invoiceCreated": bool(row.get("invoiceCreated")),
-                    "paymentReceived": bool(row.get("paymentReceived")),
+                    "refKey": ref_key,
+                    "number": number,
+                    "createdAt": row["createdAt"],
+                    "status": status,
+                    "additionalInfoFirstLine": row["additionalInfoFirstLine"],
                 }
             )
-        _save_stage_patch("stage6_group_flags", stage6_patch)
+
+        _save_stage_patch("stage1_base", stage1_patch)
+        _save_refresh_checkpoint("stage1_base", rows, include_stage6, page_size)
+    else:
+        log(f"stage1_base skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 2.5: fetch docs in parallel for per-doc stages.
+    need_doc_stages = not _stage_completed("stage5_product_price", checkpoint_stage)
+    if need_doc_stages:
+        def _fetch_one(ref_key: str) -> tuple[str, dict]:
+            if not ref_key:
+                return ref_key, {}
+            return ref_key, _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 6.0))
+
+        ref_keys = [str(row.get("refKey") or "") for row in rows]
+        ref_key_to_number = {str(row.get("refKey") or ""): str(row.get("number") or "") for row in rows}
+        doc_ok = 0
+        doc_fail = 0
+        failed_refs: list[str] = []
+        with ThreadPoolExecutor(max_workers=max(1, STAGE25_WORKERS)) as pool:
+            futures = {pool.submit(_fetch_one, rk): rk for rk in ref_keys}
+            for future in as_completed(futures):
+                rk, doc = future.result()
+                docs_by_ref[rk] = doc
+                if doc:
+                    doc_ok += 1
+                else:
+                    doc_fail += 1
+                    failed_refs.append(rk)
+        log(f"stage2.5: fetched {doc_ok} ok, {doc_fail} failed/timeout out of {len(ref_keys)} docs")
+
+        # Second pass for failed refs only: slower but much smaller batch,
+        # so we can recover comments for transiently slow documents.
+        if failed_refs:
+            retry_targets = failed_refs[: max(0, STAGE25_RETRY_MAX_DOCS)]
+
+            def _fetch_retry(ref_key: str) -> tuple[str, dict]:
+                if not ref_key:
+                    return ref_key, {}
+                return ref_key, _fetch_doc_by_ref(
+                    ref_key,
+                    headers,
+                    timeout=max(STAGE25_RETRY_TIMEOUT_SECONDS, DOC_TIMEOUT_SECONDS, 6.0),
+                )
+
+            recovered = 0
+            still_failed: list[str] = []
+            with ThreadPoolExecutor(max_workers=max(1, STAGE25_RETRY_WORKERS)) as retry_pool:
+                retry_futures = {retry_pool.submit(_fetch_retry, rk): rk for rk in retry_targets}
+                for future in as_completed(retry_futures):
+                    rk, doc = future.result()
+                    if doc:
+                        docs_by_ref[rk] = doc
+                        recovered += 1
+                    else:
+                        still_failed.append(rk)
+
+            doc_ok += recovered
+            doc_fail = max(0, doc_fail - recovered)
+            failed_refs = still_failed + failed_refs[len(retry_targets) :]
+            log(
+                "stage2.5 retry: attempted "
+                f"{len(retry_targets)}, recovered {recovered}, still failed {len(failed_refs)}"
+            )
+
+        if failed_refs:
+            failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
+            log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
+    else:
+        log(f"stage2.5 skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 2: quick flags from full comment payload.
+    if not _stage_completed("stage2_comment_flags", checkpoint_stage):
+        _t2 = time.time()
+        stage2_patch: list[dict] = []
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            doc = docs_by_ref.get(ref_key) or {}
+            comment_raw = str(doc.get("Комментарий") or "")
+            comment_clean = strip_html(comment_raw).replace("\r\n", "\n").replace("\r", "\n").upper()
+            comment_top = comment_clean.split("\n")[:5]
+            payment_by_comment = any("ОПЛАТА ПРИШЛА" in line for line in comment_top)
+            patch = {
+                "refKey": ref_key,
+                "kpSent": any("КП ОТПРАВЛЕНО" in line for line in comment_top) if comment_raw else row.get("kpSent", False),
+                "receiptConfirmed": any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top) if comment_raw else row.get("receiptConfirmed", False),
+                "edoSent": ("В ЭДО ОТПРАВЛЕНО" in comment_clean) if comment_raw else row.get("edoSent", False),
+                "rejected": ("ОТКАЗ" in comment_clean) if comment_raw else row.get("rejected", False),
+                "problem": ("ПРОБЛЕМА" in comment_clean) if comment_raw else row.get("problem", False),
+                "shipmentPending": ("ОТГРУЗИТЬ" in comment_clean) if comment_raw else row.get("shipmentPending", False),
+                "additionalInfoFirstLine": first_line(comment_raw) or row.get("additionalInfoFirstLine") or "",
+            }
+            if payment_by_comment:
+                patch["paymentReceived"] = True
+            row.update(patch)
+            stage2_patch.append(patch)
+        _save_stage_patch("stage2_comment_flags", stage2_patch)
+        _save_refresh_checkpoint("stage2_comment_flags", rows, include_stage6, page_size)
+        log(f"stage2: done {len(rows)} rows in {time.time()-_t2:.1f}s")
+    else:
+        log(f"stage2 skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 3: customer — parallel nav-link resolution.
+    if not _stage_completed("stage3_customer", checkpoint_stage):
+        _t3 = time.time()
+        def _resolve_customer(row: dict) -> dict:
+            ref_key = str(row.get("refKey") or "")
+            doc = docs_by_ref.get(ref_key) or {}
+            customer_name = ""
+            if doc:
+                customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or ""
+            return {
+                "refKey": ref_key,
+                "customerName": customer_name or row.get("customerName") or "",
+            }
+
+        stage3_results: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s3_pool:
+            s3_futures = {s3_pool.submit(_resolve_customer, row): row for row in rows}
+            for future in as_completed(s3_futures):
+                result = future.result()
+                stage3_results[result["refKey"]] = result
+
+        stage3_patch: list[dict] = []
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            resolved = stage3_results.get(ref_key, {})
+            if resolved.get("customerName"):
+                row["customerName"] = resolved["customerName"]
+            patch = {
+                "refKey": ref_key,
+                "customerName": row.get("customerName") or "",
+                "clientFilled": is_client_filled(row.get("customerName") or ""),
+            }
+            row.update(patch)
+            stage3_patch.append(patch)
+        _save_stage_patch("stage3_customer", stage3_patch)
+        _save_refresh_checkpoint("stage3_customer", rows, include_stage6, page_size)
+        log(f"stage3: done {len(rows)} rows in {time.time()-_t3:.1f}s")
+    else:
+        log(f"stage3 skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 4: manager — parallel nav-link resolution.
+    if not _stage_completed("stage4_manager", checkpoint_stage):
+        _t4 = time.time()
+        def _resolve_manager(row: dict) -> dict:
+            ref_key = str(row.get("refKey") or "")
+            doc = docs_by_ref.get(ref_key) or {}
+            result: dict = {"refKey": ref_key}
+            if doc:
+                manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                if manager_filled is not None:
+                    result["managerFilled"] = manager_filled
+                    manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                    if manager_name:
+                        result["managerName"] = manager_name
+            return result
+
+        stage4_results: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=max(1, STAGE34_WORKERS)) as s4_pool:
+            s4_futures = {s4_pool.submit(_resolve_manager, row): row for row in rows}
+            for future in as_completed(s4_futures):
+                result = future.result()
+                stage4_results[result["refKey"]] = result
+
+        stage4_patch: list[dict] = []
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            resolved = stage4_results.get(ref_key, {})
+            if resolved.get("managerFilled") is not None:
+                row["managerFilled"] = resolved["managerFilled"]
+            if resolved.get("managerName"):
+                row["managerName"] = resolved["managerName"]
+            patch = {
+                "refKey": ref_key,
+                "managerName": row.get("managerName") or UNKNOWN_MANAGER_NAME,
+                "managerFilled": row.get("managerFilled"),
+            }
+            row.update(patch)
+            stage4_patch.append(patch)
+        _save_stage_patch("stage4_manager", stage4_patch)
+        _save_refresh_checkpoint("stage4_manager", rows, include_stage6, page_size)
+        log(f"stage4: done {len(rows)} rows in {time.time()-_t4:.1f}s")
+    else:
+        log(f"stage4 skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 5: goods/price.
+    if not _stage_completed("stage5_product_price", checkpoint_stage):
+        _t5 = time.time()
+        stage5_patch: list[dict] = []
+        for row in rows:
+            ref_key = str(row.get("refKey") or "")
+            doc = docs_by_ref.get(ref_key) or {}
+            if doc:
+                product_specified = resolve_product_specified_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                price_filled = resolve_price_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                if product_specified is not None:
+                    row["productSpecified"] = bool(product_specified)
+                if price_filled is not None:
+                    row["priceFilled"] = bool(price_filled)
+            patch = {
+                "refKey": ref_key,
+                "productSpecified": row.get("productSpecified"),
+                "priceFilled": row.get("priceFilled"),
+            }
+            row.update(patch)
+            stage5_patch.append(patch)
+        _save_stage_patch("stage5_product_price", stage5_patch)
+        _save_refresh_checkpoint("stage5_product_price", rows, include_stage6, page_size)
+        log(f"stage5: done {len(rows)} rows in {time.time()-_t5:.1f}s")
+    else:
+        log(f"stage5 skipped by checkpoint stage={checkpoint_stage}")
+
+    # Stage 6: heavy group flags (orders/invoices/payments).
+    if include_stage6:
+        if not _stage_completed("stage6_group_flags", checkpoint_stage):
+            _t6 = time.time()
+            stage6_patch: list[dict] = []
+            try:
+                _enrich_group_flags_bulk(rows, headers)
+            except Exception as exc:
+                log(f"stage6_group_flags failed: {type(exc).__name__}: {exc}")
+
+            for row in rows:
+                stage6_patch.append(
+                    {
+                        "refKey": row.get("refKey"),
+                        "invoiceCreated": bool(row.get("invoiceCreated")),
+                        "paymentReceived": bool(row.get("paymentReceived")),
+                    }
+                )
+            _save_stage_patch("stage6_group_flags", stage6_patch)
+            _save_refresh_checkpoint("stage6_group_flags", rows, include_stage6, page_size)
+            log(f"stage6: done in {time.time()-_t6:.1f}s")
+        else:
+            log(f"stage6 skipped by checkpoint stage={checkpoint_stage}")
     else:
         _save_stage_patch("stage6_group_flags", [])
+        _save_refresh_checkpoint("stage6_group_flags", rows, include_stage6, page_size)
         log("stage6_group_flags skipped (fast mode)")
-    log(f"stage6: done in {time.time()-_t6:.1f}s")
 
     # Rule automation: comment/email for specific computed status.
     try:
@@ -4927,6 +5028,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
         apply_runtime_defaults(row)
 
     rows.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    _clear_refresh_checkpoint()
     log(f"staged refresh success: {len(rows)} rows")
     return rows
 
