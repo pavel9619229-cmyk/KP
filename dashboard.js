@@ -274,8 +274,8 @@ refreshBtn.addEventListener('click', async () => {
     }
 
     if (!done) {
-      // Final safety check: if backend is still running or has just completed,
-      // do not show a false timeout error in UI.
+      // Final safety check: if backend is still running, has just completed,
+      // or lost volatile status after restart, do not show a false timeout.
       try {
         const finalResp = await fetch('/api/kp/refresh/status', {
           method: 'GET',
@@ -298,6 +298,24 @@ refreshBtn.addEventListener('click', async () => {
             || (finalState?.lastRefresh && !finalState?.lastRefreshError)
             || (finalState?.finishedAt && !finalState?.lastError && !finalState?.lastRefreshError)
           ) {
+            done = true;
+          } else if (
+            !finalState?.running
+            && !finalState?.requestedAt
+            && !finalState?.startedAt
+            && !finalState?.finishedAt
+            && finalState?.lastOk == null
+            && !finalState?.lastError
+            && !finalState?.lastRefreshError
+          ) {
+            // Render restart can wipe in-memory refresh status even if data is already updated.
+            const _savedTab = activeTab;
+            const _savedSearch = searchInput.value;
+            await refreshData(false);
+            activeTab = _savedTab;
+            searchInput.value = _savedSearch;
+            updateClearSearchButton();
+            renderBoard();
             done = true;
           }
         }
