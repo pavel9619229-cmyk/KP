@@ -175,8 +175,9 @@ refreshBtn.addEventListener('click', async () => {
         cache: 'no-store',
       });
       if (startResponse.status !== 503 && startResponse.status !== 502 && startResponse.status !== 504) break;
-      const wakeLabel = startResponse.status === 503 ? 'Сервер просыпается' : 'Сервер перезапускается';
-      refreshBtn.textContent = `${wakeLabel}... (${(wake + 1) * 2}с)`;
+      // Hide infra-level wake/restart wording in UI; keep a stable refresh state instead.
+      refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+      setRefreshingLabel();
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
