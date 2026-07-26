@@ -209,18 +209,10 @@ refreshBtn.addEventListener('click', async () => {
           return;
         }
         if (stateResponse.status === 502 || stateResponse.status === 503 || stateResponse.status === 504) {
-          // Do not assume restart on transient gateway errors.
-          // Keep waiting until the global refresh timeout expires.
+          // Keep waiting on transient gateway errors without alarming UI text.
           consecutiveStatusErrors += 1;
-          let healthOk = false;
-          try {
-            const hz = await fetch('/healthz', { method: 'GET', cache: 'no-store' });
-            healthOk = hz.ok;
-          } catch {
-            healthOk = false;
-          }
-          const waitingLabel = healthOk ? 'Ожидание ответа сервера' : 'Сервер временно недоступен';
-          refreshBtn.textContent = `${waitingLabel}... (${consecutiveStatusErrors * 2}с)`;
+          refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+          setRefreshingLabel();
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           continue;
         }
@@ -233,7 +225,8 @@ refreshBtn.addEventListener('click', async () => {
         setRefreshingLabel();
       } catch (statusError) {
         consecutiveStatusErrors += 1;
-        refreshBtn.textContent = `Ожидание ответа сервера... (${consecutiveStatusErrors * 2}с)`;
+        refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+        setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
