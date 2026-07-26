@@ -308,6 +308,34 @@ def _startup_live_refresh_gate_detail() -> str:
     return "startup live refresh has not completed yet"
 
 
+def _is_runtime_snapshot_stale_for_recovery(max_age_hours: int = 6) -> bool:
+    """Best-effort stale check for startup recovery refresh."""
+    try:
+        meta = _read_runtime_meta() or {}
+        stamp = str(meta.get("last1cLoadedAt") or meta.get("generatedAt") or "").strip()
+        if not stamp:
+            return True
+
+        dt: datetime | None = None
+        try:
+            dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except Exception:
+            pass
+        if dt is None:
+            try:
+                dt = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return True
+
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+        age = datetime.utcnow() - dt
+        return age > timedelta(hours=max_age_hours)
+    except Exception:
+        return True
+
+
 def _set_manual_refresh_state(**updates: object) -> None:
     with _manual_refresh_state_lock:
         _manual_refresh_state.update(updates)
@@ -5281,8 +5309,15 @@ async def on_startup() -> None:
         except Exception as exc:
             log(f"[startup] GitHub sync failed (non-blocking): {type(exc).__name__}: {exc}")
 
-        if _resume_interrupted_manual_refresh:
-            log("[startup] detected interrupted manual refresh, running recovery refresh")
+        need_recovery_refresh = _resume_interrupted_manual_refresh
+        recovery_reason = "interrupted-manual-refresh"
+        if not need_recovery_refresh and not REQUIRE_LIVE_REFRESH_AFTER_STARTUP:
+            if _is_runtime_snapshot_stale_for_recovery(max_age_hours=6):
+                need_recovery_refresh = True
+                recovery_reason = "stale-runtime-snapshot"
+
+        if need_recovery_refresh:
+            log(f"[startup] running recovery refresh ({recovery_reason})")
             try:
                 await asyncio.to_thread(
                     refresh_cache_and_file,
