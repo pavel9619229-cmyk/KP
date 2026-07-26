@@ -397,6 +397,11 @@ def _load_refresh_checkpoint() -> dict:
         return {}
 
 
+def _has_pending_refresh_checkpoint() -> bool:
+    checkpoint = _load_refresh_checkpoint()
+    return bool(checkpoint.get("inProgress")) and isinstance(checkpoint.get("rows"), list)
+
+
 def _save_refresh_checkpoint(stage: str, rows: list, include_stage6: bool, page_size: int) -> None:
     try:
         path = Path(MANUAL_REFRESH_CHECKPOINT_FILE)
@@ -5413,6 +5418,9 @@ async def on_startup() -> None:
 
         need_recovery_refresh = _resume_interrupted_manual_refresh
         recovery_reason = "interrupted-manual-refresh"
+        if not need_recovery_refresh and _has_pending_refresh_checkpoint():
+            need_recovery_refresh = True
+            recovery_reason = "pending-refresh-checkpoint"
         if not need_recovery_refresh and not REQUIRE_LIVE_REFRESH_AFTER_STARTUP:
             if _is_runtime_snapshot_stale_for_recovery(max_age_hours=6):
                 need_recovery_refresh = True
