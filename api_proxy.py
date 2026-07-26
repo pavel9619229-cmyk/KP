@@ -255,6 +255,7 @@ _manual_refresh_state: dict = {
     "lastOk": None,
     "lastError": None,
 }
+_resume_interrupted_manual_refresh = False
 
 _startup_live_refresh_lock = threading.Lock()
 _startup_live_refresh_state: dict = {
@@ -333,13 +334,12 @@ def _load_manual_refresh_state() -> dict:
 
 _manual_refresh_state.update(_load_manual_refresh_state())
 if _manual_refresh_state.get("running"):
-    _manual_refresh_state.update(
-        {
-            "running": False,
-            "finishedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
-            "lastOk": False,
-            "lastError": "manual refresh was interrupted by server restart",
-        }
+    _resume_interrupted_manual_refresh = True
+    _set_manual_refresh_state(
+        running=False,
+        finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+        lastOk=False,
+        lastError="manual refresh was interrupted by server restart",
     )
 
 DEFAULT_STATUS_RULES_TEXT = """# Формат 1 (простой):
@@ -5275,11 +5275,33 @@ async def on_startup() -> None:
     # All blocking network operations (GitHub sync, 1C enrich) run in a background task
     # so startup completes immediately and Render health check passes without delay.
     async def _post_startup_sync():
-        global _cached_rows, _cached_fp
+        global _cached_rows, _cached_fp, _resume_interrupted_manual_refresh
         try:
             await asyncio.to_thread(_sync_confirmed_runtime_cache_from_github_if_needed, "startup", True)
         except Exception as exc:
             log(f"[startup] GitHub sync failed (non-blocking): {type(exc).__name__}: {exc}")
+
+        if _resume_interrupted_manual_refresh:
+            log("[startup] detected interrupted manual refresh, running recovery refresh")
+            try:
+                await asyncio.to_thread(
+                    refresh_cache_and_file,
+                    True,
+                    True,
+                    MANUAL_REFRESH_PAGE_SIZE,
+                    True,
+                    False,
+                    True,
+                )
+                if _last_refresh_error:
+                    log(f"[startup] recovery refresh finished with error: {_last_refresh_error}")
+                else:
+                    log("[startup] recovery refresh completed")
+            except Exception as exc:
+                log(f"[startup] recovery refresh failed: {type(exc).__name__}: {exc}")
+            finally:
+                _resume_interrupted_manual_refresh = False
+
         if STARTUP_ENRICH_ENABLED:
             try:
                 headers = _build_headers()
@@ -5556,6 +5578,13 @@ async def manual_refresh(request: Request):
                 "confirmedVersion": None,
             }
         )
+        try:
+            path = Path(MANUAL_REFRESH_STATE_FILE)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("w", encoding="utf-8") as f:
+                json.dump(_manual_refresh_state, f, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            log(f"manual refresh state save failed: {exc}")
 
     async def _run_manual_refresh() -> None:
         global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
