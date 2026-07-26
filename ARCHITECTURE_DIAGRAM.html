@@ -406,6 +406,16 @@
             <text x="484" y="319">/api/kp/refresh/status</text>
           </g>
 
+          <g filter="url(#shadow)">
+            <rect x="1126" y="206" width="292" height="70" rx="14" fill="#fff1f2" stroke="#dc2626" stroke-width="2" />
+            <text x="1272" y="233" text-anchor="middle" font-size="14" font-weight="700" fill="#991b1b">❌ СБОЙ ДО WRITE SNAPSHOT</text>
+            <text x="1272" y="254" text-anchor="middle" font-size="13" fill="#991b1b">Новый snapshot не записан → остается старая дата</text>
+          </g>
+
+          <g stroke="#dc2626" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1166 141 L1218 206" />
+          </g>
+
           <g stroke="#dc2626" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 8">
             <path d="M850 141 L1088 266" />
             <path d="M1088 286 L850 141" />
@@ -436,11 +446,11 @@
             <text x="1263" y="288" text-anchor="middle" font-size="19" font-weight="700" fill="#7f1d1d">♻️ Render restart / cold start</text>
             <text x="1263" y="314" text-anchor="middle" font-size="14" fill="#7f1d1d">Происходит на стороне Render процесса</text>
             <text x="1263" y="336" text-anchor="middle" font-size="14" fill="#7f1d1d">До ответа /api/kp/refresh и во время refresh</text>
-            <text x="1263" y="358" text-anchor="middle" font-size="14" fill="#7f1d1d">Именно тут UI видит «Сервер просыпается...»</text>
+            <text x="1263" y="358" text-anchor="middle" font-size="14" fill="#7f1d1d">Именно здесь refresh обрывается до записи свежего snapshot</text>
           </g>
         </svg>
       </div>
-      <p class="footer-note"><strong>Основной поток:</strong> пользователь запускает refresh → фронт вызывает Render API → backend тянет КП из 1С → вычисляет статус → сохраняет runtime snapshot → UI показывает уже готовые данные.<br /><strong>Где перезапуск:</strong> в узле <strong>Render restart / cold start</strong> (красный блок справа), между фронтом и backend API, из-за чего UI временно получает 503/502/504.</p>
+      <p class="footer-note"><strong>Основной поток:</strong> пользователь запускает refresh → фронт вызывает Render API → backend тянет КП из 1С → вычисляет статус → сохраняет runtime snapshot → UI показывает уже готовые данные.<br /><strong>Где ломается дата snapshot:</strong> в точке <strong>СБОЙ ДО WRITE SNAPSHOT</strong> (красный блок у шага write snapshot): если процесс перезапускается/обрывается до этой записи, остается предыдущий snapshot и старая дата.</p>
     </section>
 
     <section class="section-grid">
