@@ -48,6 +48,7 @@ darkBtn.addEventListener('click', () => {
 });
 
 const REFRESH_INTERVAL_MS = 15000;
+const ENABLE_AUTO_REFRESH = false;
 const WS_RECONNECT_MS = 5000;
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
 const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
@@ -1018,9 +1019,11 @@ async function init() {
   await loadStatusRulesFromServer();
   await refreshData(true);
   connectWebSocket();
-  setInterval(() => {
-    if (!wsActive) refreshData(false);
-  }, REFRESH_INTERVAL_MS);
+  if (ENABLE_AUTO_REFRESH) {
+    setInterval(() => {
+      if (!wsActive) refreshData(false);
+    }, REFRESH_INTERVAL_MS);
+  }
   pollLastRefresh();
   setInterval(pollLastRefresh, 30000);
 }
