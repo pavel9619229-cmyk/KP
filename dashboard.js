@@ -160,8 +160,18 @@ refreshBtn.addEventListener('click', async () => {
     updatedAtLabel.textContent = formatElapsed(elapsedSec);
   };
 
+  const setRefreshButtonText = (value) => {
+    const text = String(value || '');
+    // Hard guard: never show infra wake/restart wording in UI.
+    if (/сервер\s+(просыпается|перезапускается)/i.test(text)) {
+      refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+      return;
+    }
+    refreshBtn.textContent = text;
+  };
+
   refreshBtn.disabled = true;
-  refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+  setRefreshButtonText('ОБНОВЛЕНИЕ...');
   setRefreshingLabel();
   refreshTimerId = setInterval(setRefreshingLabel, 1000);
 
@@ -176,7 +186,7 @@ refreshBtn.addEventListener('click', async () => {
       });
       if (startResponse.status !== 503 && startResponse.status !== 502 && startResponse.status !== 504) break;
       // Hide infra-level wake/restart wording in UI; keep a stable refresh state instead.
-      refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+      setRefreshButtonText('ОБНОВЛЕНИЕ...');
       setRefreshingLabel();
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
@@ -212,7 +222,7 @@ refreshBtn.addEventListener('click', async () => {
         if (stateResponse.status === 502 || stateResponse.status === 503 || stateResponse.status === 504) {
           // Keep waiting on transient gateway errors without alarming UI text.
           consecutiveStatusErrors += 1;
-          refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+          setRefreshButtonText('ОБНОВЛЕНИЕ...');
           setRefreshingLabel();
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           continue;
@@ -226,7 +236,7 @@ refreshBtn.addEventListener('click', async () => {
         setRefreshingLabel();
       } catch (statusError) {
         consecutiveStatusErrors += 1;
-        refreshBtn.textContent = 'ОБНОВЛЕНИЕ...';
+        setRefreshButtonText('ОБНОВЛЕНИЕ...');
         setRefreshingLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
@@ -243,7 +253,8 @@ refreshBtn.addEventListener('click', async () => {
       if (!statePayload.running && !statePayload.finishedAt && statePayload.lastOk == null && !statePayload.lastError && !statePayload.requestedAt) {
         if (restartRetries < 2) {
           restartRetries += 1;
-          refreshBtn.textContent = `Перезапуск после рестарта (${restartRetries}/2)...`;
+          setRefreshButtonText('ОБНОВЛЕНИЕ...');
+          setRefreshingLabel();
           await new Promise((resolve) => setTimeout(resolve, 3000));
           try {
             const retryResp = await fetch('/api/kp/refresh', { method: 'POST', credentials: 'include', cache: 'no-store' });
@@ -349,7 +360,7 @@ refreshBtn.addEventListener('click', async () => {
       refreshTimerId = null;
     }
     refreshBtn.disabled = false;
-    refreshBtn.textContent = defaultLabel;
+    setRefreshButtonText(defaultLabel);
   }
 });
 
