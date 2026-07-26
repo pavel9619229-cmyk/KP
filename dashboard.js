@@ -209,12 +209,18 @@ refreshBtn.addEventListener('click', async () => {
           return;
         }
         if (stateResponse.status === 502 || stateResponse.status === 503 || stateResponse.status === 504) {
-          // Server is waking up or restarting (Render deploy/cold start) — wait up to 120 seconds
+          // Do not assume restart on transient gateway errors.
+          // Keep waiting until the global refresh timeout expires.
           consecutiveStatusErrors += 1;
-          refreshBtn.textContent = `Сервер перезапускается... (${consecutiveStatusErrors * 2}с)`;
-          if (consecutiveStatusErrors >= 60) {
-            throw new Error('Сервер не отвечает после 120 секунд ожидания');
+          let healthOk = false;
+          try {
+            const hz = await fetch('/healthz', { method: 'GET', cache: 'no-store' });
+            healthOk = hz.ok;
+          } catch {
+            healthOk = false;
           }
+          const waitingLabel = healthOk ? 'Ожидание ответа сервера' : 'Сервер временно недоступен';
+          refreshBtn.textContent = `${waitingLabel}... (${consecutiveStatusErrors * 2}с)`;
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           continue;
         }
@@ -226,11 +232,8 @@ refreshBtn.addEventListener('click', async () => {
         consecutiveStatusErrors = 0;
         setRefreshingLabel();
       } catch (statusError) {
-        if (statusError.message.startsWith('Сервер не отвечает')) throw statusError;
         consecutiveStatusErrors += 1;
-        if (consecutiveStatusErrors >= 60) {
-          throw new Error(`Ошибка статуса обновления: ${statusError.message}`);
-        }
+        refreshBtn.textContent = `Ожидание ответа сервера... (${consecutiveStatusErrors * 2}с)`;
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
