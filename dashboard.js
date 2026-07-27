@@ -88,20 +88,6 @@ function isCurrentOriginSource(url) {
   }
 }
 
-const STATUS_LABELS_COMPACT = {
-  '__all__': 'Все',
-  'ПРОБЛЕМА': 'Пробл.',
-  'ОТКАЗ': 'Отказ',
-  'ЖДЕМ ОПЛАТУ': 'Оплата',
-  'ОТПРАВИТЬ В ЭДО': 'ЭДО',
-  'ОТГРУЗИТЬ': 'Отгр.',
-  'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП': 'Проверка',
-  'КЛИЕНТ ДУМАЕТ': 'Думает',
-  'ОТПРАВИТЬ КЛИЕНТУ': 'Клиенту',
-  'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО': 'Готово',
-  'ОБРАБОТАТЬ': 'В работу',
-};
-
 let rows = [];
 let ws = null;
 let wsActive = false;
@@ -797,12 +783,12 @@ function getOrderedStatuses(counts) {
   return STATUS_ORDER.filter((status) => counts.has(status)).concat(dynamicStatuses);
 }
 
-function getTabLabel(statusKey, fallbackLabel) {
-  const isCompactViewport = window.matchMedia('(max-width: 720px)').matches;
-  if (!isCompactViewport) {
-    return fallbackLabel;
+function renderStackedLabel(label) {
+  const words = String(label || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) {
+    return '';
   }
-  return STATUS_LABELS_COMPACT[statusKey] ? STATUS_LABELS_COMPACT[statusKey] : fallbackLabel;
+  return words.map((word) => `<span class="status-tab__word">${escapeHtml(word)}</span>`).join('');
 }
 
 function formatUpdatedAt(value) {
@@ -927,7 +913,7 @@ function renderTabs(counts, totalCount) {
 
   statusTabs.innerHTML = tabs.map((tab) => `
     <button class="status-tab ${getTabRowClass(tab.key)} ${tab.key === activeTab ? 'is-active' : ''}" data-status-key="${escapeHtml(tab.key)}" type="button">
-      <span class="status-tab__label">${escapeHtml(tab.label)}</span>
+      <span class="status-tab__label">${renderStackedLabel(tab.label)}</span>
       <span class="status-tab__count">${tab.count}</span>
     </button>
   `).join('');
@@ -1091,6 +1077,8 @@ async function refreshData(initial = false) {
     if (initial) {
       boardContent.innerHTML = `<div class="board-empty">Не удалось загрузить данные: ${escapeHtml(error.message)}<br><small>Повторная попытка через несколько секунд…</small></div>`;
       updatedAtLabel.textContent = 'Ошибка';
+      // Keep status tags visible even when the first data request fails.
+      renderTabs(getStatusCounts(rows), rows.length);
       // Retry initial load after a delay (Render free tier may be waking up)
       setTimeout(() => refreshData(true), 5000);
     }
@@ -1150,6 +1138,7 @@ function startKeepAlive() {
 
 async function init() {
   updateClearSearchButton();
+  renderTabs(getStatusCounts(rows), rows.length);
   await loadCurrentUserRole();
   await loadStatusRulesFromServer();
   await refreshData(true);

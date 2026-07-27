@@ -89,17 +89,6 @@ textarea {
   flex: 2 2 280px;
 }
 
-@media (max-width: 1100px) {
-  .topbar-actions {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .topbar-actions > * {
-    flex: 1 1 100%;
-    min-width: 120px;
-  }
-}
-
 .manager-filter select {
   width: 100%;
   height: 100%;
@@ -376,6 +365,10 @@ body.light .dashboard-board {
   text-align: left;
 }
 
+.status-tab__word {
+  display: inline;
+}
+
 .status-tab__count {
   display: inline-flex;
   min-width: 32px;
@@ -386,6 +379,61 @@ body.light .dashboard-board {
   background: rgba(255, 255, 255, 0.09);
   font-weight: 800;
   padding: 0 10px;
+}
+
+@media (min-width: 1101px) {
+  .status-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 5px;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .status-tab--full {
+    grid-column: auto;
+  }
+
+  .status-tab {
+    min-width: 0;
+    flex: 1 1 0;
+    min-height: 220px;
+    border-radius: 9px;
+    padding: 10px 6px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .status-tab__label {
+    min-width: 100%;
+    font-size: 0.125rem;
+    text-align: center;
+    line-height: 1.02;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    word-break: break-word;
+    transform: scale(5.3333);
+    transform-origin: center top;
+  }
+
+  .status-tab__word {
+    display: block;
+  }
+
+  .status-tab__count {
+    min-width: 18px;
+    height: 18px;
+    font-weight: 700;
+    font-size: 0.135rem;
+    padding: 0 4px;
+    transform: scale(5.3333);
+    transform-origin: center center;
+    margin-top: auto;
+  }
 }
 
 .status-tab.is-active .status-tab__count {
