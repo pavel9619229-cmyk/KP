@@ -4202,6 +4202,25 @@ def _runtime_load_local_consistent_state() -> tuple[list, dict, dict]:
     if not rows:
         return [], meta if isinstance(meta, dict) else {}, pointer if isinstance(pointer, dict) else {}
 
+    # The plain (non-versioned) RUNTIME_DATA_FILE/RUNTIME_META_FILE on disk are
+    # only ever written locally (see _write_local_confirmed_runtime) — they are
+    # NOT pushed to GitHub on every publish (only the versioned copies and the
+    # pointer are). On an ephemeral filesystem (e.g. Render), a fresh deploy
+    # restores whatever was last committed to git for these plain files, which
+    # can be far older than the pointer. If the pointer already references a
+    # specific fingerprinted snapshot and the on-disk rows don't match it, the
+    # on-disk cache is stale garbage — do NOT relabel it with the pointer's
+    # version/timestamp (that would disguise old data as current). Treat it as
+    # untrustworthy so callers fall back to the GitHub-confirmed snapshot.
+    pointer_fp = str((pointer or {}).get("rowsFingerprint") or "")
+    if pointer_fp and pointer_fp != rows_fingerprint(rows):
+        log(
+            "runtime consistency: on-disk runtime cache does not match current pointer "
+            f"(pointer version={pointer.get('version')}, pointer rows={pointer.get('rowCount')}, "
+            f"on-disk rows={len(rows)}); ignoring stale on-disk cache"
+        )
+        return [], {}, {}
+
     normalized_meta = _runtime_normalize_meta(
         meta,
         rows,
