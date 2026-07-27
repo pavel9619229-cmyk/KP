@@ -5910,15 +5910,24 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
     )
     log(f"[checkpoint-recovery] started (trigger={trigger})")
     try:
-        ran = await asyncio.to_thread(
-            refresh_cache_and_file,
-            True,
-            MANUAL_REFRESH_INCLUDE_STAGE6,
-            MANUAL_REFRESH_PAGE_SIZE,
-            True,
-            False,
-            False,
-        )
+        ran = False
+        # The full refresh lock can be held briefly by another cycle.
+        # Retry instead of failing recovery immediately.
+        for attempt in range(1, 7):
+            ran = await asyncio.to_thread(
+                refresh_cache_and_file,
+                True,
+                MANUAL_REFRESH_INCLUDE_STAGE6,
+                MANUAL_REFRESH_PAGE_SIZE,
+                True,
+                False,
+                False,
+            )
+            if ran:
+                break
+            log(f"[checkpoint-recovery] refresh lock busy, retry {attempt}/6")
+            await asyncio.sleep(5)
+
         if ran and not _last_refresh_error:
             _set_manual_refresh_state(lastOk=True, lastError=None)
             log("[checkpoint-recovery] completed successfully")
