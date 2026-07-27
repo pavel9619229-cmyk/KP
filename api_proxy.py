@@ -5933,8 +5933,14 @@ async def manual_refresh(request: Request):
         _set_manual_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"manual refresh requested by {username} from {client_host}")
 
-        # Hard deadline: github push + readback add up to ~3 min on top of the main refresh.
-        TOTAL_HARD_DEADLINE = max(120, MANUAL_REFRESH_TIMEOUT_SECONDS) + 300
+        # refresh_cache_and_file may legitimately run longer than
+        # MANUAL_REFRESH_TIMEOUT_SECONDS when stage2.5 enters the slow probe pass
+        # for chronically failing docs. Keep an additional margin so we don't
+        # cut the cycle a few minutes before it naturally completes.
+        refresh_wait_timeout = max(60, MANUAL_REFRESH_TIMEOUT_SECONDS) + 180
+        # Hard deadline still protects from truly stuck cycles, but should remain
+        # above the wait timeout to leave room for GitHub publish/readback.
+        TOTAL_HARD_DEADLINE = refresh_wait_timeout + 180
         deadline_task: asyncio.Task | None = None
 
         async def _deadline_killer():
@@ -5978,7 +5984,7 @@ async def manual_refresh(request: Request):
                     False,
                     False,
                 ),
-                timeout=max(60, MANUAL_REFRESH_TIMEOUT_SECONDS),
+                timeout=refresh_wait_timeout,
             )
 
             if not ran:
