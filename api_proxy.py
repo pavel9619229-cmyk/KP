@@ -89,6 +89,10 @@ FORCE_INFO_REFRESH_TOP_ROWS = int(os.getenv("FORCE_INFO_REFRESH_TOP_ROWS", "20")
 GROUP_ENRICH_INTERVAL_SECONDS = int(os.getenv("GROUP_ENRICH_INTERVAL_SECONDS", "300"))
 DOC_TIMEOUT_SECONDS = float(os.getenv("DOC_TIMEOUT_SECONDS", "1.5"))
 STAGE25_RETRY_TIMEOUT_SECONDS = float(os.getenv("STAGE25_RETRY_TIMEOUT_SECONDS", "12.0"))
+# Diagnostic-only third pass for the handful of docs that still fail after the
+# retry pass — a much longer timeout to find out WHY (genuine slowness vs
+# 1C document lock vs HTTP error) instead of just logging "failed".
+STAGE25_PROBE_TIMEOUT_SECONDS = float(os.getenv("STAGE25_PROBE_TIMEOUT_SECONDS", "30.0"))
 STAGE25_WORKERS = int(os.getenv("STAGE25_WORKERS", "8"))
 STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
 STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
@@ -4967,6 +4971,50 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
         if failed_refs:
             failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
             log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
+
+            # Diagnostic-only third pass: a handful of docs (usually <10) keep
+            # failing every cycle. Probe them once with a much longer timeout
+            # to learn WHY (genuine timeout vs HTTP error vs 1C document lock),
+            # and recover the data if it turns out to just be marginally slow.
+            # This does not change behavior for the other ~290 docs.
+            probe_targets = failed_refs[:15]
+
+            def _probe_one(ref_key: str) -> tuple[str, dict, str]:
+                try:
+                    resp = requests.get(
+                        f"{BASE}/{ENTITY}(guid'{ref_key}')",
+                        headers=headers,
+                        timeout=STAGE25_PROBE_TIMEOUT_SECONDS,
+                        verify=False,
+                    )
+                    if resp.status_code == 200:
+                        doc = resp.json()
+                        return ref_key, (doc if isinstance(doc, dict) else {}), "ok"
+                    return ref_key, {}, f"HTTP {resp.status_code}: {resp.text[:150]}"
+                except requests.exceptions.Timeout:
+                    return ref_key, {}, f"timeout>{STAGE25_PROBE_TIMEOUT_SECONDS:.0f}s"
+                except Exception as exc:
+                    return ref_key, {}, f"{type(exc).__name__}: {exc}"
+
+            probe_recovered = 0
+            reasons: list[str] = []
+            with ThreadPoolExecutor(max_workers=max(1, len(probe_targets))) as probe_pool:
+                probe_futures = {probe_pool.submit(_probe_one, rk): rk for rk in probe_targets}
+                for future in as_completed(probe_futures):
+                    rk, doc, reason = future.result()
+                    number = ref_key_to_number.get(rk, rk)
+                    if doc:
+                        docs_by_ref[rk] = doc
+                        failed_refs = [x for x in failed_refs if x != rk]
+                        probe_recovered += 1
+                        reasons.append(f"{number}: recovered on slow probe")
+                    else:
+                        reasons.append(f"{number}: {reason}")
+
+            log("stage2.5 probe (diagnostic): " + "; ".join(reasons))
+            if probe_recovered:
+                doc_ok += probe_recovered
+                doc_fail = max(0, doc_fail - probe_recovered)
     else:
         log(f"stage2.5 skipped by checkpoint stage={checkpoint_stage}")
 
