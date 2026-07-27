@@ -4125,7 +4125,11 @@ def _runtime_generated_at_from_rows(rows: list) -> Optional[datetime]:
         if not created_at:
             continue
         try:
-            parsed = datetime.fromisoformat(created_at.replace(" ", "T")).replace(tzinfo=timezone.utc)
+            parsed_local = datetime.fromisoformat(created_at.replace(" ", "T"))
+            if parsed_local.tzinfo is None:
+                parsed = parsed_local.replace(tzinfo=_TZ_MSK).astimezone(timezone.utc)
+            else:
+                parsed = parsed_local.astimezone(timezone.utc)
         except Exception:
             continue
         if latest is None or parsed > latest:
@@ -4538,6 +4542,13 @@ def save_rows(
 
     with _runtime_write_guard_lock:
         current_generated_at = _read_runtime_generated_at(runtime_meta_path)
+        now_utc = datetime.now(timezone.utc)
+        if current_generated_at and current_generated_at > now_utc + timedelta(minutes=10):
+            log(
+                "save_rows: runtime meta generatedAt looks invalid (far future), "
+                f"ignoring guard value {current_generated_at.isoformat()}"
+            )
+            current_generated_at = None
         if current_generated_at and current_generated_at > started_at:
             log(
                 "save_rows skipped: newer runtime snapshot already exists "
