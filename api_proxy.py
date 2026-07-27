@@ -93,6 +93,9 @@ STAGE25_RETRY_TIMEOUT_SECONDS = float(os.getenv("STAGE25_RETRY_TIMEOUT_SECONDS",
 # retry pass — a much longer timeout to find out WHY (genuine slowness vs
 # 1C document lock vs HTTP error) instead of just logging "failed".
 STAGE25_PROBE_TIMEOUT_SECONDS = float(os.getenv("STAGE25_PROBE_TIMEOUT_SECONDS", "30.0"))
+STAGE25_PROBE_WORKERS = int(os.getenv("STAGE25_PROBE_WORKERS", "1"))
+STAGE25_PROBE_ATTEMPTS = int(os.getenv("STAGE25_PROBE_ATTEMPTS", "2"))
+STAGE25_PROBE_BACKOFF_SECONDS = float(os.getenv("STAGE25_PROBE_BACKOFF_SECONDS", "1.5"))
 STAGE25_WORKERS = int(os.getenv("STAGE25_WORKERS", "8"))
 STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
 STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
@@ -4999,25 +5002,34 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
             probe_targets = failed_refs[:15]
 
             def _probe_one(ref_key: str) -> tuple[str, dict, str]:
-                try:
-                    resp = requests.get(
-                        f"{BASE}/{ENTITY}(guid'{ref_key}')",
-                        headers=headers,
-                        timeout=STAGE25_PROBE_TIMEOUT_SECONDS,
-                        verify=False,
-                    )
-                    if resp.status_code == 200:
-                        doc = resp.json()
-                        return ref_key, (doc if isinstance(doc, dict) else {}), "ok"
-                    return ref_key, {}, f"HTTP {resp.status_code}: {resp.text[:150]}"
-                except requests.exceptions.Timeout:
-                    return ref_key, {}, f"timeout>{STAGE25_PROBE_TIMEOUT_SECONDS:.0f}s"
-                except Exception as exc:
-                    return ref_key, {}, f"{type(exc).__name__}: {exc}"
+                attempts = max(1, STAGE25_PROBE_ATTEMPTS)
+                last_reason = "unknown"
+                for attempt in range(attempts):
+                    try:
+                        resp = requests.get(
+                            f"{BASE}/{ENTITY}(guid'{ref_key}')",
+                            headers=headers,
+                            timeout=STAGE25_PROBE_TIMEOUT_SECONDS,
+                            verify=False,
+                        )
+                        if resp.status_code == 200:
+                            doc = resp.json()
+                            return ref_key, (doc if isinstance(doc, dict) else {}), "ok"
+                        last_reason = f"HTTP {resp.status_code}: {resp.text[:150]}"
+                    except requests.exceptions.Timeout:
+                        last_reason = f"timeout>{STAGE25_PROBE_TIMEOUT_SECONDS:.0f}s"
+                    except Exception as exc:
+                        last_reason = f"{type(exc).__name__}: {exc}"
+
+                    if attempt + 1 < attempts:
+                        time.sleep(max(0.0, STAGE25_PROBE_BACKOFF_SECONDS) * (attempt + 1))
+
+                return ref_key, {}, last_reason
 
             probe_recovered = 0
             reasons: list[str] = []
-            with ThreadPoolExecutor(max_workers=max(1, len(probe_targets))) as probe_pool:
+            probe_workers = max(1, min(STAGE25_PROBE_WORKERS, len(probe_targets)))
+            with ThreadPoolExecutor(max_workers=probe_workers) as probe_pool:
                 probe_futures = {probe_pool.submit(_probe_one, rk): rk for rk in probe_targets}
                 for future in as_completed(probe_futures):
                     rk, doc, reason = future.result()
