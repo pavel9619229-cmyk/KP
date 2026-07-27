@@ -4747,8 +4747,29 @@ def _fetch_rows_from_odata_subprocess(include_stage6: bool = True, page_size: in
     drain_thread = threading.Thread(target=_drain_logs, daemon=True)
     drain_thread.start()
 
+    # IMPORTANT: the result_queue must be drained CONCURRENTLY with proc.join(),
+    # not after it. multiprocessing docs warn that a child process cannot fully
+    # exit until everything it has put() on a queue has been flushed into the
+    # underlying pipe, which requires a reader on the other end. Calling
+    # proc.join() before reading result_queue can deadlock/hang for a long time
+    # once the payload (300 rows) exceeds the OS pipe buffer.
+    result_holder: dict = {}
+
+    def _collect_result() -> None:
+        try:
+            status, payload = result_queue.get()
+            result_holder["status"] = status
+            result_holder["payload"] = payload
+        except Exception as exc:
+            result_holder["status"] = "error"
+            result_holder["payload"] = f"result queue read failed: {exc}"
+
+    result_thread = threading.Thread(target=_collect_result, daemon=True)
+    result_thread.start()
+
     try:
-        proc.join()
+        result_thread.join()
+        proc.join(timeout=10)
     finally:
         stop_draining.set()
         drain_thread.join(timeout=2)
@@ -4759,11 +4780,11 @@ def _fetch_rows_from_odata_subprocess(include_stage6: bool = True, page_size: in
                 break
             log(message)
 
-    try:
-        status, payload = result_queue.get(timeout=5)
-    except Exception:
+    if "status" not in result_holder:
         raise RuntimeError(f"refresh subprocess exited (code={proc.exitcode}) without a result")
 
+    status = result_holder["status"]
+    payload = result_holder["payload"]
     if status == "error":
         raise RuntimeError(payload)
     log(f"refresh subprocess finished (pid={proc.pid}, rows={len(payload)})")
