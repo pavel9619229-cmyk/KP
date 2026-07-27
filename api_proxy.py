@@ -7,6 +7,7 @@ import collections
 import hashlib
 import hmac
 import json
+import multiprocessing
 import os
 import re
 import smtplib
@@ -4691,6 +4692,84 @@ def _fetch_latest_kp_base_batch(headers: dict, page_size: int = 0) -> tuple[int,
     return total_count, initial_skip, collected
 
 
+def _refresh_subprocess_worker(include_stage6: bool, page_size: int, log_queue, result_queue) -> None:
+    """Entry point for the child process. Redirects this process's own copy of
+    log() to log_queue so progress is still visible to the parent, then runs
+    the heavy fetch pipeline and reports the outcome back via result_queue.
+
+    Runs in a separate OS process (not a thread) so that CPU-heavy JSON
+    parsing / many parallel HTTP fetches cannot starve the main process's
+    asyncio event loop of GIL time, which is what caused /healthz timeouts.
+    """
+    def _queued_log(message: str) -> None:
+        try:
+            log_queue.put_nowait(str(message))
+        except Exception:
+            pass
+
+    globals()["log"] = _queued_log
+    try:
+        rows = fetch_rows_from_odata(include_stage6=include_stage6, page_size=page_size)
+        result_queue.put(("ok", rows))
+    except Exception as exc:
+        result_queue.put(("error", f"{type(exc).__name__}: {exc}"))
+
+
+def _fetch_rows_from_odata_subprocess(include_stage6: bool = True, page_size: int = 0) -> list:
+    """Runs fetch_rows_from_odata() in a separate OS process instead of the
+    calling thread, so the main event loop (and /healthz) stays responsive
+    during heavy parallel 1C fetch work."""
+    try:
+        ctx = multiprocessing.get_context("fork")
+    except ValueError:
+        ctx = multiprocessing.get_context()
+
+    log_queue = ctx.Queue()
+    result_queue = ctx.Queue()
+    proc = ctx.Process(
+        target=_refresh_subprocess_worker,
+        args=(include_stage6, page_size, log_queue, result_queue),
+        daemon=True,
+    )
+    proc.start()
+    log(f"refresh subprocess started (pid={proc.pid})")
+
+    stop_draining = threading.Event()
+
+    def _drain_logs() -> None:
+        while not stop_draining.is_set():
+            try:
+                message = log_queue.get(timeout=0.5)
+            except Exception:
+                continue
+            log(message)
+
+    drain_thread = threading.Thread(target=_drain_logs, daemon=True)
+    drain_thread.start()
+
+    try:
+        proc.join()
+    finally:
+        stop_draining.set()
+        drain_thread.join(timeout=2)
+        while True:
+            try:
+                message = log_queue.get_nowait()
+            except Exception:
+                break
+            log(message)
+
+    try:
+        status, payload = result_queue.get(timeout=5)
+    except Exception:
+        raise RuntimeError(f"refresh subprocess exited (code={proc.exitcode}) without a result")
+
+    if status == "error":
+        raise RuntimeError(payload)
+    log(f"refresh subprocess finished (pid={proc.pid}, rows={len(payload)})")
+    return payload
+
+
 def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> list:
     """Staged refresh pipeline.
 
@@ -5135,7 +5214,7 @@ def refresh_cache_and_file(
 
     try:
         try:
-            fetched = fetch_rows_from_odata(include_stage6=include_stage6, page_size=page_size)
+            fetched = _fetch_rows_from_odata_subprocess(include_stage6=include_stage6, page_size=page_size)
             if fetched:
                 saved = save_rows(
                     fetched,
