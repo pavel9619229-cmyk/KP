@@ -345,7 +345,7 @@
         <span>Главный поток обработки КП из 1С</span>
       </div>
       <div class="diagram">
-        <svg class="svg-box" viewBox="0 0 1500 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram">
+        <svg class="svg-box" viewBox="0 0 1500 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram">
           <defs>
             <linearGradient id="g1" x1="0" x2="1">
               <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.20" />
@@ -360,7 +360,7 @@
             </filter>
           </defs>
 
-          <rect x="30" y="26" width="1440" height="390" rx="26" fill="url(#g1)" stroke="rgba(148,163,184,0.18)" />
+          <rect x="30" y="26" width="1440" height="520" rx="26" fill="url(#g1)" stroke="rgba(148,163,184,0.18)" />
 
           <g filter="url(#shadow)">
             <rect x="70" y="86" width="210" height="110" rx="20" fill="#fff9e6" stroke="#94a3b8" />
@@ -448,9 +448,49 @@
             <text x="1263" y="336" text-anchor="middle" font-size="14" fill="#7f1d1d">До ответа /api/kp/refresh и во время refresh</text>
             <text x="1263" y="358" text-anchor="middle" font-size="14" fill="#7f1d1d">Именно здесь refresh обрывается до записи свежего snapshot</text>
           </g>
+
+          <text x="750" y="406" text-anchor="middle" font-size="16" font-weight="700" fill="#e2e8f0">🔍 Стадии внутри «fetch rows» (реальный лог прод, 27.07 09:35)</text>
+
+          <g filter="url(#shadow)">
+            <rect x="340" y="424" width="230" height="110" rx="18" fill="#ecfeff" stroke="#0891b2" stroke-width="2" />
+            <text x="455" y="450" text-anchor="middle" font-size="16" font-weight="700" fill="#0e7490">✅ health = 200</text>
+            <text x="455" y="472" text-anchor="middle" font-size="13" fill="#164e63">/healthz отвечает ok:true</text>
+            <text x="455" y="492" text-anchor="middle" font-size="13" fill="#164e63">процесс не упал, жив</text>
+            <text x="455" y="512" text-anchor="middle" font-size="13" fill="#164e63">но стадии не двигаются</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="620" y="424" width="250" height="110" rx="18" fill="#fef9c3" stroke="#ca8a04" stroke-width="2" />
+            <text x="745" y="450" text-anchor="middle" font-size="16" font-weight="700" fill="#854d0e">1️⃣ stage1_base</text>
+            <text x="745" y="472" text-anchor="middle" font-size="13" fill="#713f12">Постраничный список КП</text>
+            <text x="745" y="492" text-anchor="middle" font-size="13" fill="#713f12">total_count=48816, rows=600</text>
+            <text x="745" y="512" text-anchor="middle" font-size="13" font-weight="700" fill="#713f12">checkpoint сохраняется здесь ✅</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="920" y="424" width="270" height="120" rx="18" fill="#fee2e2" stroke="#dc2626" stroke-width="2" />
+            <text x="1055" y="450" text-anchor="middle" font-size="16" font-weight="700" fill="#7f1d1d">2️⃣ stage2.5</text>
+            <text x="1055" y="472" text-anchor="middle" font-size="13" fill="#7f1d1d">Догрузка каждого документа</text>
+            <text x="1055" y="492" text-anchor="middle" font-size="13" fill="#7f1d1d">по одному, 8 потоков, 1С медленный</text>
+            <text x="1055" y="512" text-anchor="middle" font-size="13" font-weight="700" fill="#7f1d1d">⏳ здесь цикл сейчас «висит»</text>
+            <text x="1055" y="532" text-anchor="middle" font-size="13" font-weight="700" fill="#7f1d1d">checkpointStage всё ещё stage1_base</text>
+          </g>
+
+          <g stroke="#334155" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M570 479 L620 479" />
+            <path d="M870 479 L920 479" />
+          </g>
+
+          <g stroke="#dc2626" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 6">
+            <path d="M1055 424 L1218 276" />
+          </g>
+
+          <g fill="#b91c1c" font-size="12" font-weight="700">
+            <text x="1060" y="350" text-anchor="middle">та же точка сбоя, что и выше</text>
+          </g>
         </svg>
       </div>
-      <p class="footer-note"><strong>Основной поток:</strong> пользователь запускает refresh → фронт вызывает Render API → backend тянет КП из 1С → вычисляет статус → сохраняет runtime snapshot → UI показывает уже готовые данные.<br /><strong>Где ломается дата snapshot:</strong> в точке <strong>СБОЙ ДО WRITE SNAPSHOT</strong> (красный блок у шага write snapshot): если процесс перезапускается/обрывается до этой записи, остается предыдущий snapshot и старая дата.</p>
+      <p class="footer-note"><strong>Основной поток:</strong> пользователь запускает refresh → фронт вызывает Render API → backend тянет КП из 1С → вычисляет статус → сохраняет runtime snapshot → UI показывает уже готовые данные.<br /><strong>Где ломается дата snapshot:</strong> в точке <strong>СБОЙ ДО WRITE SNAPSHOT</strong> (красный блок у шага write snapshot): если процесс перезапускается/обрывается до этой записи, остается предыдущий snapshot и старая дата. Внизу диаграммы — реальные стадии текущего цикла: <strong>health=200</strong> (процесс жив) → <strong>stage1_base</strong> (список получен, checkpoint сохранён) → <strong>stage2.5</strong> (догрузка документов, где цикл сейчас стоит).</p>
     </section>
 
     <section class="section-grid">

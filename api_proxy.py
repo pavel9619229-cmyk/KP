@@ -97,6 +97,10 @@ BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
 # <=0 means full target window (no top-N cap).
 MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
+# Explicit top-N cap requested by user on 2026-07-27 to reduce stage2.5+ per-doc
+# workload and increase chance of completing a full refresh cycle before a
+# Render restart/cold-start interrupts it. <=0 disables the cap (full window).
+STAGE1_ROW_LIMIT = int(os.getenv("STAGE1_ROW_LIMIT", "300"))
 REQUIRE_LIVE_REFRESH_AFTER_STARTUP = os.getenv("REQUIRE_LIVE_REFRESH_AFTER_STARTUP", "false").strip().lower() in {
     "1",
     "true",
@@ -4706,6 +4710,11 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
         rows = [dict(r) for r in checkpoint.get("rows") if isinstance(r, dict)]
         for row in rows:
             apply_storage_defaults(row)
+        if STAGE1_ROW_LIMIT > 0 and len(rows) > STAGE1_ROW_LIMIT:
+            rows.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
+            dropped = len(rows) - STAGE1_ROW_LIMIT
+            rows = rows[:STAGE1_ROW_LIMIT]
+            log(f"resume from checkpoint: trimmed to latest {STAGE1_ROW_LIMIT} rows (dropped {dropped})")
         log(f"resume from checkpoint: stage={checkpoint_stage}, rows={len(rows)}")
 
     if not _stage_completed("stage1_base", checkpoint_stage):
@@ -4782,6 +4791,14 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
                     "additionalInfoFirstLine": row["additionalInfoFirstLine"],
                 }
             )
+
+        if STAGE1_ROW_LIMIT > 0 and len(rows) > STAGE1_ROW_LIMIT:
+            rows.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
+            dropped = len(rows) - STAGE1_ROW_LIMIT
+            rows = rows[:STAGE1_ROW_LIMIT]
+            kept_refs = {r.get("refKey") for r in rows}
+            stage1_patch = [p for p in stage1_patch if p.get("refKey") in kept_refs]
+            log(f"stage1_base: trimmed to latest {STAGE1_ROW_LIMIT} rows (dropped {dropped})")
 
         _save_stage_patch("stage1_base", stage1_patch)
         _save_refresh_checkpoint("stage1_base", rows, include_stage6, page_size)
