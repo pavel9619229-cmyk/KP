@@ -5895,8 +5895,57 @@ async def manual_refresh_force(request: Request):
     return await manual_refresh(request)
 
 
+async def _run_system_checkpoint_recovery(trigger: str) -> None:
+    """Best-effort auto recovery for pending refresh checkpoints."""
+    now_msk = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+    _set_manual_refresh_state(
+        running=True,
+        requestedAt=now_msk,
+        requestedBy="system:checkpoint-recovery",
+        requestedFrom=trigger,
+        startedAt=now_msk,
+        finishedAt=None,
+        lastError=None,
+        confirmedVersion=None,
+    )
+    log(f"[checkpoint-recovery] started (trigger={trigger})")
+    try:
+        ran = await asyncio.to_thread(
+            refresh_cache_and_file,
+            True,
+            MANUAL_REFRESH_INCLUDE_STAGE6,
+            MANUAL_REFRESH_PAGE_SIZE,
+            True,
+            False,
+            False,
+        )
+        if ran and not _last_refresh_error:
+            _set_manual_refresh_state(lastOk=True, lastError=None)
+            log("[checkpoint-recovery] completed successfully")
+        else:
+            error_text = str(_last_refresh_error or "refresh cycle did not complete")
+            _set_manual_refresh_state(lastOk=False, lastError=error_text)
+            log(f"[checkpoint-recovery] ended with error: {error_text}")
+    except Exception as exc:
+        _set_manual_refresh_state(lastOk=False, lastError=str(exc))
+        log(f"[checkpoint-recovery] crashed: {type(exc).__name__}: {exc}")
+    finally:
+        _set_manual_refresh_state(
+            running=False,
+            finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+
 @app.get("/api/kp/refresh/status")
 async def manual_refresh_status():
+    with _manual_refresh_state_lock:
+        running = bool(_manual_refresh_state.get("running"))
+    if not running and _has_pending_refresh_checkpoint():
+        task = getattr(app.state, "checkpoint_recovery_task", None)
+        if task is None or task.done():
+            app.state.checkpoint_recovery_task = asyncio.create_task(
+                _run_system_checkpoint_recovery("status-endpoint")
+            )
     return _manual_refresh_snapshot()
 
 
