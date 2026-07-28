@@ -223,6 +223,7 @@ body.light .search-box input {
   justify-content: center;
   text-decoration: none;
   width: 60%;
+  flex: 0.6 1 0;
 }
 
 .primary-button {
