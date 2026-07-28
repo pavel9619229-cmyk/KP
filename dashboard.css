@@ -412,13 +412,13 @@ body.light .dashboard-board {
     min-width: 100%;
     font-size: 0.125rem;
     font-weight: 400;
-    text-align: center;
+    text-align: left;
     line-height: 1.02;
     letter-spacing: 0.01em;
     text-transform: uppercase;
     word-break: break-word;
-    transform: scale(9.6);
-    transform-origin: center top;
+    transform: scale(8.64);
+    transform-origin: left top;
   }
 
   .status-tab__word {
