@@ -411,12 +411,13 @@ body.light .dashboard-board {
   .status-tab__label {
     min-width: 100%;
     font-size: 0.125rem;
+    font-weight: 400;
     text-align: center;
     line-height: 1.02;
     letter-spacing: 0.01em;
     text-transform: uppercase;
     word-break: break-word;
-    transform: scale(10.6666);
+    transform: scale(9.6);
     transform-origin: center top;
   }
 
@@ -427,12 +428,12 @@ body.light .dashboard-board {
   .status-tab__count {
     min-width: 0;
     height: auto;
-    font-weight: 700;
+    font-weight: 400;
     font-size: 0.135rem;
     padding: 0;
     border-radius: 0;
     background: transparent;
-    transform: scale(10.6666);
+    transform: scale(9.6);
     transform-origin: center center;
     margin-top: auto;
   }
