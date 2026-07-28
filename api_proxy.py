@@ -1083,6 +1083,136 @@ def _patch_comment_prefix_line(ref_key: str, existing_comment: str, prefix_line:
     return False
 
 
+SEND_TO_CLIENT_STATUS = "ОТПРАВИТЬ КЛИЕНТУ"
+
+
+def _build_send_to_client_comment_instruction(manager_name: str) -> str:
+    manager = str(manager_name or "").strip() or "Менеджер"
+    return (
+        f"({manager}, прошу отправить данное КП клиенту, связаться с клиентом "
+        "и записать в КП результат и статус)"
+    )
+
+
+def _prepend_instruction_to_first_comment_line(existing_comment: str, instruction: str) -> tuple[str, bool]:
+    """Prepends instruction to the left side of the first line, preserving other lines."""
+    comment = str(existing_comment or "").replace("\r\n", "\n").replace("\r", "\n")
+    phrase = str(instruction or "").strip()
+    if not phrase:
+        return comment, False
+
+    if not comment:
+        return phrase, True
+
+    lines = comment.split("\n")
+    first = lines[0].strip()
+    # Idempotency guard: do not prepend the same phrase twice.
+    if first.startswith(phrase):
+        return comment, False
+
+    lines[0] = f"{phrase} {first}".strip()
+    return "\n".join(lines), True
+
+
+def _process_send_to_client_status_for_user(user: dict) -> dict:
+    if not _cached_rows:
+        return {
+            "ok": False,
+            "detail": "KP data is not available yet",
+            "processed": 0,
+            "matched": 0,
+            "updated": 0,
+            "skipped": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+    with _status_rules_lock:
+        rules = _parse_status_rules_text(load_status_rules_text())
+
+    visible_rows = _filter_rows_for_user(_cached_rows, user)
+    target_rows: list[dict] = []
+    for row in visible_rows:
+        if _compute_status_for_row(row, rules) == SEND_TO_CLIENT_STATUS:
+            target_rows.append(row)
+
+    if not target_rows:
+        return {
+            "ok": True,
+            "detail": "Нет КП для обработки",
+            "processed": 0,
+            "matched": 0,
+            "updated": 0,
+            "skipped": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+    headers = _build_headers()
+    updated = 0
+    skipped = 0
+    failed = 0
+    errors: list[dict] = []
+
+    for row in target_rows:
+        ref_key = str(row.get("refKey") or "").strip()
+        kp_number = str(row.get("number") or "").strip()
+        manager_name = str(row.get("managerName") or row.get("manager") or "").strip() or "Менеджер"
+        if not ref_key:
+            failed += 1
+            errors.append({"number": kp_number, "error": "empty refKey"})
+            continue
+
+        doc = _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 8.0))
+        if not doc:
+            failed += 1
+            errors.append({"number": kp_number, "error": "document fetch failed"})
+            continue
+
+        existing_comment = str(doc.get("Комментарий") or "")
+        instruction = _build_send_to_client_comment_instruction(manager_name)
+        new_comment, changed = _prepend_instruction_to_first_comment_line(existing_comment, instruction)
+        if not changed:
+            skipped += 1
+            continue
+
+        response = requests.patch(
+            f"{BASE}/{ENTITY}(guid'{ref_key}')",
+            headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+            json={"Комментарий": new_comment},
+            timeout=20,
+            verify=False,
+        )
+        if response.status_code in (200, 204):
+            updated += 1
+            continue
+
+        failed += 1
+        errors.append(
+            {
+                "number": kp_number,
+                "error": f"patch failed HTTP {response.status_code}",
+            }
+        )
+
+    try:
+        if updated > 0:
+            refresh_comment_first_line_only()
+    except Exception as exc:
+        log(f"send-to-client process: comment refresh failed: {type(exc).__name__}: {exc}")
+
+    return {
+        "ok": failed == 0,
+        "detail": "completed",
+        "processed": len(target_rows),
+        "matched": len(target_rows),
+        "updated": updated,
+        "skipped": skipped,
+        "failed": failed,
+        "errors": errors[:50],
+    }
+
+
 def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str]:
     recipient = str(to_email or "").strip()
     if not _looks_like_email(recipient):
@@ -6755,6 +6885,15 @@ async def create_kp_from_new_request(payload: NewRequestPayload, request: Reques
 
     result = await asyncio.to_thread(_create_kp_in_1c_from_request, request_text)
     await asyncio.to_thread(refresh_cache_and_file)
+    return result
+
+
+@app.post("/api/kp/process/send-to-client")
+async def process_send_to_client_status(request: Request):
+    user = _get_user_from_request(request)
+    result = await asyncio.to_thread(_process_send_to_client_status_for_user, user)
+    if result.get("ok") is False and result.get("detail") == "KP data is not available yet":
+        raise HTTPException(status_code=503, detail=result.get("detail"))
     return result
 
 

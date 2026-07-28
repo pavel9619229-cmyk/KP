@@ -11,6 +11,7 @@ const requestStatusMsg = document.getElementById('requestStatusMsg');
 const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
+const processClientStatusBtn = document.getElementById('processClientStatusBtn');
 
 const boardContent = document.getElementById('boardContent');
 
@@ -411,6 +412,46 @@ submitRequestBtn.addEventListener('click', async () => {
     submitRequestBtn.textContent = 'ОТПРАВИТЬ';
   }
 });
+
+if (processClientStatusBtn) {
+  processClientStatusBtn.addEventListener('click', async () => {
+    const defaultLabel = 'Обработать статусы Отправить клиенту';
+    processClientStatusBtn.disabled = true;
+    processClientStatusBtn.textContent = 'ОБРАБОТКА...';
+
+    try {
+      const response = await fetch('/api/kp/process/send-to-client', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
+        throw new Error(String(details));
+      }
+
+      const processed = Number(payload?.processed || 0);
+      const updated = Number(payload?.updated || 0);
+      const skipped = Number(payload?.skipped || 0);
+      const failed = Number(payload?.failed || 0);
+
+      await refreshData(false);
+      updatedAtLabel.textContent = `Обработано: ${processed}; обновлено: ${updated}; пропущено: ${skipped}; ошибок: ${failed}`;
+    } catch (error) {
+      updatedAtLabel.textContent = `Ошибка обработки статуса: ${error.message}`;
+    } finally {
+      processClientStatusBtn.disabled = false;
+      processClientStatusBtn.textContent = defaultLabel;
+    }
+  });
+}
 
 statusTabs.addEventListener('click', (event) => {
   const button = event.target.closest('[data-status-key]');
