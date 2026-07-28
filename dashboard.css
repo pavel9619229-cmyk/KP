@@ -64,6 +64,7 @@ textarea {
 
 .dashboard-topbar {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: stretch;
   gap: 16px;
@@ -79,6 +80,11 @@ textarea {
   align-items: stretch;
 }
 
+.topbar-actions-secondary {
+  display: none;
+  width: 100%;
+}
+
 .topbar-actions > * {
   min-width: 0;
   flex: 1 1 0;
@@ -87,6 +93,28 @@ textarea {
 .search-box {
   min-width: 180px;
   flex: 2 2 280px;
+}
+
+@media (min-width: 1101px) {
+  .topbar-actions .search-box {
+    min-width: 90px;
+    flex: 1 1 140px;
+  }
+
+  #refreshBtn {
+    min-width: 0;
+    flex: 2 1 0;
+  }
+
+  .topbar-actions-secondary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .topbar-actions-secondary .ghost-button {
+    width: 100%;
+  }
 }
 
 .manager-filter select {
