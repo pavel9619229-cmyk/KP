@@ -447,6 +447,22 @@ body.light .dashboard-board {
   background: rgba(255, 255, 255, 0.18);
 }
 
+@media (max-width: 768px) {
+  .status-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-tab,
+  .status-tab--full,
+  .status-tab--top-pair,
+  .status-tab--second-pair {
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+}
+
 .dashboard-board {
   margin-top: 14px;
   padding: 22px;
