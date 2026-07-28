@@ -423,7 +423,7 @@ body.light .dashboard-board {
   .status-tab {
     min-width: 0;
     flex: 1 1 0;
-    min-height: 125px;
+    min-height: 113px;
     border-radius: 9px;
     padding: 9px 6px;
     flex-direction: column;
