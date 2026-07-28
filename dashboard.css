@@ -386,6 +386,7 @@ body.light .dashboard-board {
   font-size: 0.83125rem;
   font-weight: 700;
   text-align: left;
+  line-height: 1.2;
 }
 
 .status-tab__word {
@@ -436,7 +437,7 @@ body.light .dashboard-board {
     font-size: 0.109375rem;
     font-weight: 400;
     text-align: left;
-    line-height: 1.02;
+    line-height: 1.2;
     letter-spacing: 0.01em;
     text-transform: uppercase;
     word-break: break-word;
@@ -680,7 +681,7 @@ body.light .phone-link {
 
   .status-tab__label {
     font-size: 0.7175rem;
-    line-height: 1.05;
+    line-height: 1.2;
   }
 
   .status-tab__count {
