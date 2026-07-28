@@ -416,7 +416,7 @@ body.light .dashboard-board {
     letter-spacing: 0.01em;
     text-transform: uppercase;
     word-break: break-word;
-    transform: scale(5.3333);
+    transform: scale(10.6666);
     transform-origin: center top;
   }
 
@@ -430,7 +430,7 @@ body.light .dashboard-board {
     font-weight: 700;
     font-size: 0.135rem;
     padding: 0 4px;
-    transform: scale(5.3333);
+    transform: scale(10.6666);
     transform-origin: center center;
     margin-top: auto;
   }
