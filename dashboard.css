@@ -222,6 +222,7 @@ body.light .search-box input {
   align-items: center;
   justify-content: center;
   text-decoration: none;
+  width: 60%;
 }
 
 .primary-button {
