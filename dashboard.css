@@ -436,6 +436,9 @@ body.light .dashboard-board {
     min-width: 100%;
     font-size: 0.109375rem;
     font-weight: 400;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     text-align: left;
     line-height: 1.2;
     letter-spacing: 0.01em;
@@ -447,6 +450,10 @@ body.light .dashboard-board {
 
   .status-tab__word {
     display: block;
+  }
+
+  .status-tab__word + .status-tab__word {
+    margin-top: 0.28em;
   }
 
   .status-tab__count {
