@@ -189,7 +189,7 @@ body.light .updated-at-inline {
   background: rgba(255, 255, 255, 0.08);
   color: var(--muted);
   border-radius: 10px;
-  width: 180px;
+  width: 90px;
   padding: 6px 10px;
   font-size: 0.912rem;
   line-height: 1;
