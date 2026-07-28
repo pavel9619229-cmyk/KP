@@ -399,7 +399,7 @@ body.light .dashboard-board {
   .status-tab {
     min-width: 0;
     flex: 1 1 0;
-    min-height: 220px;
+    min-height: 154px;
     border-radius: 9px;
     padding: 10px 6px;
     flex-direction: column;
@@ -425,14 +425,20 @@ body.light .dashboard-board {
   }
 
   .status-tab__count {
-    min-width: 18px;
-    height: 18px;
+    min-width: 0;
+    height: auto;
     font-weight: 700;
     font-size: 0.135rem;
-    padding: 0 4px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
     transform: scale(10.6666);
     transform-origin: center center;
     margin-top: auto;
+  }
+
+  .status-tab.is-active .status-tab__count {
+    background: transparent;
   }
 }
 
