@@ -148,13 +148,6 @@ body.light .manager-filter select {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
-  font-weight: 700;
-  white-space: nowrap;
-  flex: 2 2 0;
-}
-
-body.light .updated-at-inline {
-  background: rgba(255, 255, 255, 0.9);
 }
 
 .search-box {
@@ -466,7 +459,7 @@ body.light .dashboard-board {
     transform: scale(9.6);
     transform-origin: center center;
     margin-top: auto;
-    margin-bottom: 2.1em;
+    margin-bottom: 6.3em;
   }
 
   .status-tab.is-active .status-tab__count {
