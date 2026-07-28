@@ -649,21 +649,21 @@ body.light .phone-link {
   }
 
   .status-tab {
-    padding: 12px 14px;
-    border-radius: 14px;
-    gap: 10px;
+    padding: 6px 7px;
+    border-radius: 10px;
+    gap: 5px;
   }
 
   .status-tab__label {
     font-size: 0.82rem;
-    line-height: 1.25;
+    line-height: 1.05;
   }
 
   .status-tab__count {
-    min-width: 28px;
-    height: 28px;
-    padding: 0 8px;
-    font-size: 0.74rem;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    font-size: 0.37rem;
   }
 
   .board-header {
