@@ -383,7 +383,7 @@ body.light .dashboard-board {
 
 .status-tab__label {
   min-width: 0;
-  font-size: 0.95rem;
+  font-size: 0.665rem;
   font-weight: 700;
   text-align: left;
 }
@@ -433,7 +433,7 @@ body.light .dashboard-board {
 
   .status-tab__label {
     min-width: 100%;
-    font-size: 0.125rem;
+    font-size: 0.0875rem;
     font-weight: 400;
     text-align: left;
     line-height: 1.02;
@@ -679,7 +679,7 @@ body.light .phone-link {
   }
 
   .status-tab__label {
-    font-size: 0.82rem;
+    font-size: 0.574rem;
     line-height: 1.05;
   }
 
