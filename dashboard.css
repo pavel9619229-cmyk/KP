@@ -454,6 +454,12 @@ body.light .dashboard-board {
     gap: 8px;
   }
 
+  .status-tab {
+    padding-top: 7px;
+    padding-bottom: 7px;
+    gap: 6px;
+  }
+
   .status-tab,
   .status-tab--full,
   .status-tab--top-pair,
