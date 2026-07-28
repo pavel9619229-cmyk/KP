@@ -32,9 +32,19 @@ urllib3.disable_warnings()
 
 app = FastAPI(title="1C KP Realtime API")
 
+_cors_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+if _cors_origins_raw:
+    CORS_ALLOWED_ORIGINS = [x.strip() for x in _cors_origins_raw.split(",") if x.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "https://onec-kp-realtime.onrender.com",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
