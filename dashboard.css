@@ -168,7 +168,7 @@ body.light .updated-at-inline {
   height: 100%;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px 212px 14px 18px;
+  padding: 14px 112px 14px 18px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   outline: none;
@@ -466,7 +466,7 @@ body.light .dashboard-board {
     transform: scale(9.6);
     transform-origin: center center;
     margin-top: auto;
-    margin-bottom: 1.05em;
+    margin-bottom: 2.1em;
   }
 
   .status-tab.is-active .status-tab__count {
