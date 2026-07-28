@@ -883,7 +883,6 @@ function buildMetaChips(row) {
 function renderTabs(counts, totalCount) {
   const orderedStatuses = getOrderedStatuses(counts);
   const primaryTabs = [
-    'ОТКАЗ',
     'ОБРАБОТАТЬ',
     'ОТПРАВИТЬ КЛИЕНТУ',
     'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП',
@@ -894,9 +893,10 @@ function renderTabs(counts, totalCount) {
   const forcedTailTabs = [
     'ПРОБЛЕМА',
     'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО',
+    'ОТКАЗ',
   ];
 
-  const tabs = [{ key: ALL_TAB_KEY, label: 'ALL', count: totalCount }];
+  const tabs = [{ key: ALL_TAB_KEY, label: 'ВСЕ КП', count: totalCount }];
   for (const status of primaryTabs) {
     tabs.push({ key: status, label: status, count: counts.get(status) || 0 });
   }
