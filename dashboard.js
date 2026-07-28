@@ -824,12 +824,23 @@ function getOrderedStatuses(counts) {
   return STATUS_ORDER.filter((status) => counts.has(status)).concat(dynamicStatuses);
 }
 
+const LABEL_LINE_GROUPS = {
+  'ВСЕ КП': ['ВСЕ КП'],
+  'ПРОВЕРИТЬ ПОЛУЧЕНИЕ КП': ['ПРОВЕРИТЬ', 'ПОЛУЧЕНИЕ КП'],
+  'ОТГРУЗИТЬ И ОТПРАВИТЬ В ЭДО': ['ОТГРУЗИТЬ И', 'ОТПРАВИТЬ', 'В ЭДО'],
+  'ОТГРУЖЕНО, ОФОРМЛЕНО И ОПЛАЧЕНО': ['ОТГРУЖЕНО,', 'ОФОРМЛЕНО', 'И ОПЛАЧЕНО'],
+};
+
 function renderStackedLabel(label) {
-  const words = String(label || '').trim().split(/\s+/).filter(Boolean);
-  if (!words.length) {
+  const normalizedLabel = String(label || '').trim();
+  const groupedLines = LABEL_LINE_GROUPS[normalizedLabel];
+  const lines = Array.isArray(groupedLines)
+    ? groupedLines
+    : normalizedLabel.split(/\s+/).filter(Boolean);
+  if (!lines.length) {
     return '';
   }
-  return words.map((word) => `<span class="status-tab__word">${escapeHtml(word)}</span>`).join('');
+  return lines.map((line) => `<span class="status-tab__word">${escapeHtml(line)}</span>`).join('');
 }
 
 function formatUpdatedAt(value) {
