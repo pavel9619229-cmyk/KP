@@ -12,10 +12,25 @@ const themeBtn = document.getElementById('themeBtn');
 const statusTabs = document.getElementById('statusTabs');
 const updatedAtLabel = document.getElementById('updatedAtLabel');
 const processClientStatusBtn = document.getElementById('processClientStatusBtn');
+const processReceiptStatusBtn = document.getElementById('processReceiptStatusBtn');
+const processThinkStatusBtn = document.getElementById('processThinkStatusBtn');
 
 const boardContent = document.getElementById('boardContent');
 
 let lastRefreshDurationSec = null;
+const STATUS_PROCESSING_ALLOWED_LOGIN = 'info@10-16-5.ru';
+let currentUsername = '';
+
+function updateStatusProcessingButtonsVisibility() {
+  const normalizedUser = String(currentUsername || '').trim().toLowerCase();
+  const isAllowed = normalizedUser === STATUS_PROCESSING_ALLOWED_LOGIN;
+  const targets = [processClientStatusBtn, processReceiptStatusBtn, processThinkStatusBtn];
+  for (const btn of targets) {
+    if (!btn) continue;
+    btn.hidden = !isAllowed;
+    btn.disabled = !isAllowed;
+  }
+}
 
 function updateLastDurationBtn() {}
 
@@ -887,15 +902,21 @@ async function loadCurrentUserRole() {
     }
     if (!response.ok) {
       currentUserRole = 'manager';
+      currentUsername = '';
+      updateStatusProcessingButtonsVisibility();
       updateLastDurationBtn();
       return;
     }
     const payload = await response.json().catch(() => ({}));
     const role = String(payload?.user?.role || '').trim().toLowerCase();
+    currentUsername = String(payload?.user?.username || '').trim().toLowerCase();
     currentUserRole = role || 'manager';
+    updateStatusProcessingButtonsVisibility();
     updateLastDurationBtn();
   } catch {
     currentUserRole = 'manager';
+    currentUsername = '';
+    updateStatusProcessingButtonsVisibility();
     updateLastDurationBtn();
   }
 }
