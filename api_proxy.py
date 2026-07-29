@@ -6284,10 +6284,15 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
         if ran and not _last_refresh_error:
             _set_manual_refresh_state(lastOk=True, lastError=None)
             log("[checkpoint-recovery] completed successfully")
-        else:
-            error_text = str(_last_refresh_error or "refresh cycle did not complete")
+        elif ran and _last_refresh_error:
+            error_text = str(_last_refresh_error)
             _set_manual_refresh_state(lastOk=False, lastError=error_text)
-            log(f"[checkpoint-recovery] ended with error: {error_text}")
+            log(f"[checkpoint-recovery] ended with refresh error: {error_text}")
+        else:
+            # Recovery could not acquire the refresh lock in time.
+            # Keep state neutral to avoid surfacing a misleading manual-refresh error.
+            _set_manual_refresh_state(lastOk=None, lastError=None)
+            log("[checkpoint-recovery] skipped (refresh lock busy); keeping manual refresh state neutral")
     except Exception as exc:
         _set_manual_refresh_state(lastOk=False, lastError=str(exc))
         log(f"[checkpoint-recovery] crashed: {type(exc).__name__}: {exc}")
