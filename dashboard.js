@@ -435,25 +435,53 @@ submitRequestBtn.addEventListener('click', async () => {
 if (processClientStatusBtn) {
   processClientStatusBtn.addEventListener('click', async () => {
     const defaultLabel = 'Обработать статусы Отправить клиенту';
+    const transientStatuses = new Set([502, 503, 504]);
+    const maxAttempts = 3;
     processClientStatusBtn.disabled = true;
     processClientStatusBtn.textContent = 'ОБРАБОТКА...';
 
     try {
-      const response = await fetch('/api/kp/process/send-to-client', {
-        method: 'POST',
-        credentials: 'include',
-        cache: 'no-store',
-      });
+      let payload = {};
+      let response = null;
 
-      if (response.status === 401) {
-        window.location.href = '/login';
-        return;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        response = await fetch('/api/kp/process/send-to-client', {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const rawBody = await response.text().catch(() => '');
+        payload = {};
+        if (rawBody) {
+          try {
+            payload = JSON.parse(rawBody);
+          } catch {
+            payload = { error: rawBody };
+          }
+        }
+
+        if (response.ok) {
+          break;
+        }
+
+        const details = payload?.detail || payload?.error || rawBody || `HTTP ${response.status}`;
+        const canRetry = transientStatuses.has(response.status) && attempt < maxAttempts;
+        if (!canRetry) {
+          throw new Error(String(details));
+        }
+
+        updatedAtLabel.textContent = `Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`;
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
       }
 
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
-        throw new Error(String(details));
+      if (!response || !response.ok) {
+        throw new Error('Не удалось обработать статусы после повторов');
       }
 
       const processed = Number(payload?.processed || 0);
