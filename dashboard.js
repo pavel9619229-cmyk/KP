@@ -20,10 +20,14 @@ const boardContent = document.getElementById('boardContent');
 let lastRefreshDurationSec = null;
 const STATUS_PROCESSING_ALLOWED_LOGIN = 'info@10-16-5.ru';
 let currentUsername = '';
+let currentAllowedManagers = [];
+
+function isInfoLogin() {
+  return String(currentUsername || '').trim().toLowerCase() === STATUS_PROCESSING_ALLOWED_LOGIN;
+}
 
 function updateStatusProcessingButtonsVisibility() {
-  const normalizedUser = String(currentUsername || '').trim().toLowerCase();
-  const isAllowed = normalizedUser === STATUS_PROCESSING_ALLOWED_LOGIN;
+  const isAllowed = isInfoLogin();
   const targets = [processClientStatusBtn, processReceiptStatusBtn, processThinkStatusBtn];
   for (const btn of targets) {
     if (!btn) continue;
@@ -903,6 +907,7 @@ async function loadCurrentUserRole() {
     if (!response.ok) {
       currentUserRole = 'manager';
       currentUsername = '';
+      currentAllowedManagers = [];
       updateStatusProcessingButtonsVisibility();
       updateLastDurationBtn();
       return;
@@ -910,12 +915,19 @@ async function loadCurrentUserRole() {
     const payload = await response.json().catch(() => ({}));
     const role = String(payload?.user?.role || '').trim().toLowerCase();
     currentUsername = String(payload?.user?.username || '').trim().toLowerCase();
+    const allowedManagers = payload?.user?.allowedManagers;
+    if (Array.isArray(allowedManagers)) {
+      currentAllowedManagers = allowedManagers.map((value) => String(value || '').trim()).filter(Boolean);
+    } else {
+      currentAllowedManagers = [];
+    }
     currentUserRole = role || 'manager';
     updateStatusProcessingButtonsVisibility();
     updateLastDurationBtn();
   } catch {
     currentUserRole = 'manager';
     currentUsername = '';
+    currentAllowedManagers = [];
     updateStatusProcessingButtonsVisibility();
     updateLastDurationBtn();
   }
@@ -1070,9 +1082,19 @@ function renderBoard() {
 
 function fillManagers(data) {
   const selectedManager = managerFilter.value;
-  managerFilter.innerHTML = '<option value="">ВСЕ</option>';
-
   const managers = [...new Set((data || []).map((row) => getManagerName(row)))].sort((a, b) => a.localeCompare(b, 'ru'));
+  let defaultLabel = 'ВСЕ';
+  if (!isInfoLogin()) {
+    if (currentAllowedManagers.length > 0) {
+      defaultLabel = currentAllowedManagers[0];
+    } else if (managers.length > 0) {
+      defaultLabel = managers[0];
+    } else {
+      defaultLabel = 'Менеджер';
+    }
+  }
+  managerFilter.innerHTML = `<option value="">${escapeHtml(defaultLabel)}</option>`;
+
   for (const manager of managers) {
     const option = document.createElement('option');
     option.value = manager;
