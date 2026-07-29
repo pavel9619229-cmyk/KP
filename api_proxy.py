@@ -1110,6 +1110,13 @@ def _build_send_to_client_comment_instruction(manager_name: str) -> str:
     )
 
 
+def _build_send_to_client_email_subject(kp_number: str) -> str:
+    number = str(kp_number or "").strip()
+    if number:
+        return f"КП {number}: ОТПРАВИТЬ КЛИЕНТУ"
+    return "КП: ОТПРАВИТЬ КЛИЕНТУ"
+
+
 def _prepend_instruction_to_first_comment_line(existing_comment: str, instruction: str) -> tuple[str, bool]:
     """Prepends instruction to the left side of the first line, preserving other lines."""
     comment = str(existing_comment or "").replace("\r\n", "\n").replace("\r", "\n")
@@ -1165,6 +1172,18 @@ def _process_send_to_client_status_for_user(user: dict) -> dict:
         }
 
     headers = _build_headers()
+    send_to_client_rule: dict = {}
+    with _comment_automation_rules_lock:
+        payload = load_comment_automation_rules()
+    rules = payload.get("rules") if isinstance(payload, dict) else []
+    if isinstance(rules, list):
+        for item in rules:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("id") or "").strip() == "client_thinking_reminder_v1":
+                send_to_client_rule = item
+                break
+
     updated = 0
     skipped = 0
     failed = 0
@@ -1201,6 +1220,31 @@ def _process_send_to_client_status_for_user(user: dict) -> dict:
         )
         if response.status_code in (200, 204):
             updated += 1
+            manager_email = _resolve_manager_email_for_rule(manager_name, send_to_client_rule)
+            if not manager_email:
+                failed += 1
+                errors.append(
+                    {
+                        "number": kp_number,
+                        "error": f"manager email is not resolved ({manager_name})",
+                    }
+                )
+                continue
+
+            email_text = first_line(new_comment) or instruction
+            sent, err = _send_email(
+                manager_email,
+                _build_send_to_client_email_subject(kp_number),
+                email_text,
+            )
+            if not sent:
+                failed += 1
+                errors.append(
+                    {
+                        "number": kp_number,
+                        "error": f"email send failed: {err}",
+                    }
+                )
             continue
 
         failed += 1
