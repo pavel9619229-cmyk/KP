@@ -106,6 +106,12 @@ STAGE25_PROBE_TIMEOUT_SECONDS = float(os.getenv("STAGE25_PROBE_TIMEOUT_SECONDS",
 STAGE25_PROBE_WORKERS = int(os.getenv("STAGE25_PROBE_WORKERS", "1"))
 STAGE25_PROBE_ATTEMPTS = int(os.getenv("STAGE25_PROBE_ATTEMPTS", "2"))
 STAGE25_PROBE_BACKOFF_SECONDS = float(os.getenv("STAGE25_PROBE_BACKOFF_SECONDS", "1.5"))
+STAGE25_PROBE_ENABLED = os.getenv("STAGE25_PROBE_ENABLED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 STAGE25_WORKERS = int(os.getenv("STAGE25_WORKERS", "8"))
 STAGE25_RETRY_WORKERS = int(os.getenv("STAGE25_RETRY_WORKERS", "8"))
 STAGE25_RETRY_MAX_DOCS = int(os.getenv("STAGE25_RETRY_MAX_DOCS", "60"))
@@ -5141,7 +5147,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
                 f"{len(retry_targets)}, recovered {recovered}, still failed {len(failed_refs)}"
             )
 
-        if failed_refs:
+        if failed_refs and STAGE25_PROBE_ENABLED:
             failed_nums = [ref_key_to_number.get(rk, rk) for rk in failed_refs]
             log(f"stage2.5: failed docs (comments won't update): {', '.join(failed_nums)}")
 
@@ -5197,6 +5203,11 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
             if probe_recovered:
                 doc_ok += probe_recovered
                 doc_fail = max(0, doc_fail - probe_recovered)
+        elif failed_refs:
+            log(
+                "stage2.5 probe skipped (STAGE25_PROBE_ENABLED=false); "
+                f"failed docs count={len(failed_refs)}"
+            )
     else:
         log(f"stage2.5 skipped by checkpoint stage={checkpoint_stage}")
 
@@ -6066,6 +6077,7 @@ async def manual_refresh(request: Request):
                 "requestedFrom": client_host,
                 "startedAt": None,
                 "finishedAt": None,
+                "lastOk": None,
                 "lastError": None,
                 "confirmedVersion": None,
             }
