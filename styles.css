@@ -113,11 +113,11 @@ body {
 
 input,
 select,
-button {
+textarea {
   width: 100%;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.86);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 10px 12px;
   font: inherit;
 }
@@ -453,7 +453,7 @@ body.dark .tag {
   width: 100%;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 0;
   padding: 12px 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.9rem;
@@ -473,7 +473,7 @@ body.dark .tag {
   width: 100%;
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 0;
   padding: 10px 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.86rem;

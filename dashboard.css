@@ -121,7 +121,7 @@ textarea {
   width: 100%;
   height: 100%;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.08);
   color: #edf2ff;
@@ -160,7 +160,7 @@ body.light .manager-filter select {
   width: 100%;
   height: 100%;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 14px 112px 14px 18px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
@@ -288,7 +288,7 @@ body.light .request-panel {
 .request-panel textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   padding: 12px 14px;
