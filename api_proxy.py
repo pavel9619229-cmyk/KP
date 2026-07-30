@@ -4096,6 +4096,8 @@ def _build_payment_coverage_audit(max_rows: int = 300) -> dict:
     table = _build_payment_match_table(headers)
     table_rows = table.get("rows") if isinstance(table, dict) else []
     table_rows = table_rows if isinstance(table_rows, list) else []
+    orders_scan_complete = bool(table.get("ordersScanComplete")) if isinstance(table, dict) else False
+    payments_scan_complete = bool(table.get("paymentsScanComplete")) if isinstance(table, dict) else False
 
     matched_kp_numbers: set[str] = set()
     for row in table_rows:
@@ -4127,12 +4129,24 @@ def _build_payment_coverage_audit(max_rows: int = 300) -> dict:
                 }
             )
 
+    if not payments_scan_complete:
+        return {
+            "ok": False,
+            "detail": "payment scan incomplete; audit result is not reliable",
+            "rowsChecked": len(rows_checked),
+            "ordersScanComplete": orders_scan_complete,
+            "paymentsScanComplete": payments_scan_complete,
+            "block3MatchedKpCount": len(matched_kp_numbers),
+            "mismatchCount": len(mismatches),
+            "mismatches": mismatches,
+        }
+
     return {
         "ok": True,
         "detail": "completed",
         "rowsChecked": len(rows_checked),
-        "ordersScanComplete": bool(table.get("ordersScanComplete")) if isinstance(table, dict) else False,
-        "paymentsScanComplete": bool(table.get("paymentsScanComplete")) if isinstance(table, dict) else False,
+        "ordersScanComplete": orders_scan_complete,
+        "paymentsScanComplete": payments_scan_complete,
         "block3MatchedKpCount": len(matched_kp_numbers),
         "mismatchCount": len(mismatches),
         "mismatches": mismatches,
