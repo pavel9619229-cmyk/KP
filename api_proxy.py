@@ -333,6 +333,8 @@ _shipment_pending_cache = {}
 _refresh_run_lock = threading.Lock()
 _refresh_lock = threading.Lock()
 _partial_refresh_lock = threading.Lock()
+_refresh_run_lock_state: dict = {"owner": None, "startedAt": None, "releasedAt": None}
+_partial_refresh_lock_state: dict = {"owner": None, "startedAt": None, "releasedAt": None}
 _render_status_cache: dict = {"status": None, "updatedAt": None}
 _last_cache_push: Optional[datetime] = None
 _last_confirmed_runtime_sync_check = 0.0
@@ -403,6 +405,28 @@ def _startup_live_refresh_snapshot() -> dict:
 def _set_startup_live_refresh_state(**updates: object) -> None:
     with _startup_live_refresh_lock:
         _startup_live_refresh_state.update(updates)
+
+
+def _lock_state_snapshot(lock_state: dict) -> dict:
+    return {
+        "owner": lock_state.get("owner"),
+        "startedAt": lock_state.get("startedAt"),
+        "releasedAt": lock_state.get("releasedAt"),
+    }
+
+
+def _set_lock_owner(lock_state: dict, owner: str | None) -> None:
+    lock_state["owner"] = owner
+    if owner:
+        lock_state["startedAt"] = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+        lock_state["releasedAt"] = None
+    else:
+        lock_state["releasedAt"] = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+        lock_state["startedAt"] = None
+
+
+def _clear_lock_owner(lock_state: dict) -> None:
+    _set_lock_owner(lock_state, None)
 
 
 def _startup_live_refresh_gate_open() -> bool:
@@ -5852,19 +5876,24 @@ def refresh_cache_and_file(
     use_known_cache: bool = True,
     push_to_github: bool = True,
     update_live_cache: bool = True,
+    cycle_owner: str = "manual-refresh",
 ) -> bool:
     """Returns True if refresh actually ran, False if skipped (another cycle holds the lock)."""
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
     refresh_started_at = datetime.now(timezone.utc)
 
     if not _refresh_run_lock.acquire(blocking=False):
-        log("refresh skipped: another refresh cycle is running")
+        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+        log(f"refresh skipped: another refresh cycle is running (owner={owner})")
         return False
     if not _refresh_lock.acquire(blocking=False):
+        _clear_lock_owner(_refresh_run_lock_state)
         _refresh_run_lock.release()
-        log("refresh skipped: previous full cycle is still running")
+        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+        log(f"refresh skipped: previous full cycle is still running (owner={owner})")
         return False
 
+    _set_lock_owner(_refresh_run_lock_state, cycle_owner)
     try:
         try:
             fetched = _fetch_rows_from_odata_subprocess(include_stage6=include_stage6, page_size=page_size)
@@ -5952,6 +5981,7 @@ def refresh_cache_and_file(
             log(f"refresh failed, keeping last successful live cache: {exc}")
     finally:
         _refresh_lock.release()
+        _clear_lock_owner(_refresh_run_lock_state)
         _refresh_run_lock.release()
     return True
 
@@ -5963,14 +5993,17 @@ def refresh_cached_rows_only() -> dict:
     if not _cached_rows:
         return {"ok": False, "skipped": "empty-cache"}
     if not _refresh_run_lock.acquire(blocking=False):
-        log("fast partial refresh skipped: another refresh cycle is running")
+        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+        log(f"fast partial refresh skipped: another refresh cycle is running (owner={owner})")
         return {"ok": False, "skipped": "another-refresh-running"}
     if not _partial_refresh_lock.acquire(blocking=False):
+        owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
         _refresh_run_lock.release()
-        log("fast partial refresh skipped: already running")
+        log(f"fast partial refresh skipped: already running (owner={owner})")
         return {"ok": False, "skipped": "already-running"}
 
     try:
+        _set_lock_owner(_partial_refresh_lock_state, "fast-partial-refresh")
         refresh_started_at = datetime.now(timezone.utc)
         headers = _build_headers()
         partial_rows, touched, next_idx = _partial_refresh_from_cached_rows(
@@ -6028,6 +6061,7 @@ def refresh_cached_rows_only() -> dict:
         log(f"fast partial refresh failed: {type(exc).__name__}: {exc}")
         return {"ok": False, "error": _last_comment_refresh_error}
     finally:
+        _clear_lock_owner(_partial_refresh_lock_state)
         _partial_refresh_lock.release()
         _refresh_run_lock.release()
 
@@ -6107,7 +6141,18 @@ async def trigger_refresh_if_stale() -> None:
     task = getattr(app.state, "on_demand_refresh_task", None)
     if task and not task.done():
         return
-    app.state.on_demand_refresh_task = asyncio.create_task(asyncio.to_thread(refresh_cache_and_file))
+    app.state.on_demand_refresh_task = asyncio.create_task(
+        asyncio.to_thread(
+            refresh_cache_and_file,
+            True,
+            True,
+            0,
+            True,
+            True,
+            True,
+            "on-demand-refresh",
+        )
+    )
 
 
 async def refresh_loop() -> None:
@@ -6117,7 +6162,16 @@ async def refresh_loop() -> None:
     while True:
         started_at = time.time()
         try:
-            await asyncio.to_thread(refresh_cache_and_file)
+            await asyncio.to_thread(
+                refresh_cache_and_file,
+                True,
+                True,
+                0,
+                True,
+                True,
+                True,
+                "background-refresh-loop",
+            )
         except Exception as exc:
             log(f"refresh loop error: {type(exc).__name__}: {exc}")
         elapsed = max(0.0, time.time() - started_at)
@@ -6186,6 +6240,7 @@ async def on_startup() -> None:
                     True,
                     False,
                     True,
+                    "startup-recovery",
                 )
                 if _last_refresh_error:
                     log(f"[startup] recovery refresh finished with error: {_last_refresh_error}")
@@ -6269,8 +6324,8 @@ async def on_startup() -> None:
     # Background refresh loops are optional and disabled by default.
     if ENABLE_BACKGROUND_REFRESH:
         app.state.refresh_task = asyncio.create_task(refresh_loop())
-        app.state.fast_partial_refresh_task = asyncio.create_task(fast_partial_refresh_loop())
-        log("background refresh loops enabled")
+        app.state.fast_partial_refresh_task = None
+        log("background refresh loop enabled (full refresh only)")
     else:
         app.state.refresh_task = None
         app.state.fast_partial_refresh_task = None
@@ -6537,6 +6592,7 @@ async def manual_refresh(request: Request):
                     True,
                     False,
                     False,
+                    f"manual-refresh:{username}",
                 ),
                 timeout=refresh_wait_timeout,
             )
@@ -6689,6 +6745,7 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
                 True,
                 False,
                 False,
+                "checkpoint-recovery",
             )
             if ran:
                 break
@@ -6801,6 +6858,8 @@ async def debug_runtime_state():
         "cachedFp": _cached_fp[:12] if _cached_fp else None,
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
+        "refreshLockState": _lock_state_snapshot(_refresh_run_lock_state),
+        "partialRefreshLockState": _lock_state_snapshot(_partial_refresh_lock_state),
         "runtimeStrictGithubOnly": RUNTIME_STRICT_GITHUB_POINTER,
         "githubRuntimeSync": bool(GITHUB_TOKEN and GITHUB_REPO),
         "manualRefreshState": dict(_manual_refresh_state),
