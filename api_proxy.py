@@ -3263,10 +3263,14 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     if target_order_refs:
         log(f"[orders-cache] merged cache: {len(target_order_refs)} total order→KP entries for {len(kp_ref_set)} KPs")
 
-    if not target_order_refs:
-        # Last resort: scan payment purposes, extract order number hints,
-        # then try tail-pages on ЗаказКлиента for those specific numbers.
-        log(f"[orders-lazy] entering last-resort: target_refs empty, {len(kp_ref_set)} KPs to match")
+    unresolved_kp_refs = {kp_ref for kp_ref in kp_ref_set if not kp_to_orders.get(kp_ref)}
+    if unresolved_kp_refs:
+        # Last-resort for unresolved KPs: use the same number hints as block3
+        # payment-match table (from payment purpose text), then backfill order links.
+        log(
+            f"[orders-lazy] unresolved KPs before hint backfill: "
+            f"{len(unresolved_kp_refs)} of {len(kp_ref_set)}"
+        )
         purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
             "Document_ПоступлениеБезналичныхДенежныхСредств",
             headers,
@@ -3284,7 +3288,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                         purpose_number_hints.add(digits)
         log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in purpose_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
         if purpose_number_hints:
-            lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, kp_ref_set)
+            lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, unresolved_kp_refs)
             log(f"[orders-lazy] tail-page scan found {len(lazy_orders)} order→KP matches")
             for order_ref, kp_ref in lazy_orders.items():
                 order_to_kp[order_ref] = kp_ref
@@ -3292,6 +3296,9 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
             target_order_refs = set(order_to_kp.keys())
             if target_order_refs:
                 log(f"[orders-lazy] now have {len(target_order_refs)} target orders for {len(kp_ref_set)} KPs")
+            unresolved_after = {kp_ref for kp_ref in kp_ref_set if not kp_to_orders.get(kp_ref)}
+            if unresolved_after:
+                log(f"[orders-lazy] unresolved KPs after hint backfill: {len(unresolved_after)}")
 
     invoice_order_refs: set[str] = set()
     invoices_complete = False
