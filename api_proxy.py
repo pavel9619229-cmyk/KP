@@ -148,6 +148,84 @@ GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
 ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
+PAYMENT_MATCH_SELECT_FIELD_CANDIDATES = [
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ОбъектРасчетов_Key",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+        "РасшифровкаПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ОбъектРасчетов",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+        "РасшифровкаПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ЗаказКлиента",
+        "ЗаказКлиента_Type",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+        "РасшифровкаПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+        "РасшифровкаПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ОбъектРасчетов_Key",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ОбъектРасчетов",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ЗаказКлиента",
+        "ЗаказКлиента_Type",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+    ],
+    [
+        "Ref_Key",
+        "Date",
+        "Number",
+        "ДокументОснование",
+        "ДокументОснование_Type",
+        "НазначениеПлатежа",
+    ],
+]
 STATUS_KP_PROPERTY_KEY = os.getenv(
     "STATUS_KP_PROPERTY_KEY",
     "e1c7a0e4-4f8d-11f0-8d50-bc97e15eb091",
@@ -3136,6 +3214,74 @@ def _extract_order_refs_from_payment_breakdown(item: dict) -> set[str]:
     return refs
 
 
+def _extract_payment_candidate_order_refs(item: dict) -> set[str]:
+    refs: set[str] = set()
+
+    settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
+    if settlement_order:
+        refs.add(settlement_order)
+
+    direct_order = str(item.get("ЗаказКлиента") or "")
+    direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
+    if direct_order and (not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")):
+        refs.add(direct_order)
+
+    base_order = str(item.get("ДокументОснование") or "")
+    base_order_type = str(item.get("ДокументОснование_Type") or "")
+    if base_order and (not base_order_type or base_order_type.endswith("Document_ЗаказКлиента")):
+        refs.add(base_order)
+
+    refs.update(_extract_order_refs_from_payment_breakdown(item))
+    return {ref for ref in refs if ref}
+
+
+def _resolve_order_refs_to_target_kps(
+    order_refs: set[str], headers: dict, kp_ref_set: set[str]
+) -> dict[str, dict]:
+    resolved: dict[str, dict] = {}
+    target_order_refs = {str(ref or "").strip() for ref in order_refs if str(ref or "").strip()}
+    if not target_order_refs or not kp_ref_set:
+        return resolved
+
+    def _fetch_one(order_ref: str) -> tuple[str, dict]:
+        try:
+            payload, error = _get_json_with_retry(
+                f"{BASE}/Document_ЗаказКлиента(guid'{order_ref}')",
+                headers,
+                params={"$select": "Ref_Key,Number,ДокументОснование,ДокументОснование_Type"},
+                timeout=max(8.0, GROUP_CHECK_TIMEOUT_SECONDS),
+                retries=1,
+            )
+            if error or not isinstance(payload, dict):
+                return order_ref, {}
+
+            base_type = str(payload.get("ДокументОснование_Type") or "")
+            base_ref = str(payload.get("ДокументОснование") or "")
+            if not base_ref or not base_type.endswith("Document_КоммерческоеПредложениеКлиенту") or base_ref not in kp_ref_set:
+                return order_ref, {}
+
+            order_number = str(payload.get("Number") or "")
+            digits_trim = "".join(ch for ch in order_number if ch.isdigit()).lstrip("0")
+            compact_number = "".join(ch for ch in order_number.lower() if ch.isalnum())
+            return order_ref, {
+                "kp": base_ref,
+                "num": digits_trim,
+                "raw": order_number,
+                "compact": compact_number,
+            }
+        except Exception:
+            return order_ref, {}
+
+    with ThreadPoolExecutor(max_workers=min(12, max(1, len(target_order_refs)))) as pool:
+        futures = {pool.submit(_fetch_one, order_ref): order_ref for order_ref in target_order_refs}
+        for future in as_completed(futures):
+            order_ref, payload = future.result()
+            if payload:
+                resolved[order_ref] = payload
+
+    return resolved
+
+
 def _fetch_orders_by_number_hints(
     number_hints: set[str], headers: dict, kp_ref_set: set[str]
 ) -> dict[str, str]:
@@ -3381,9 +3527,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
-        [
-            ["Ref_Key", "Date", "Number", "НазначениеПлатежа"],
-        ],
+        PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
         timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
     if not payments_complete and not payment_pages:
@@ -3392,27 +3536,15 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
         # consistent with Block 3 showing "нет совпадений" when data unavailable.
         log("[payments] scan completely unavailable; treating all KPs as unpaid (no stale cache)")
 
+    unresolved_payment_order_refs: set[str] = set()
     for batch in payment_pages:
         for item in batch:
-            settlement_order = str(item.get("ОбъектРасчетов_Key") or item.get("ОбъектРасчетов") or "")
-            if settlement_order in target_order_refs:
-                payment_order_hits.add(settlement_order)
-
-            direct_order = str(item.get("ЗаказКлиента") or "")
-            direct_order_type = str(item.get("ЗаказКлиента_Type") or "")
-            if direct_order in target_order_refs and (
-                not direct_order_type or direct_order_type.endswith("Document_ЗаказКлиента")
-            ):
-                payment_order_hits.add(direct_order)
-
-            base_order = str(item.get("ДокументОснование") or "")
-            base_order_type = str(item.get("ДокументОснование_Type") or "")
-            if base_order in target_order_refs and base_order_type.endswith("Document_ЗаказКлиента"):
-                payment_order_hits.add(base_order)
-
-            for breakdown_ref in _extract_order_refs_from_payment_breakdown(item):
-                if breakdown_ref in target_order_refs:
-                    payment_order_hits.add(breakdown_ref)
+            candidate_order_refs = _extract_payment_candidate_order_refs(item)
+            for order_ref in candidate_order_refs:
+                if order_ref in target_order_refs:
+                    payment_order_hits.add(order_ref)
+                elif order_ref not in order_to_kp:
+                    unresolved_payment_order_refs.add(order_ref)
 
             purpose = str(item.get("НазначениеПлатежа") or "").lower()
             if not purpose:
@@ -3423,6 +3555,30 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
                 purpose_num = (m.group(1) or "").lstrip("0")
                 if purpose_num:
                     purpose_num_set.add(purpose_num)
+
+    if unresolved_payment_order_refs:
+        resolved_orders = _resolve_order_refs_to_target_kps(unresolved_payment_order_refs, headers, kp_ref_set)
+        if resolved_orders:
+            for order_ref, payload in resolved_orders.items():
+                kp_ref = str(payload.get("kp") or "")
+                if not kp_ref:
+                    continue
+                order_to_kp[order_ref] = kp_ref
+                kp_to_orders.setdefault(kp_ref, set()).add(order_ref)
+                num = str(payload.get("num") or "")
+                raw = str(payload.get("raw") or "")
+                compact = str(payload.get("compact") or "")
+                if num:
+                    order_short_numbers[order_ref] = num
+                if compact:
+                    order_compact_numbers[order_ref] = compact
+            target_order_refs = set(order_to_kp.keys())
+
+            for batch in payment_pages:
+                for item in batch:
+                    for order_ref in _extract_payment_candidate_order_refs(item):
+                        if order_ref in target_order_refs:
+                            payment_order_hits.add(order_ref)
 
     # Merge payment seed: covers payments missed by tail-page scan (e.g. early-numbered docs).
     _load_payment_seed()
@@ -3795,9 +3951,7 @@ def _build_payment_match_table(headers: dict) -> dict:
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
-        [
-            ["Ref_Key", "Date", "Number", "НазначениеПлатежа"],
-        ],
+        PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
         timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
     )
 
@@ -3820,7 +3974,25 @@ def _build_payment_match_table(headers: dict) -> dict:
                 "payShort": pay_short,
                 "purpose": purpose,
                 "purposeNums": purpose_nums,
+                "orderRefs": sorted(_extract_payment_candidate_order_refs(item)),
             })
+
+    unresolved_payment_order_refs = {
+        order_ref
+        for pay in pay_rows
+        for order_ref in pay.get("orderRefs", [])
+        if order_ref and order_ref not in order_info
+    }
+    if unresolved_payment_order_refs:
+        resolved_orders = _resolve_order_refs_to_target_kps(unresolved_payment_order_refs, headers, target_kp_refs)
+        for order_ref, payload in resolved_orders.items():
+            kp_ref = str(payload.get("kp") or "")
+            if not kp_ref:
+                continue
+            raw = str(payload.get("raw") or payload.get("num") or "")
+            short = str(payload.get("num") or "")
+            order_info[order_ref] = {"kp_ref": kp_ref, "raw": raw, "short": short}
+            kp_to_orders.setdefault(kp_ref, []).append(order_ref)
 
     # Merge payment seed: add seeded entries whose payShort is not already in live scan.
     _load_payment_seed()
@@ -3857,7 +4029,7 @@ def _build_payment_match_table(headers: dict) -> dict:
         # Find payments that reference this order's number in their purpose
         matched_payments = [
             p for p in pay_rows
-            if order_short and order_short in p["purposeNums"]
+            if oref in p.get("orderRefs", []) or (order_short and order_short in p["purposeNums"])
         ]
 
         if matched_payments:
