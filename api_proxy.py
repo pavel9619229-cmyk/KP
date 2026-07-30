@@ -4081,6 +4081,64 @@ def _build_payment_match_table(headers: dict) -> dict:
     }
 
 
+def _build_payment_coverage_audit(max_rows: int = 300) -> dict:
+    """Compare runtime payment flags with block3 payment-match scan for latest KP rows."""
+    if not _cached_rows:
+        return {
+            "ok": False,
+            "detail": "KP data is not available yet",
+            "rowsChecked": 0,
+            "mismatchCount": 0,
+            "mismatches": [],
+        }
+
+    headers = _build_headers()
+    table = _build_payment_match_table(headers)
+    table_rows = table.get("rows") if isinstance(table, dict) else []
+    table_rows = table_rows if isinstance(table_rows, list) else []
+
+    matched_kp_numbers: set[str] = set()
+    for row in table_rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("match") or "") != "СОВПАДЕНИЕ":
+            continue
+        kp_num = _normalize_kp_number(str(row.get("kpNum") or ""))
+        if kp_num:
+            matched_kp_numbers.add(kp_num)
+
+    rows_checked = list(_cached_rows[: max(1, max_rows)])
+    mismatches: list[dict] = []
+    for row in rows_checked:
+        kp_num = _normalize_kp_number(str(row.get("number") or ""))
+        if not kp_num:
+            continue
+        block3_has_payment = kp_num in matched_kp_numbers
+        runtime_payment = bool(row.get("paymentReceived"))
+        if block3_has_payment and not runtime_payment:
+            mismatches.append(
+                {
+                    "number": str(row.get("number") or ""),
+                    "refKey": str(row.get("refKey") or ""),
+                    "customerName": str(row.get("customerName") or ""),
+                    "managerName": str(row.get("managerName") or ""),
+                    "paymentReceived": runtime_payment,
+                    "block3HasPayment": block3_has_payment,
+                }
+            )
+
+    return {
+        "ok": True,
+        "detail": "completed",
+        "rowsChecked": len(rows_checked),
+        "ordersScanComplete": bool(table.get("ordersScanComplete")) if isinstance(table, dict) else False,
+        "paymentsScanComplete": bool(table.get("paymentsScanComplete")) if isinstance(table, dict) else False,
+        "block3MatchedKpCount": len(matched_kp_numbers),
+        "mismatchCount": len(mismatches),
+        "mismatches": mismatches,
+    }
+
+
 def resolve_customer_name_for_ref(
     ref_key: str,
     headers: dict,
@@ -7109,6 +7167,22 @@ async def admin_payment_match_table(request: Request):
     headers = _build_headers()
     result = await asyncio.to_thread(_build_payment_match_table, headers)
     return {"ok": True, **result}
+
+
+@app.get("/api/admin/payment-coverage-audit")
+async def admin_payment_coverage_audit(request: Request):
+    # Same auth model as payment match table: admin cookie OR user role=admin.
+    is_admin = _get_admin_username(request)
+    if not is_admin:
+        user = _get_user_from_request(request)
+        role = str(user.get("role") or "").strip().lower()
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+    result = await asyncio.to_thread(_build_payment_coverage_audit, 300)
+    if result.get("ok") is False and result.get("detail") == "KP data is not available yet":
+        raise HTTPException(status_code=503, detail=result.get("detail"))
+    return result
 
 
 @app.post("/api/admin/seed-payment")
