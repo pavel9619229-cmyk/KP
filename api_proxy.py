@@ -137,7 +137,7 @@ STARTUP_ENRICH_ENABLED = os.getenv("STARTUP_ENRICH_ENABLED", "false").strip().lo
     "yes",
     "on",
 }
-MANUAL_REFRESH_INCLUDE_STAGE6 = os.getenv("MANUAL_REFRESH_INCLUDE_STAGE6", "false").strip().lower() in {
+MANUAL_REFRESH_INCLUDE_STAGE6 = os.getenv("MANUAL_REFRESH_INCLUDE_STAGE6", "true").strip().lower() in {
     "1",
     "true",
     "yes",
