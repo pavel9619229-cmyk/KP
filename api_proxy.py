@@ -740,6 +740,13 @@ def _manager_name_is_known(value: str | None) -> bool:
     return normalized not in {"не определен", "неопределен"}
 
 
+def _coerce_manager_filled(row: dict) -> bool:
+    if _manager_name_is_known(_row_manager_name(row)):
+        return True
+    explicit = row.get("managerFilled")
+    return bool(explicit) if explicit is not None else False
+
+
 def _find_access_user(username: str) -> dict | None:
     wanted = _normalize_username(username)
     if not wanted:
@@ -2416,6 +2423,7 @@ def apply_storage_defaults(row: dict) -> dict:
         row["managerName"] = UNKNOWN_MANAGER_NAME
 
     row["clientFilled"] = is_client_filled(row.get("customerName"))
+    row["managerFilled"] = _coerce_manager_filled(row)
     for key, default_value in STORAGE_DEFAULTS.items():
         if key not in row:
             row[key] = default_value
@@ -2426,6 +2434,7 @@ def apply_runtime_defaults(row: dict) -> dict:
     row["clientFilled"] = is_client_filled(row.get("customerName"))
     if not str(row.get("managerName") or "").strip():
         row["managerName"] = UNKNOWN_MANAGER_NAME
+    row["managerFilled"] = _coerce_manager_filled(row)
     return row
 
 
@@ -5394,6 +5403,7 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
                 row["managerFilled"] = resolved["managerFilled"]
             if resolved.get("managerName"):
                 row["managerName"] = resolved["managerName"]
+            row["managerFilled"] = _coerce_manager_filled(row)
             patch = {
                 "refKey": ref_key,
                 "managerName": row.get("managerName") or UNKNOWN_MANAGER_NAME,
