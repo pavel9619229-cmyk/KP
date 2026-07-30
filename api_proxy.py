@@ -145,6 +145,8 @@ MANUAL_REFRESH_INCLUDE_STAGE6 = os.getenv("MANUAL_REFRESH_INCLUDE_STAGE6", "true
 }
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
+GROUP_SCAN_MAX_PAGES = int(os.getenv("GROUP_SCAN_MAX_PAGES", "80"))
+GROUP_SCAN_MAX_SECONDS = float(os.getenv("GROUP_SCAN_MAX_SECONDS", "240"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
 ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
@@ -3146,6 +3148,9 @@ def _collect_tail_pages(
     timeout: float = GROUP_CHECK_TIMEOUT_SECONDS,
 ) -> tuple[list[list], bool]:
     pages: list[list] = []
+    started_at = time.time()
+    max_pages = max(1, GROUP_SCAN_MAX_PAGES)
+    max_seconds = max(10.0, GROUP_SCAN_MAX_SECONDS)
     try:
         response = requests.get(
             f"{BASE}/{entity_name}/$count",
@@ -3183,6 +3188,14 @@ def _collect_tail_pages(
             return pages, True
 
         pages.append(batch)
+
+        if len(pages) >= max_pages:
+            log(f"[{entity_name}] tail scan reached page limit {len(pages)}/{max_pages}")
+            return pages, False
+        if (time.time() - started_at) >= max_seconds:
+            elapsed = time.time() - started_at
+            log(f"[{entity_name}] tail scan reached time limit {elapsed:.1f}s/{max_seconds:.1f}s")
+            return pages, False
 
         batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch if isinstance(item, dict)]
         batch_dates = [d for d in batch_dates if d is not None]
