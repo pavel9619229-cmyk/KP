@@ -150,6 +150,7 @@ GROUP_SCAN_MAX_SECONDS = float(os.getenv("GROUP_SCAN_MAX_SECONDS", "240"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
 ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
+ORDERS_HINT_HEAD_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_HEAD_SCAN_MAX_PAGES", "20"))
 PAYMENT_MATCH_SELECT_FIELD_CANDIDATES = [
     [
         "Ref_Key",
@@ -3357,26 +3358,13 @@ def _fetch_orders_by_number_hints(
 
     page_size = max(5, ORDERS_HINT_SCAN_PAGE_SIZE)
     max_pages = max(1, ORDERS_HINT_SCAN_MAX_PAGES)
-    skip = ((total_count - 1) // page_size) * page_size
+    tail_skip = ((total_count - 1) // page_size) * page_size
     select_expr = "Ref_Key,Date,Number,ДокументОснование,ДокументОснование_Type"
-    pages_scanned = 0
+    pages_scanned_tail = 0
+    pages_scanned_head = 0
     matched_kp_refs: set[str] = set()
 
-    while pages_scanned < max_pages:
-        payload, error = _get_json_with_retry(
-            f"{BASE}/Document_ЗаказКлиента",
-            headers,
-            params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
-            timeout=max(20.0, GROUP_CHECK_TIMEOUT_SECONDS),
-            retries=2,
-        )
-        if error or not isinstance(payload, dict):
-            break
-
-        batch = payload.get("value", [])
-        if not isinstance(batch, list) or not batch:
-            break
-
+    def _process_batch(batch: list) -> None:
         for item in batch:
             if not isinstance(item, dict):
                 continue
@@ -3399,6 +3387,24 @@ def _fetch_orders_by_number_hints(
                 result[order_ref] = base_ref
                 matched_kp_refs.add(base_ref)
 
+    # Pass 1: scan from tail (recent orders).
+    while pages_scanned_tail < max_pages:
+        payload, error = _get_json_with_retry(
+            f"{BASE}/Document_ЗаказКлиента",
+            headers,
+            params={"$select": select_expr, "$top": str(page_size), "$skip": str(tail_skip)},
+            timeout=max(20.0, GROUP_CHECK_TIMEOUT_SECONDS),
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            break
+
+        batch = payload.get("value", [])
+        if not isinstance(batch, list) or not batch:
+            break
+
+        _process_batch(batch)
+
         if len(matched_kp_refs) >= len(kp_ref_set):
             break
 
@@ -3407,16 +3413,50 @@ def _fetch_orders_by_number_hints(
         if batch_dates and max(batch_dates) < TARGET_START:
             break
 
-        pages_scanned += 1
-        if skip == 0:
+        pages_scanned_tail += 1
+        if tail_skip == 0:
             break
-        skip = max(0, skip - page_size)
+        tail_skip = max(0, tail_skip - page_size)
 
-    if pages_scanned >= max_pages:
+    if pages_scanned_tail >= max_pages:
         log(
             f"[orders-lazy] hint scan page limit reached "
-            f"({pages_scanned}/{max_pages}), matched_kps={len(matched_kp_refs)}"
+            f"({pages_scanned_tail}/{max_pages}), matched_kps={len(matched_kp_refs)}"
         )
+
+    # Pass 2: if unresolved remains, scan from head too (older order numbers).
+    unresolved_after_tail = len(matched_kp_refs) < len(kp_ref_set)
+    if unresolved_after_tail:
+        head_max_pages = max(0, ORDERS_HINT_HEAD_SCAN_MAX_PAGES)
+        head_skip = 0
+        while pages_scanned_head < head_max_pages:
+            payload, error = _get_json_with_retry(
+                f"{BASE}/Document_ЗаказКлиента",
+                headers,
+                params={"$select": select_expr, "$top": str(page_size), "$skip": str(head_skip)},
+                timeout=max(20.0, GROUP_CHECK_TIMEOUT_SECONDS),
+                retries=2,
+            )
+            if error or not isinstance(payload, dict):
+                break
+
+            batch = payload.get("value", [])
+            if not isinstance(batch, list) or not batch:
+                break
+
+            _process_batch(batch)
+
+            if len(matched_kp_refs) >= len(kp_ref_set):
+                break
+
+            pages_scanned_head += 1
+            head_skip += page_size
+
+        if pages_scanned_head:
+            log(
+                f"[orders-lazy] head scan pages={pages_scanned_head}/{head_max_pages}, "
+                f"matched_kps={len(matched_kp_refs)}"
+            )
 
     return result
 
