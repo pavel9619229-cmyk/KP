@@ -146,6 +146,8 @@ MANUAL_REFRESH_INCLUDE_STAGE6 = os.getenv("MANUAL_REFRESH_INCLUDE_STAGE6", "true
 COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40"))
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
+ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
+ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
 STATUS_KP_PROPERTY_KEY = os.getenv(
     "STATUS_KP_PROPERTY_KEY",
     "e1c7a0e4-4f8d-11f0-8d50-bc97e15eb091",
@@ -3153,16 +3155,45 @@ def _fetch_orders_by_number_hints(
         hint_patterns.add(digits.zfill(3))
         hint_patterns.add(digits.zfill(6))
 
-    # Scan tail pages with small page_size to avoid timeouts
-    pages, complete = _collect_tail_pages(
-        "Document_ЗаказКлиента",
-        headers,
-        ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
-        page_size=5,  # small page, high timeout
-        timeout=60.0,
-    )
+    # Bounded tail scan: this fallback must not consume the entire refresh budget.
+    try:
+        count_resp = requests.get(
+            f"{BASE}/Document_ЗаказКлиента/$count",
+            headers=headers,
+            timeout=max(20.0, GROUP_CHECK_TIMEOUT_SECONDS),
+            verify=False,
+        )
+        if count_resp.status_code != 200:
+            return result
+        total_count = int(str(count_resp.text or "0").strip() or "0")
+    except Exception:
+        return result
 
-    for batch in pages:
+    if total_count <= 0:
+        return result
+
+    page_size = max(5, ORDERS_HINT_SCAN_PAGE_SIZE)
+    max_pages = max(1, ORDERS_HINT_SCAN_MAX_PAGES)
+    skip = ((total_count - 1) // page_size) * page_size
+    select_expr = "Ref_Key,Date,Number,ДокументОснование,ДокументОснование_Type"
+    pages_scanned = 0
+    matched_kp_refs: set[str] = set()
+
+    while pages_scanned < max_pages:
+        payload, error = _get_json_with_retry(
+            f"{BASE}/Document_ЗаказКлиента",
+            headers,
+            params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
+            timeout=max(20.0, GROUP_CHECK_TIMEOUT_SECONDS),
+            retries=2,
+        )
+        if error or not isinstance(payload, dict):
+            break
+
+        batch = payload.get("value", [])
+        if not isinstance(batch, list) or not batch:
+            break
+
         for item in batch:
             if not isinstance(item, dict):
                 continue
@@ -3183,10 +3214,28 @@ def _fetch_orders_by_number_hints(
                 and base_ref in kp_ref_set
             ):
                 result[order_ref] = base_ref
+                matched_kp_refs.add(base_ref)
+
+        if len(matched_kp_refs) >= len(kp_ref_set):
+            break
+
+        batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch if isinstance(item, dict)]
+        batch_dates = [d for d in batch_dates if d is not None]
+        if batch_dates and max(batch_dates) < TARGET_START:
+            break
+
+        pages_scanned += 1
+        if skip == 0:
+            break
+        skip = max(0, skip - page_size)
+
+    if pages_scanned >= max_pages:
+        log(
+            f"[orders-lazy] hint scan page limit reached "
+            f"({pages_scanned}/{max_pages}), matched_kps={len(matched_kp_refs)}"
+        )
 
     return result
-
-    return refs
 
 
 def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
