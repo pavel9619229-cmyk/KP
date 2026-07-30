@@ -6326,6 +6326,8 @@ async def manual_refresh_force(request: Request):
 
 async def _run_system_checkpoint_recovery(trigger: str) -> None:
     """Best-effort auto recovery for pending refresh checkpoints."""
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
+
     now_msk = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
     _set_manual_refresh_state(
         running=True,
@@ -6358,8 +6360,57 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
             await asyncio.sleep(5)
 
         if ran and not _last_refresh_error:
-            _set_manual_refresh_state(lastOk=True, lastError=None)
-            log("[checkpoint-recovery] completed successfully")
+            # Recovery must publish the confirmed pointer too; otherwise strict
+            # mode keeps serving an older GitHub snapshot forever.
+            candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+            candidate_meta = _read_runtime_meta()
+            if not candidate_rows:
+                raise RuntimeError("checkpoint recovery produced empty runtime snapshot")
+
+            publish_source = "github-current"
+            try:
+                github_rows, _, github_pointer = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _publish_confirmed_runtime_snapshot_or_raise,
+                        candidate_rows,
+                        candidate_meta,
+                    ),
+                    timeout=180,
+                )
+            except Exception as publish_exc:
+                if RUNTIME_STRICT_GITHUB_POINTER:
+                    raise RuntimeError(
+                        "checkpoint recovery strict publish failed: "
+                        f"{type(publish_exc).__name__}: {publish_exc}"
+                    ) from publish_exc
+
+                github_rows = list(candidate_rows)
+                github_meta = _runtime_normalize_meta(
+                    dict(candidate_meta or {}),
+                    github_rows,
+                    pointer=_read_runtime_current_pointer(),
+                    fallback_source="consistency-recovery:checkpoint-fallback",
+                )
+                github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
+                publish_source = "local-runtime"
+                log(
+                    "[checkpoint-recovery] github publish failed in non-strict mode; "
+                    "using local runtime snapshot"
+                )
+
+            _cached_rows = list(github_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _last_confirmed_runtime_sync_check = time.time()
+            _last_refresh_error = None
+            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+            confirmed_version = github_pointer.get("version") if github_pointer else None
+            _set_manual_refresh_state(lastOk=True, lastError=None, confirmedVersion=confirmed_version)
+            log(
+                "[checkpoint-recovery] completed successfully "
+                f"(rows={len(_cached_rows)}, confirmedVersion={confirmed_version}, source={publish_source})"
+            )
         elif ran and _last_refresh_error:
             error_text = str(_last_refresh_error)
             _set_manual_refresh_state(lastOk=False, lastError=error_text)
@@ -6414,6 +6465,8 @@ async def debug_runtime_state():
         "cachedFp": _cached_fp[:12] if _cached_fp else None,
         "lastRefresh": _last_refresh,
         "lastRefreshError": _last_refresh_error,
+        "runtimeStrictGithubOnly": RUNTIME_STRICT_GITHUB_POINTER,
+        "githubRuntimeSync": bool(GITHUB_TOKEN and GITHUB_REPO),
         "manualRefreshState": dict(_manual_refresh_state),
         "startupLiveRefresh": _startup_live_refresh_snapshot(),
         "localMeta": local_meta,
