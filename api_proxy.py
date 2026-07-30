@@ -160,6 +160,12 @@ GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main").strip()
 GITHUB_RUNTIME_BRANCH = os.getenv("GITHUB_RUNTIME_BRANCH", GITHUB_BRANCH).strip() or GITHUB_BRANCH
 GITHUB_RUNTIME_CURRENT_PATH = os.getenv("GITHUB_RUNTIME_CURRENT_PATH", "data/kp_runtime_current.json").strip()
 GITHUB_RUNTIME_VERSIONS_DIR = os.getenv("GITHUB_RUNTIME_VERSIONS_DIR", "data/runtime_versions").strip().strip("/")
+RUNTIME_STRICT_GITHUB_POINTER = os.getenv("RUNTIME_STRICT_GITHUB_POINTER", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 GITHUB_RULES_PATH = os.getenv("GITHUB_RULES_PATH", "data/status_rules.json").strip()
 ACCESS_RIGHTS_FILE = os.getenv("ACCESS_RIGHTS_FILE", "data/access_rights.json").strip()
 ADMIN_USER = os.getenv("ADMIN_USER", "admin").strip()
@@ -4464,6 +4470,11 @@ def _runtime_pick_authoritative_state(
     local_ready = bool(local_rows and local_version > 0 and local_generated_at is not None)
     github_ready = bool(github_rows and github_version > 0 and github_generated_at is not None)
 
+    if RUNTIME_STRICT_GITHUB_POINTER:
+        if github_ready:
+            return "github", github_rows, github_meta, github_pointer
+        return "none", [], {}, {}
+
     if local_ready and github_ready:
         if local_version > github_version:
             return "local", local_rows, local_meta, local_pointer
@@ -6223,6 +6234,15 @@ async def manual_refresh(request: Request):
                 )
                 log(f"[refresh] github publish done in {time.time()-_publish_t0:.1f}s")
             except Exception as publish_exc:
+                if RUNTIME_STRICT_GITHUB_POINTER:
+                    log(
+                        "[refresh] versioned github publish failed in strict mode: "
+                        f"{type(publish_exc).__name__}: {publish_exc}"
+                    )
+                    raise RuntimeError(
+                        f"strict runtime publish failed: {type(publish_exc).__name__}: {publish_exc}"
+                    ) from publish_exc
+
                 log(
                     f"[refresh] versioned github publish failed: {type(publish_exc).__name__}: {publish_exc}; "
                     "using local runtime snapshot instead"
