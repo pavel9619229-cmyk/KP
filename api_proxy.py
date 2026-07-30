@@ -732,6 +732,14 @@ def _row_manager_name(row: dict) -> str:
     return manager or UNKNOWN_MANAGER_NAME
 
 
+def _manager_name_is_known(value: str | None) -> bool:
+    manager = str(value or "").strip()
+    if not manager:
+        return False
+    normalized = manager.casefold().replace("ё", "е")
+    return normalized not in {"не определен", "неопределен"}
+
+
 def _find_access_user(username: str) -> dict | None:
     wanted = _normalize_username(username)
     if not wanted:
@@ -4813,8 +4821,22 @@ def build_known_rows_lookup() -> dict:
     def _append(rows: list) -> None:
         for source_row in list(rows or []):
             number = source_row.get("number")
-            if number and number not in known:
+            if not number:
+                continue
+
+            existing_row = known.get(number)
+            if not existing_row:
                 known[number] = source_row
+                continue
+
+            existing_manager = _row_manager_name(existing_row)
+            candidate_manager = _row_manager_name(source_row)
+            if _manager_name_is_known(candidate_manager) and not _manager_name_is_known(existing_manager):
+                merged_row = dict(existing_row)
+                merged_row["managerName"] = candidate_manager
+                if source_row.get("managerFilled") is not None:
+                    merged_row["managerFilled"] = source_row.get("managerFilled")
+                known[number] = merged_row
 
     # 1) In-memory cache (fast path for running API process)
     _append(list(_cached_rows))
