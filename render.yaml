@@ -30,7 +30,9 @@ services:
       - key: REFRESH_SECONDS
         value: "60"
       - key: ENABLE_BACKGROUND_REFRESH
-        value: "false"
+        value: "true"
+      - key: MANUAL_REFRESH_INCLUDE_STAGE6
+        value: "true"
       - key: RENDER_API_KEY
         sync: false
       - key: RENDER_SERVICE_NAME
