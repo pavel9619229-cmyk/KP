@@ -33,6 +33,12 @@ services:
         value: "true"
       - key: MANUAL_REFRESH_INCLUDE_STAGE6
         value: "true"
+      - key: GROUP_SCAN_MAX_PAGES
+        value: "120"
+      - key: GROUP_SCAN_MAX_SECONDS
+        value: "300"
+      - key: ORDERS_HINT_HEAD_SCAN_MAX_PAGES
+        value: "120"
       - key: RENDER_API_KEY
         sync: false
       - key: RENDER_SERVICE_NAME
