@@ -2430,7 +2430,10 @@ def resolve_manager_name_for_ref(
     if not ref_key:
         return None
     if use_cache and ref_key in _manager_name_cache:
-        return _manager_name_cache[ref_key]
+        cached_name = str(_manager_name_cache.get(ref_key) or "").strip()
+        # Do not trust cached UNKNOWN here: it can come from transient nav timeouts.
+        if cached_name and cached_name != UNKNOWN_MANAGER_NAME:
+            return cached_name
 
     row = doc or _fetch_doc_by_ref(ref_key, headers, timeout=DOC_TIMEOUT_SECONDS)
     if not row:
@@ -2455,14 +2458,15 @@ def resolve_manager_name_for_ref(
         )
         if nav_resp.status_code == 200:
             nav_obj = nav_resp.json() if isinstance(nav_resp.json(), dict) else {}
-            manager_name = str(nav_obj.get("Description") or "").strip() or UNKNOWN_MANAGER_NAME
-            _manager_name_cache[ref_key] = manager_name
-            return manager_name
+            manager_name = str(nav_obj.get("Description") or "").strip()
+            if manager_name:
+                _manager_name_cache[ref_key] = manager_name
+                return manager_name
+            return None
     except Exception:
         pass
 
-    _manager_name_cache[ref_key] = UNKNOWN_MANAGER_NAME
-    return UNKNOWN_MANAGER_NAME
+    return None
 
 
 def _resolve_comment_flag_for_ref(
@@ -5345,10 +5349,10 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
             doc = docs_by_ref.get(ref_key) or {}
             result: dict = {"refKey": ref_key}
             if doc:
-                manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
                 if manager_filled is not None:
                     result["managerFilled"] = manager_filled
-                    manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=True)
+                    manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
                     if manager_name:
                         result["managerName"] = manager_name
             return result
