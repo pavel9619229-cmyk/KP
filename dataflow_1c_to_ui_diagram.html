@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Схема: путь данных из 1С в UI</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --ink: #182236;
+      --muted: #4e5d7a;
+      --line: #2f3e5f;
+      --card: #ffffff;
+      --accent: #4f6ee8;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    }
+
+    .page {
+      width: 1400px;
+      min-height: 980px;
+      margin: 0 auto;
+      padding: 36px 32px 48px;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 36px;
+      line-height: 1.2;
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      font-size: 18px;
+      color: var(--muted);
+    }
+
+    .board {
+      position: relative;
+      width: 1336px;
+      height: 820px;
+      background: linear-gradient(180deg, #f9fbff, #f3f6ff);
+      border: 1px solid #d8e0f3;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .node {
+      position: absolute;
+      background: var(--card);
+      border: 2px solid #2f3e5f;
+      border-radius: 14px;
+      box-shadow: 0 8px 18px rgba(21, 39, 79, 0.08);
+      padding: 12px 14px;
+      box-sizing: border-box;
+    }
+
+    .node h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .node p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.35;
+      color: #25334f;
+    }
+
+    .n1 { left: 28px; top: 30px; width: 280px; height: 148px; }
+    .n2 { left: 362px; top: 30px; width: 304px; height: 168px; }
+    .n3 { left: 720px; top: 30px; width: 286px; height: 170px; }
+    .n4 { left: 1060px; top: 30px; width: 250px; height: 170px; }
+
+    .n5 { left: 720px; top: 270px; width: 286px; height: 170px; }
+    .n6 { left: 1060px; top: 270px; width: 250px; height: 170px; }
+
+    .n7 { left: 720px; top: 520px; width: 286px; height: 164px; }
+    .n8 { left: 1060px; top: 520px; width: 250px; height: 164px; }
+
+    .n9 { left: 362px; top: 520px; width: 304px; height: 164px; }
+    .n10 { left: 28px; top: 520px; width: 280px; height: 164px; }
+
+    .legend {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 24px;
+      font-size: 15px;
+      color: #334566;
+      background: #eef3ff;
+      border: 1px solid #cfdaff;
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    svg {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .arrow {
+      stroke: var(--line);
+      stroke-width: 3;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .arrow-dash {
+      stroke: #6c7fb1;
+      stroke-width: 3;
+      fill: none;
+      stroke-dasharray: 9 7;
+      marker-end: url(#arrow);
+    }
+
+    .label {
+      font-size: 14px;
+      fill: var(--accent);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Блок-схема: движение данных из 1С в UI</h1>
+    <p class="subtitle">Проект KP · путь после обработки через OData до отображения в интерфейсе</p>
+
+    <div class="board">
+      <svg viewBox="0 0 1336 820" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#2f3e5f"/>
+          </marker>
+        </defs>
+
+        <path class="arrow" d="M308,104 L362,104"/>
+        <path class="arrow" d="M666,116 L720,116"/>
+        <path class="arrow" d="M1006,116 L1060,116"/>
+
+        <path class="arrow" d="M1140,200 L1140,270"/>
+        <path class="arrow" d="M1006,355 L1060,355"/>
+
+        <path class="arrow" d="M1140,440 L1140,520"/>
+        <path class="arrow" d="M1006,602 L1060,602"/>
+
+        <path class="arrow" d="M720,602 L666,602"/>
+        <path class="arrow" d="M362,602 L308,602"/>
+
+        <path class="arrow-dash" d="M1140,684 L1140,760 L168,760 L168,684"/>
+        <text class="label" x="602" y="752">обратная связь: новые действия в UI вызывают API и запускают следующий цикл</text>
+      </svg>
+
+      <section class="node n1">
+        <h2>1) 1С OData</h2>
+        <p>Источник документов КП, реквизитов, комментариев, статусов и связанных данных.</p>
+      </section>
+
+      <section class="node n2">
+        <h2>2) Backend fetch</h2>
+        <p>Сервис API читает данные из 1С, нормализует поля и собирает строки КП.</p>
+      </section>
+
+      <section class="node n3">
+        <h2>3) Обработка правил</h2>
+        <p>Расчет бизнес-статусов, enrichment, подготовка полей для отображения и действий.</p>
+      </section>
+
+      <section class="node n4">
+        <h2>4) Оперативный кэш</h2>
+        <p>Данные попадают в память процесса: <strong>_cached_rows</strong>.</p>
+      </section>
+
+      <section class="node n5">
+        <h2>5) Runtime-кэш (файлы)</h2>
+        <p>Снимки записываются в: <br>data/kp_runtime_cache.json + meta/current.</p>
+      </section>
+
+      <section class="node n6">
+        <h2>6) Версионирование + GitHub</h2>
+        <p>Формируются версии в data/runtime_versions, затем снимки и current-pointer публикуются в GitHub.</p>
+      </section>
+
+      <section class="node n7">
+        <h2>7) API выдача</h2>
+        <p>Клиент получает данные через <strong>/api/kp/all</strong> и обновления через <strong>/ws/kp</strong>.</p>
+      </section>
+
+      <section class="node n8">
+        <h2>8) UI Dashboard</h2>
+        <p>Интерфейс рисует карточки, статусы, фильтры и кнопки обработки.</p>
+      </section>
+
+      <section class="node n9">
+        <h2>9) Действие пользователя</h2>
+        <p>Кнопки в UI вызывают backend endpoint (например, обработка статуса).</p>
+      </section>
+
+      <section class="node n10">
+        <h2>10) PATCH в 1С</h2>
+        <p>Backend отправляет изменения обратно в 1С по OData (комментарии/статусы).</p>
+      </section>
+
+      <div class="legend">
+        Поток слева направо и сверху вниз: 1С → backend → кэш → API → UI. После действий в UI цикл повторяется через backend обратно в 1С.
+      </div>
+    </div>
+  </div>
+</body>
+</html>
