@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-31T11:02:13.881148+00:00",
-  "refreshStartedAt": "2026-07-31T11:02:13.880002+00:00",
+  "generatedAt": "2026-07-31T12:33:34.345655+00:00",
+  "refreshStartedAt": "2026-07-31T11:48:26.188769+00:00",
   "rowCount": 300,
-  "writeSource": "payments-only-kp-seed:709",
+  "writeSource": "full-refresh",
   "cycleVersion": 227,
   "last1cLoadedVersion": 227,
-  "last1cLoadedAt": "2026-07-31T11:02:13.881148+00:00"
+  "last1cLoadedAt": "2026-07-31T12:33:34.345655+00:00"
 }
