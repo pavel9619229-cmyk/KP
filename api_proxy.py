@@ -6233,28 +6233,42 @@ def refresh_comment_first_line_only() -> dict:
     return {"ok": True, "touched": touched, "rows": len(refreshed)}
 
 
-def refresh_payments_only_for_cached_rows(cycle_owner: str = "payments-only-refresh") -> dict:
+def refresh_payments_only_for_cached_rows(
+    cycle_owner: str = "payments-only-refresh",
+    allow_when_refresh_busy: bool = False,
+) -> dict:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
-    source_rows = list(_cached_rows) if _cached_rows else []
-    if not source_rows:
-        source_rows = load_fresh_runtime_rows() or []
-    if not source_rows:
-        return {"ok": False, "error": "empty-cache"}
+    acquired_run_lock = False
+    forced_mode = False
 
-    if not _refresh_run_lock.acquire(blocking=False):
+    if _refresh_run_lock.acquire(blocking=False):
+        acquired_run_lock = True
+    else:
         owner = str(_refresh_run_lock_state.get("owner") or "unknown")
-        log(f"payments-only refresh skipped: another refresh cycle is running (owner={owner})")
-        return {"ok": False, "skipped": "another-refresh-running", "owner": owner}
+        if not allow_when_refresh_busy:
+            log(f"payments-only refresh skipped: another refresh cycle is running (owner={owner})")
+            return {"ok": False, "skipped": "another-refresh-running", "owner": owner}
+        forced_mode = True
+        log(f"payments-only refresh: proceeding in isolated mode while refresh lock is busy (owner={owner})")
+
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
-        _refresh_run_lock.release()
+        if acquired_run_lock:
+            _refresh_run_lock.release()
         log(f"payments-only refresh skipped: already running (owner={owner})")
         return {"ok": False, "skipped": "already-running", "owner": owner}
 
     try:
-        _set_lock_owner(_refresh_run_lock_state, cycle_owner)
+        if acquired_run_lock:
+            _set_lock_owner(_refresh_run_lock_state, cycle_owner)
         _set_lock_owner(_partial_refresh_lock_state, "payments-only-refresh")
+
+        source_rows = load_fresh_runtime_rows() or []
+        if not source_rows:
+            source_rows = list(_cached_rows) if _cached_rows else []
+        if not source_rows:
+            return {"ok": False, "error": "empty-cache"}
 
         refresh_started_at = datetime.now(timezone.utc)
         headers = _build_headers()
@@ -6294,6 +6308,7 @@ def refresh_payments_only_for_cached_rows(cycle_owner: str = "payments-only-refr
             "rows": len(refreshed),
             "paymentReceivedCount": payment_received_count,
             "invoiceCreatedCount": invoice_created_count,
+            "forcedMode": forced_mode,
         }
     except Exception as exc:
         _last_refresh_error = str(exc)
@@ -6302,8 +6317,9 @@ def refresh_payments_only_for_cached_rows(cycle_owner: str = "payments-only-refr
     finally:
         _clear_lock_owner(_partial_refresh_lock_state)
         _partial_refresh_lock.release()
-        _clear_lock_owner(_refresh_run_lock_state)
-        _refresh_run_lock.release()
+        if acquired_run_lock:
+            _clear_lock_owner(_refresh_run_lock_state)
+            _refresh_run_lock.release()
 
 
 def cache_is_stale() -> bool:
@@ -6928,6 +6944,7 @@ async def payments_only_refresh(request: Request):
         result = await asyncio.to_thread(
             refresh_payments_only_for_cached_rows,
             f"payments-only-refresh:{username}",
+            True,
         )
         result["pauseApplied"] = True
         result["waitedSeconds"] = int(max(0, time.time() - wait_started))
