@@ -7708,8 +7708,14 @@ def build_rows_with_computed_status(rows: list[dict]) -> list[dict]:
         rules_text = load_status_rules_text()
     rules = _parse_status_rules_text(rules_text)
 
+    # Apply block3-compatible seed payment overlay on response rows so
+    # payment status stays consistent even when a background sync reloads an
+    # older runtime snapshot.
+    overlay_rows: list[dict] = [dict(r) for r in list(rows or [])]
+    _apply_seed_payment_promotions_for_all_rows(overlay_rows)
+
     output = []
-    for row in rows:
+    for row in overlay_rows:
         formatted = format_row_for_client(row)
         formatted["statusKpComputed"] = _compute_status_for_row(formatted, rules)
         output.append(formatted)
