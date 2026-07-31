@@ -6395,6 +6395,17 @@ def refresh_payments_for_single_kp_from_seed(
     if not normalized_target:
         return {"ok": False, "error": "invalid-kp-number"}
 
+    with _payments_only_state_lock:
+        payments_only_running = bool(_payments_only_state.get("running"))
+    if payments_only_running:
+        _queue_single_kp_seed_promotion(normalized_target)
+        return {
+            "ok": True,
+            "queued": True,
+            "owner": "payments-only-refresh",
+            "message": "queued for running payments-only refresh",
+        }
+
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
         if owner == "payments-only-refresh":
