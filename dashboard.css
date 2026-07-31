@@ -87,8 +87,17 @@ textarea {
 }
 
 .topbar-actions-secondary {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
   width: 100%;
+}
+
+.topbar-actions-secondary .ghost-button {
+  flex: 1 1 280px;
+  width: auto;
+  white-space: normal;
 }
 
 .topbar-actions > * {
@@ -119,7 +128,9 @@ textarea {
   }
 
   .topbar-actions-secondary .ghost-button {
+    flex: initial;
     width: 100%;
+    white-space: nowrap;
   }
 }
 
