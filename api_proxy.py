@@ -6051,6 +6051,7 @@ def refresh_cache_and_file(
         try:
             fetched = _fetch_rows_from_odata_subprocess(include_stage6=include_stage6, page_size=page_size)
             if fetched:
+                _apply_seed_payment_promotions_for_all_rows(fetched)
                 saved = save_rows(
                     fetched,
                     refresh_started_at=refresh_started_at,
@@ -6098,6 +6099,7 @@ def refresh_cache_and_file(
                     headers = _build_headers()
                     partial_rows, touched, _ = _partial_refresh_from_cached_rows(valid_cached, headers, 0)
                     if touched > 0:
+                        _apply_seed_payment_promotions_for_all_rows(partial_rows)
                         saved = save_rows(
                             partial_rows,
                             refresh_started_at=refresh_started_at,
@@ -6575,6 +6577,16 @@ def _apply_seed_payment_promotions(rows: list[dict], normalized_targets: set[str
         "matchedOrderNumsByTarget": matched_by_target,
         "promotedTargets": promoted_targets,
     }
+
+
+def _apply_seed_payment_promotions_for_all_rows(rows: list[dict]) -> dict:
+    """Apply block3-compatible seed promotions for all rows before persisting."""
+    targets: set[str] = set()
+    for row in rows or []:
+        n = _normalize_kp_number(row.get("number") or "")
+        if n:
+            targets.add(n)
+    return _apply_seed_payment_promotions(rows, targets)
 
 
 def cache_is_stale() -> bool:
