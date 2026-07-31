@@ -78,6 +78,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
 SMTP_FROM = os.getenv("SMTP_FROM", "").strip()
+SMTP_SENDER = SMTP_FROM or SMTP_USERNAME
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
 SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes", "on"}
 SMTP_TIMEOUT_SECONDS = float(os.getenv("SMTP_TIMEOUT_SECONDS", "20"))
@@ -1290,6 +1291,18 @@ def _resolve_manager_email_for_rule(manager_name: str, rule: dict) -> str:
     return _resolve_manager_email_from_rights(name)
 
 
+def _resolve_recipient_email_for_send_to_client(manager_name: str, rule: dict, user: dict) -> tuple[str, str]:
+    recipient = _resolve_manager_email_for_rule(manager_name, rule)
+    if _looks_like_email(recipient):
+        return recipient, "manager"
+
+    requester_email = str((user or {}).get("username") or "").strip()
+    if _looks_like_email(requester_email):
+        return requester_email, "requester"
+
+    return "", "none"
+
+
 def _patch_comment_prefix_line(ref_key: str, existing_comment: str, prefix_line: str, headers: dict) -> bool:
     ref_key = str(ref_key or "").strip()
     first_prefix = str(prefix_line or "").strip()
@@ -1448,7 +1461,11 @@ def _process_send_to_client_status_for_user(user: dict) -> dict:
         )
         if response.status_code in (200, 204):
             updated += 1
-            manager_email = _resolve_manager_email_for_rule(manager_name, send_to_client_rule)
+            manager_email, recipient_source = _resolve_recipient_email_for_send_to_client(
+                manager_name,
+                send_to_client_rule,
+                user,
+            )
             if not manager_email:
                 failed += 1
                 errors.append(
@@ -1471,6 +1488,13 @@ def _process_send_to_client_status_for_user(user: dict) -> dict:
                     {
                         "number": kp_number,
                         "error": f"email send failed: {err}",
+                    }
+                )
+            elif recipient_source == "requester":
+                errors.append(
+                    {
+                        "number": kp_number,
+                        "warning": f"manager email unresolved ({manager_name}); sent to requester {manager_email}",
                     }
                 )
             continue
@@ -1505,11 +1529,12 @@ def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str]
     recipient = str(to_email or "").strip()
     if not _looks_like_email(recipient):
         return False, "invalid recipient email"
-    if not SMTP_HOST or not SMTP_FROM:
+    sender = str(SMTP_SENDER or "").strip()
+    if not SMTP_HOST or not sender:
         return False, "SMTP is not configured"
 
     msg = EmailMessage()
-    msg["From"] = SMTP_FROM
+    msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = str(subject or "").strip() or "Напоминание по КП"
     msg.set_content(str(body_text or "").strip())
