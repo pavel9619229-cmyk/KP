@@ -26,6 +26,25 @@ def box(c, x, y, w, h, title, lines):
     c.drawText(t)
 
 
+def warning_box(c, x, y, w, h, title, lines):
+    c.setStrokeColor(colors.HexColor("#B44A4A"))
+    c.setLineWidth(1.3)
+    c.setFillColor(colors.HexColor("#FFF3F2"))
+    c.roundRect(x, y, w, h, 5 * mm, stroke=1, fill=1)
+
+    c.setFillColor(colors.HexColor("#8F2323"))
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(x + 4 * mm, y + h - 7 * mm, title)
+
+    c.setFont("Helvetica", 8.7)
+    t = c.beginText(x + 4 * mm, y + h - 13 * mm)
+    t.setFillColor(colors.HexColor("#6F2A2A"))
+    t.setLeading(10)
+    for line in lines:
+        t.textLine(line)
+    c.drawText(t)
+
+
 def arrow(c, x1, y1, x2, y2):
     c.setStrokeColor(colors.HexColor("#2F3E5F"))
     c.setLineWidth(1.4)
@@ -94,6 +113,10 @@ def main():
         "GET /api/kp/all, WS /ws/kp", "Отрисовка карточек и статусов",
     ])
 
+    warning_box(c, x4 + 12 * mm, y_mid - 29 * mm, 72 * mm, 24 * mm, "Источник затирания: backend-этап", [
+        "Runtime consistency выбирает", "authoritative snapshot и", "перезаписывает _cached_rows",
+    ])
+
     y_low = y_mid - 46 * mm
     box(c, x2, y_low, w_box + 20 * mm, h_box, "8) Действие пользователя", [
         "Кнопка в UI вызывает endpoint", "например: /api/kp/process/send-to-client",
@@ -113,6 +136,7 @@ def main():
     arrow(c, x3 + w_box / 2, y_top, x3 + w_box / 2, y_mid + h_box)
     arrow(c, x4 + w_box / 2 + 20 * mm, y_top, x4 + w_box / 2 + 20 * mm, y_mid + h_box)
     arrow(c, x3 + w_box, y_mid + h_box / 2, x4 + 20 * mm, y_mid + h_box / 2)
+    arrow(c, x4 + 20 * mm, y_mid + h_box / 2, x4 + 12 * mm, y_mid - 17 * mm)
 
     # Feedback path
     arrow(c, x4 + 20 * mm + w_box / 2, y_mid, x2 + 20 * mm, y_low + h_box)
