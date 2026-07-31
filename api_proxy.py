@@ -378,6 +378,19 @@ _manual_refresh_state: dict = {
     "lastOk": None,
     "lastError": None,
 }
+_payments_only_state_lock = threading.Lock()
+_payments_only_state: dict = {
+    "running": False,
+    "requestedAt": None,
+    "requestedBy": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastOk": None,
+    "lastError": None,
+    "waitedSeconds": None,
+    "paymentReceivedCount": None,
+    "invoiceCreatedCount": None,
+}
 _resume_interrupted_manual_refresh = False
 
 _startup_live_refresh_lock = threading.Lock()
@@ -408,6 +421,20 @@ def _manual_refresh_snapshot() -> dict:
     state["lastRefresh"] = _last_refresh
     state["lastRefreshError"] = _last_refresh_error
     return state
+
+
+def _payments_only_snapshot() -> dict:
+    with _payments_only_state_lock:
+        state = dict(_payments_only_state)
+    state["rows"] = len(_cached_rows)
+    state["lastRefresh"] = _last_refresh
+    state["lastRefreshError"] = _last_refresh_error
+    return state
+
+
+def _set_payments_only_state(**updates: object) -> None:
+    with _payments_only_state_lock:
+        _payments_only_state.update(updates)
 
 
 def _startup_live_refresh_snapshot() -> dict:
@@ -6929,30 +6956,91 @@ async def payments_only_refresh(request: Request):
         # Allow endpoint usage from automations without auth cookie.
         pass
 
-    pause_reason = "payments-only-refresh"
-    _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
-    wait_started = time.time()
-    try:
-        wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
-        while time.time() < wait_deadline:
-            lock_free = _refresh_run_lock.acquire(blocking=False)
-            if lock_free:
-                _refresh_run_lock.release()
-                break
-            await asyncio.sleep(2)
+    with _payments_only_state_lock:
+        if _payments_only_state.get("running"):
+            running_state = dict(_payments_only_state)
+            running_state["rows"] = len(_cached_rows)
+            running_state["lastRefresh"] = _last_refresh
+            running_state["lastRefreshError"] = _last_refresh_error
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "ok": True,
+                    "message": "payments-only refresh is already running",
+                    **running_state,
+                },
+            )
 
-        result = await asyncio.to_thread(
-            refresh_payments_only_for_cached_rows,
-            f"payments-only-refresh:{username}",
-            True,
+        _payments_only_state.update(
+            {
+                "running": True,
+                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "requestedBy": username,
+                "startedAt": None,
+                "finishedAt": None,
+                "lastOk": None,
+                "lastError": None,
+                "waitedSeconds": None,
+                "paymentReceivedCount": None,
+                "invoiceCreatedCount": None,
+            }
         )
-        result["pauseApplied"] = True
-        result["waitedSeconds"] = int(max(0, time.time() - wait_started))
-    finally:
-        _clear_refresh_pause(pause_reason)
 
-    status_code = 200 if result.get("ok") else 202
-    return JSONResponse(status_code=status_code, content=result)
+    async def _run_payments_only_refresh() -> None:
+        pause_reason = "payments-only-refresh"
+        wait_started = time.time()
+        _set_payments_only_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
+
+        _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
+        try:
+            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
+            while time.time() < wait_deadline:
+                lock_free = _refresh_run_lock.acquire(blocking=False)
+                if lock_free:
+                    _refresh_run_lock.release()
+                    break
+                await asyncio.sleep(2)
+
+            result = await asyncio.to_thread(
+                refresh_payments_only_for_cached_rows,
+                f"payments-only-refresh:{username}",
+                True,
+            )
+            _set_payments_only_state(
+                lastOk=bool(result.get("ok")),
+                lastError=result.get("error") or (None if result.get("ok") else result.get("skipped")),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+                paymentReceivedCount=result.get("paymentReceivedCount"),
+                invoiceCreatedCount=result.get("invoiceCreatedCount"),
+            )
+        except Exception as exc:
+            _set_payments_only_state(
+                lastOk=False,
+                lastError=str(exc),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+            )
+            log(f"payments-only refresh task crashed: {type(exc).__name__}: {exc}")
+        finally:
+            _clear_refresh_pause(pause_reason)
+            _set_payments_only_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            )
+
+    app.state.payments_only_task = asyncio.create_task(_run_payments_only_refresh())
+    return JSONResponse(
+        status_code=202,
+        content={
+            "ok": True,
+            "message": "payments-only refresh started",
+            **_payments_only_snapshot(),
+        },
+    )
+
+
+@app.get("/api/kp/refresh/payments-only/status")
+async def payments_only_refresh_status():
+    return _payments_only_snapshot()
 
 
 async def _run_system_checkpoint_recovery(trigger: str) -> None:

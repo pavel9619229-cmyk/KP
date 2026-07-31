@@ -1244,22 +1244,42 @@ async function refreshPaymentsOnlyForLatest300() {
   }
 
   try {
-    const resp = await fetch('/api/kp/refresh/payments-only', {
+    const startResp = await fetch('/api/kp/refresh/payments-only', {
       method: 'POST',
       credentials: 'include',
     });
-    const data = await resp.json();
-    if (!resp.ok && !data?.ok) {
-      throw new Error(data?.error || `HTTP ${resp.status}`);
+    const startData = await startResp.json();
+    if (!startResp.ok && !startData?.ok) {
+      throw new Error(startData?.error || `HTTP ${startResp.status}`);
     }
+
+    let finalStatus = null;
+    for (let i = 0; i < 120; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const statusResp = await fetch('/api/kp/refresh/payments-only/status', { credentials: 'include' });
+      if (!statusResp.ok) continue;
+      const statusData = await statusResp.json();
+      finalStatus = statusData;
+      if (!statusData?.running) break;
+      if (payMatchStatus) {
+        payMatchStatus.textContent = `Проверка платежей выполняется... ${i + 2} сек.`;
+      }
+    }
+
+    const data = finalStatus || startData;
     if (payMatchStatus) {
-      if (data?.ok) {
+      if (data?.running) {
+        payMatchStatus.textContent = 'Проверка платежей еще выполняется в фоне. Обновите таблицу через 1-2 минуты.';
+      } else {
+      const success = data?.lastOk === true || data?.ok === true;
+      if (success) {
         payMatchStatus.textContent =
           `Платежи обновлены. Совпадений оплаты: ${data.paymentReceivedCount ?? 'n/a'}, ` +
           `накладных: ${data.invoiceCreatedCount ?? 'n/a'}, ожидание: ${data.waitedSeconds ?? 0} сек.`;
       } else {
         const owner = data?.owner ? ` (owner=${data.owner})` : '';
-        payMatchStatus.textContent = `Не выполнено: ${data?.skipped || data?.error || 'неизвестно'}${owner}`;
+        payMatchStatus.textContent = `Не выполнено: ${data?.lastError || data?.skipped || data?.error || 'неизвестно'}${owner}`;
+      }
       }
     }
     await loadPayMatchTable();
