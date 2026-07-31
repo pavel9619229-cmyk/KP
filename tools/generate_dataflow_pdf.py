@@ -129,6 +129,7 @@ def main():
     arrow(c, x5 - 6 * mm, y_main, x6 + 10 * mm, y_cache + h_box)
     arrow(c, x6 + w_mid, y_cache + h_box / 2, x7, y_cache + h_box / 2)
     arrow(c, x7 + w_mid, y_cache + h_box / 2, x8, y_cache + h_box / 2)
+    arrow(c, x5 + w_mid / 2, y_main, x9 + 10 * mm, y_ui + h_box)
     arrow(c, x8 + w_mid / 2, y_cache, x9 + 16 * mm, y_ui + h_box)
 
     # Feedback arrows
@@ -138,7 +139,7 @@ def main():
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 10 * mm, "LOCAL на схеме: отдельный блок в кэш-слое (локальная FS сервера, data/*).")
+    c.drawString(15 * mm, 10 * mm, "API/UI питается из local-кэша (_cached_rows) и из ветки snapshot/GitHub; затирание может произойти до GitHub на этапе Runtime consistency.")
 
     c.showPage()
     c.save()

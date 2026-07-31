@@ -195,6 +195,7 @@
         <path class="arrow" d="M770,416 L794,416"/>
         <path class="arrow" d="M1014,416 L1038,416"/>
 
+        <path class="arrow" d="M1150,218 L1000,586"/>
         <path class="arrow" d="M1148,478 L1148,586"/>
         <path class="arrow-feedback" d="M862,646 L772,646"/>
         <path class="arrow-feedback" d="M562,646 L168,646 L168,218"/>
@@ -257,7 +258,7 @@
       </section>
 
       <div class="legend">
-        LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*). Логика потока: 1С → backend обработка → runtime consistency → _cached_rows → runtime snapshot/versioning → GitHub → API/UI.
+        LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*). Важно: API/UI получает данные не только из ветки GitHub, но и напрямую из local-кэша (_cached_rows). Поэтому затирание возможно до этапа 8, если runtime consistency выбрал старый authoritative snapshot и перезаписал local-кэш.
       </div>
     </div>
   </div>
