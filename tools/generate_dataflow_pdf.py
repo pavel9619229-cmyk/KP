@@ -130,7 +130,7 @@ def main():
     arrow(c, x6 + w_mid, y_cache + h_box / 2, x7, y_cache + h_box / 2)
     arrow(c, x7 + w_mid, y_cache + h_box / 2, x8, y_cache + h_box / 2)
     arrow(c, x5 + w_mid / 2, y_main, x9 + 10 * mm, y_ui + h_box)
-    arrow(c, x8 + w_mid / 2, y_cache, x9 + 16 * mm, y_ui + h_box)
+    arrow(c, x8 + w_mid / 2, y_cache, x9 + 28 * mm, y_ui + h_box)
 
     # Feedback arrows
     arrow(c, x9, y_ui + h_box / 2, x10 + 72 * mm, y_ui + h_box / 2, dashed=True)
