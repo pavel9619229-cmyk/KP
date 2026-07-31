@@ -12,6 +12,7 @@ const requestTemplateBtn = document.getElementById('requestTemplateBtn');
 const versionNumbersBtn = document.getElementById('versionNumbersBtn');
 const rulesStorageBtn = document.getElementById('rulesStorageBtn');
 const payMatchBtn = document.getElementById('payMatchBtn');
+const paymentsOnlyRefreshTopBtn = document.getElementById('paymentsOnlyRefreshTopBtn');
 const payMatchPanel = document.getElementById('payMatchPanel');
 const closePayMatchBtn = document.getElementById('closePayMatchBtn');
 const loadPayMatchBtn = document.getElementById('loadPayMatchBtn');
@@ -1234,8 +1235,10 @@ async function loadPayMatchTable() {
 async function refreshPaymentsOnlyForLatest300() {
   if (!paymentsOnlyRefreshBtn) return;
   paymentsOnlyRefreshBtn.disabled = true;
+  if (paymentsOnlyRefreshTopBtn) paymentsOnlyRefreshTopBtn.disabled = true;
   if (loadPayMatchBtn) loadPayMatchBtn.disabled = true;
   paymentsOnlyRefreshBtn.textContent = 'Обновляю платежи...';
+  if (paymentsOnlyRefreshTopBtn) paymentsOnlyRefreshTopBtn.textContent = 'ОБНОВЛЯЮ ПЛАТЕЖИ...';
   if (payMatchStatus) {
     payMatchStatus.textContent = 'Пауза других обновлений включена. Идет проверка платежей по последним 300 КП...';
   }
@@ -1265,8 +1268,10 @@ async function refreshPaymentsOnlyForLatest300() {
     if (payMatchStatus) payMatchStatus.textContent = `Ошибка: ${err.message}`;
   } finally {
     paymentsOnlyRefreshBtn.disabled = false;
+    if (paymentsOnlyRefreshTopBtn) paymentsOnlyRefreshTopBtn.disabled = false;
     if (loadPayMatchBtn) loadPayMatchBtn.disabled = false;
     paymentsOnlyRefreshBtn.textContent = 'Обновить данные по платежам в последних 300 КП';
+    if (paymentsOnlyRefreshTopBtn) paymentsOnlyRefreshTopBtn.textContent = 'ОБНОВИТЬ ПЛАТЕЖИ ПО ПОСЛЕДНИМ 300 КП';
   }
 }
 
@@ -1287,6 +1292,7 @@ closePayMatchBtn?.addEventListener('click', () => {
 
 loadPayMatchBtn?.addEventListener('click', loadPayMatchTable);
 paymentsOnlyRefreshBtn?.addEventListener('click', refreshPaymentsOnlyForLatest300);
+paymentsOnlyRefreshTopBtn?.addEventListener('click', refreshPaymentsOnlyForLatest300);
 
 // ────────────────────────────────────────────────────────────────────────────
 
