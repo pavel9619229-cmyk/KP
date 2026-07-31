@@ -40,6 +40,8 @@ function updateLastDurationBtn() {}
 
 const WS_RECONNECT_MS = 5000;
 const THEME_STORAGE_KEY = 'kpDashboardThemeV1';
+const EMBEDDED_SCALE_MAX_WIDTH = 420;
+const EMBEDDED_FIXED_SCALE = 0.7;
 const ALL_TAB_KEY = '__all__';
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
 const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
@@ -117,7 +119,22 @@ let lastSyncAt = null;
 let statusRules = createDefaultStatusRules();
 let currentUserRole = 'manager';
 
+function applyEmbeddedViewportScale() {
+  if (window.innerWidth <= EMBEDDED_SCALE_MAX_WIDTH) {
+    document.documentElement.style.zoom = String(EMBEDDED_FIXED_SCALE);
+    return;
+  }
+
+  if (document.documentElement.style.zoom === String(EMBEDDED_FIXED_SCALE)) {
+    document.documentElement.style.zoom = '';
+  }
+}
+
+applyEmbeddedViewportScale();
+
 initTheme();
+
+window.addEventListener('resize', applyEmbeddedViewportScale);
 
 themeBtn.addEventListener('click', () => {
   const isLight = document.body.classList.toggle('light');
