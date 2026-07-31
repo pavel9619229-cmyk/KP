@@ -6323,6 +6323,10 @@ def refresh_payments_only_for_cached_rows(
         # Run only stage6 enrichment (orders/invoices/payments matching).
         _enrich_group_flags_bulk(refreshed, headers)
 
+        # Preserve block3-compatible payment source from seed data across
+        # payments-only runs, not only for explicitly queued KPs.
+        _apply_seed_payment_promotions_for_all_rows(refreshed)
+
         # Apply any queued single-KP seed promotions requested while this
         # payments-only cycle was already running.
         queued_targets = _take_single_kp_seed_queue()
