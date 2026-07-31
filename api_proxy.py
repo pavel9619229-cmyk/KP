@@ -6398,6 +6398,21 @@ def refresh_payments_for_single_kp_from_seed(
     with _payments_only_state_lock:
         payments_only_running = bool(_payments_only_state.get("running"))
     if payments_only_running:
+        # Recover from stale running state: if partial lock is already free,
+        # no active payments-only worker can be mutating rows now.
+        probe_lock_acquired = _partial_refresh_lock.acquire(blocking=False)
+        if probe_lock_acquired:
+            _partial_refresh_lock.release()
+            _set_payments_only_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                lastOk=False,
+                lastError="stale-running-state-recovered",
+            )
+            payments_only_running = False
+            log("payments-only stale running state recovered before single-kp seed refresh")
+
+    if payments_only_running:
         _queue_single_kp_seed_promotion(normalized_target)
         return {
             "ok": True,
