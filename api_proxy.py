@@ -6349,6 +6349,116 @@ def refresh_payments_only_for_cached_rows(
             _refresh_run_lock.release()
 
 
+def refresh_payments_for_single_kp_from_seed(
+    kp_number: str,
+    cycle_owner: str = "payments-only-kp-seed",
+) -> dict:
+    """Fast block3-compatible payment refresh for one KP using local seed caches only.
+
+    This path intentionally avoids long 1C scans and applies the same idea as block3:
+    paymentReceived=True when any order number linked to the KP appears in payment purpose numbers.
+    Here both links come from local seed caches.
+    """
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+
+    normalized_target = _normalize_kp_number(kp_number)
+    if not normalized_target:
+        return {"ok": False, "error": "invalid-kp-number"}
+
+    if not _partial_refresh_lock.acquire(blocking=False):
+        owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
+        return {"ok": False, "skipped": "already-running", "owner": owner}
+
+    try:
+        _set_lock_owner(_partial_refresh_lock_state, cycle_owner)
+
+        source_rows = load_fresh_runtime_rows() or []
+        if not source_rows:
+            source_rows = list(_cached_rows) if _cached_rows else []
+        if not source_rows:
+            return {"ok": False, "error": "empty-cache"}
+
+        refreshed: list[dict] = [dict(r) for r in source_rows]
+        target_index = -1
+        for i, row in enumerate(refreshed):
+            if _normalize_kp_number(row.get("number") or "") == normalized_target:
+                target_index = i
+                break
+
+        if target_index < 0:
+            return {"ok": False, "error": "kp-not-found"}
+
+        target_row = refreshed[target_index]
+        kp_ref = str(target_row.get("refKey") or "").strip()
+        if not kp_ref:
+            return {"ok": False, "error": "kp-ref-missing"}
+
+        _load_order_cache()
+        _load_payment_seed()
+
+        purpose_nums: set[str] = set()
+        for seed_entry in _payment_seed:
+            for num in seed_entry.get("purposeNums", []):
+                n = str(num or "").strip().lstrip("0")
+                if n:
+                    purpose_nums.add(n)
+
+        kp_order_nums: set[str] = set()
+        with _order_cache_lock:
+            for _, entry in _order_to_kp_cache.items():
+                if str(entry.get("kp") or "").strip() != kp_ref:
+                    continue
+                order_num = str(entry.get("num") or "").strip().lstrip("0")
+                if order_num:
+                    kp_order_nums.add(order_num)
+
+        matched_nums = sorted(kp_order_nums.intersection(purpose_nums), key=lambda x: int(x) if x.isdigit() else x)
+        prev_payment_received = bool(target_row.get("paymentReceived"))
+        if matched_nums:
+            target_row["paymentReceived"] = True
+
+        apply_runtime_defaults(target_row)
+        refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+
+        refresh_started_at = datetime.now(timezone.utc)
+        saved = save_rows(
+            refreshed,
+            refresh_started_at=refresh_started_at,
+            write_source=f"payments-only-kp-seed:{normalized_target}",
+        )
+        if not saved:
+            latest_rows = load_fresh_runtime_rows()
+            if latest_rows:
+                _cached_rows = latest_rows
+                _cached_fp = rows_fingerprint(latest_rows)
+            _last_refresh_error = "payments-only single-kp seed refresh skipped: newer runtime snapshot already exists"
+            return {"ok": False, "error": _last_refresh_error}
+
+        _cached_rows = refreshed
+        _cached_fp = rows_fingerprint(refreshed)
+        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+        _last_refresh_error = None
+
+        return {
+            "ok": True,
+            "kpNumber": target_row.get("number"),
+            "kpRef": kp_ref,
+            "seedOrderNums": sorted(kp_order_nums, key=lambda x: int(x) if x.isdigit() else x),
+            "seedPurposeNums": sorted(purpose_nums, key=lambda x: int(x) if x.isdigit() else x),
+            "matchedOrderNums": matched_nums,
+            "paymentReceivedBefore": prev_payment_received,
+            "paymentReceivedAfter": bool(target_row.get("paymentReceived")),
+            "promoted": (not prev_payment_received) and bool(target_row.get("paymentReceived")),
+        }
+    except Exception as exc:
+        _last_refresh_error = str(exc)
+        log(f"payments-only single-kp seed refresh failed: {type(exc).__name__}: {exc}")
+        return {"ok": False, "error": str(exc)}
+    finally:
+        _clear_lock_owner(_partial_refresh_lock_state)
+        _partial_refresh_lock.release()
+
+
 def cache_is_stale() -> bool:
     if not _last_refresh:
         return True
@@ -7041,6 +7151,25 @@ async def payments_only_refresh(request: Request):
 @app.get("/api/kp/refresh/payments-only/status")
 async def payments_only_refresh_status():
     return _payments_only_snapshot()
+
+
+@app.post("/api/kp/refresh/payments-only/kp/{kp_number}")
+async def payments_only_refresh_single_kp(kp_number: str, request: Request):
+    username = "anonymous"
+    try:
+        user = _get_user_from_request(request)
+        username = str(user.get("username") or "anonymous")
+    except HTTPException:
+        # Allow endpoint usage from automations without auth cookie.
+        pass
+
+    result = await asyncio.to_thread(
+        refresh_payments_for_single_kp_from_seed,
+        kp_number,
+        f"payments-only-kp-seed:{username}",
+    )
+    status_code = 200 if result.get("ok") else 202
+    return JSONResponse(status_code=status_code, content=result)
 
 
 async def _run_system_checkpoint_recovery(trigger: str) -> None:
