@@ -147,6 +147,8 @@ COLD_START_DOC_ENRICH_LIMIT = int(os.getenv("COLD_START_DOC_ENRICH_LIMIT", "40")
 GROUP_CHECK_TIMEOUT_SECONDS = float(os.getenv("GROUP_CHECK_TIMEOUT_SECONDS", "8"))
 GROUP_SCAN_MAX_PAGES = int(os.getenv("GROUP_SCAN_MAX_PAGES", "80"))
 GROUP_SCAN_MAX_SECONDS = float(os.getenv("GROUP_SCAN_MAX_SECONDS", "240"))
+PAYMENTS_ONLY_WAIT_SECONDS = int(os.getenv("PAYMENTS_ONLY_WAIT_SECONDS", "180"))
+PAYMENTS_ONLY_PAUSE_SECONDS = int(os.getenv("PAYMENTS_ONLY_PAUSE_SECONDS", "300"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
 ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
@@ -362,6 +364,7 @@ _status_rules_lock = threading.Lock()
 _comment_automation_rules_lock = threading.Lock()
 _runtime_write_guard_lock = threading.Lock()
 _confirmed_runtime_sync_lock = threading.Lock()
+_refresh_pause_lock = threading.Lock()
 _enrich_cursor = 0
 _partial_refresh_cursor = 0
 _manual_refresh_state_lock = threading.Lock()
@@ -388,6 +391,13 @@ _startup_live_refresh_state: dict = {
     "lastError": None,
 }
 
+_refresh_pause_state: dict = {
+    "pausedUntilTs": 0.0,
+    "pausedUntil": None,
+    "reason": None,
+    "requestedBy": None,
+}
+
 def _manual_refresh_snapshot() -> dict:
     with _manual_refresh_state_lock:
         state = dict(_manual_refresh_state)
@@ -408,6 +418,52 @@ def _startup_live_refresh_snapshot() -> dict:
 def _set_startup_live_refresh_state(**updates: object) -> None:
     with _startup_live_refresh_lock:
         _startup_live_refresh_state.update(updates)
+
+
+def _refresh_pause_snapshot() -> dict:
+    with _refresh_pause_lock:
+        state = dict(_refresh_pause_state)
+    if float(state.get("pausedUntilTs") or 0.0) <= time.time():
+        state["pausedUntilTs"] = 0.0
+        state["pausedUntil"] = None
+        state["reason"] = None
+        state["requestedBy"] = None
+    return state
+
+
+def _set_refresh_pause(seconds: int, reason: str, requested_by: str) -> None:
+    pause_seconds = max(0, int(seconds))
+    until_ts = time.time() + pause_seconds if pause_seconds > 0 else 0.0
+    until_iso = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S") if pause_seconds <= 0 else datetime.fromtimestamp(until_ts, _TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+    with _refresh_pause_lock:
+        _refresh_pause_state.update(
+            {
+                "pausedUntilTs": until_ts,
+                "pausedUntil": until_iso if pause_seconds > 0 else None,
+                "reason": reason if pause_seconds > 0 else None,
+                "requestedBy": requested_by if pause_seconds > 0 else None,
+            }
+        )
+
+
+def _clear_refresh_pause(reason: str | None = None) -> None:
+    with _refresh_pause_lock:
+        active_reason = _refresh_pause_state.get("reason")
+        if reason and active_reason and active_reason != reason:
+            return
+        _refresh_pause_state.update(
+            {
+                "pausedUntilTs": 0.0,
+                "pausedUntil": None,
+                "reason": None,
+                "requestedBy": None,
+            }
+        )
+
+
+def _is_refresh_paused() -> bool:
+    snapshot = _refresh_pause_snapshot()
+    return float(snapshot.get("pausedUntilTs") or 0.0) > time.time()
 
 
 def _lock_state_snapshot(lock_state: dict) -> dict:
@@ -6262,6 +6318,8 @@ def cache_is_stale() -> bool:
 
 
 async def trigger_refresh_if_stale() -> None:
+    if _is_refresh_paused():
+        return
     if not cache_is_stale():
         return
     task = getattr(app.state, "on_demand_refresh_task", None)
@@ -6288,6 +6346,9 @@ async def refresh_loop() -> None:
     while True:
         started_at = time.time()
         try:
+            if _is_refresh_paused():
+                await asyncio.sleep(min(REFRESH_SECONDS, 5))
+                continue
             await asyncio.to_thread(
                 refresh_cache_and_file,
                 True,
@@ -6852,10 +6913,27 @@ async def payments_only_refresh(request: Request):
         # Allow endpoint usage from automations without auth cookie.
         pass
 
-    result = await asyncio.to_thread(
-        refresh_payments_only_for_cached_rows,
-        f"payments-only-refresh:{username}",
-    )
+    pause_reason = "payments-only-refresh"
+    _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
+    wait_started = time.time()
+    try:
+        wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
+        while time.time() < wait_deadline:
+            lock_free = _refresh_run_lock.acquire(blocking=False)
+            if lock_free:
+                _refresh_run_lock.release()
+                break
+            await asyncio.sleep(2)
+
+        result = await asyncio.to_thread(
+            refresh_payments_only_for_cached_rows,
+            f"payments-only-refresh:{username}",
+        )
+        result["pauseApplied"] = True
+        result["waitedSeconds"] = int(max(0, time.time() - wait_started))
+    finally:
+        _clear_refresh_pause(pause_reason)
+
     status_code = 200 if result.get("ok") else 202
     return JSONResponse(status_code=status_code, content=result)
 
@@ -6863,6 +6941,10 @@ async def payments_only_refresh(request: Request):
 async def _run_system_checkpoint_recovery(trigger: str) -> None:
     """Best-effort auto recovery for pending refresh checkpoints."""
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
+
+    if _is_refresh_paused():
+        log(f"[checkpoint-recovery] skipped due to refresh pause (trigger={trigger})")
+        return
 
     now_msk = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
     _set_manual_refresh_state(
@@ -6971,7 +7053,7 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
 async def manual_refresh_status():
     with _manual_refresh_state_lock:
         running = bool(_manual_refresh_state.get("running"))
-    if not running and _has_pending_refresh_checkpoint():
+    if not running and not _is_refresh_paused() and _has_pending_refresh_checkpoint():
         task = getattr(app.state, "checkpoint_recovery_task", None)
         if task is None or task.done():
             app.state.checkpoint_recovery_task = asyncio.create_task(

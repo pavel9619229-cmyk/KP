@@ -15,6 +15,7 @@ const payMatchBtn = document.getElementById('payMatchBtn');
 const payMatchPanel = document.getElementById('payMatchPanel');
 const closePayMatchBtn = document.getElementById('closePayMatchBtn');
 const loadPayMatchBtn = document.getElementById('loadPayMatchBtn');
+const paymentsOnlyRefreshBtn = document.getElementById('paymentsOnlyRefreshBtn');
 const payMatchStatus = document.getElementById('payMatchStatus');
 const payMatchBlock1Body = document.getElementById('payMatchBlock1Body');
 const payMatchBlock2Body = document.getElementById('payMatchBlock2Body');
@@ -1230,6 +1231,45 @@ async function loadPayMatchTable() {
   }
 }
 
+async function refreshPaymentsOnlyForLatest300() {
+  if (!paymentsOnlyRefreshBtn) return;
+  paymentsOnlyRefreshBtn.disabled = true;
+  if (loadPayMatchBtn) loadPayMatchBtn.disabled = true;
+  paymentsOnlyRefreshBtn.textContent = 'Обновляю платежи...';
+  if (payMatchStatus) {
+    payMatchStatus.textContent = 'Пауза других обновлений включена. Идет проверка платежей по последним 300 КП...';
+  }
+
+  try {
+    const resp = await fetch('/api/kp/refresh/payments-only', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const data = await resp.json();
+    if (!resp.ok && !data?.ok) {
+      throw new Error(data?.error || `HTTP ${resp.status}`);
+    }
+    if (payMatchStatus) {
+      if (data?.ok) {
+        payMatchStatus.textContent =
+          `Платежи обновлены. Совпадений оплаты: ${data.paymentReceivedCount ?? 'n/a'}, ` +
+          `накладных: ${data.invoiceCreatedCount ?? 'n/a'}, ожидание: ${data.waitedSeconds ?? 0} сек.`;
+      } else {
+        const owner = data?.owner ? ` (owner=${data.owner})` : '';
+        payMatchStatus.textContent = `Не выполнено: ${data?.skipped || data?.error || 'неизвестно'}${owner}`;
+      }
+    }
+    await loadPayMatchTable();
+    await refreshData(false);
+  } catch (err) {
+    if (payMatchStatus) payMatchStatus.textContent = `Ошибка: ${err.message}`;
+  } finally {
+    paymentsOnlyRefreshBtn.disabled = false;
+    if (loadPayMatchBtn) loadPayMatchBtn.disabled = false;
+    paymentsOnlyRefreshBtn.textContent = 'Обновить данные по платежам в последних 300 КП';
+  }
+}
+
 payMatchBtn?.addEventListener('click', () => {
   if (payMatchPanel?.hidden) {
     payMatchPanel.hidden = false;
@@ -1246,6 +1286,7 @@ closePayMatchBtn?.addEventListener('click', () => {
 });
 
 loadPayMatchBtn?.addEventListener('click', loadPayMatchTable);
+paymentsOnlyRefreshBtn?.addEventListener('click', refreshPaymentsOnlyForLatest300);
 
 // ────────────────────────────────────────────────────────────────────────────
 
