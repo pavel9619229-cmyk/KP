@@ -111,6 +111,7 @@
     .n6 { left: 550px; top: 354px; width: 220px; height: 124px; }
     .n7 { left: 794px; top: 354px; width: 220px; height: 124px; }
     .n8 { left: 1038px; top: 354px; width: 254px; height: 124px; }
+    .n11 { left: 286px; top: 354px; width: 238px; height: 124px; }
 
     .n9 { left: 862px; top: 586px; width: 210px; height: 120px; }
     .n10 { left: 562px; top: 586px; width: 270px; height: 120px; }
@@ -189,6 +190,8 @@
         <path class="arrow" d="M978,156 L1010,156"/>
 
         <path class="arrow" d="M850,228 L850,354"/>
+        <path class="arrow" d="M850,220 L524,416"/>
+        <path class="arrow" d="M524,416 L550,416"/>
         <path class="arrow" d="M770,416 L794,416"/>
         <path class="arrow" d="M1014,416 L1038,416"/>
 
@@ -228,6 +231,11 @@
         <p>data/kp_runtime_cache.json + meta + current.</p>
       </section>
 
+      <section class="node n11">
+        <h2>LOCAL (сервер)</h2>
+        <p>Локальная файловая система Render: директория data/* и runtime-файлы.</p>
+      </section>
+
       <section class="node n7">
         <h2>7) Версии snapshot</h2>
         <p>data/runtime_versions/* + pointer текущей версии.</p>
@@ -249,7 +257,7 @@
       </section>
 
       <div class="legend">
-        Логика потока: 1С → backend обработка → runtime consistency → _cached_rows → runtime snapshot/versioning → GitHub → API/UI. Обратная стрелка показывает путь пользовательского действия обратно в backend и 1С.
+        LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*). Логика потока: 1С → backend обработка → runtime consistency → _cached_rows → runtime snapshot/versioning → GitHub → API/UI.
       </div>
     </div>
   </div>

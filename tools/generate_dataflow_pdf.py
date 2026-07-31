@@ -101,9 +101,11 @@ def main():
     box(c, x5, y_main, w_mid, h_box, "5) _cached_rows", ["Оперативный кэш", "в памяти процесса"])
 
     y_cache = y_main - 44 * mm
+    x_local = 84 * mm
     x6 = 140 * mm
     x7 = 196 * mm
     x8 = 252 * mm
+    box(c, x_local, y_cache, 52 * mm, h_box, "LOCAL (сервер)", ["Локальная FS Render", "директория data/*"])
     box(c, x6, y_cache, w_mid, h_box, "6) Runtime-файлы", ["kp_runtime_cache.json", "meta/current"])
     box(c, x7, y_cache, w_mid, h_box, "7) Версии", ["runtime_versions/*", "version pointer"])
     box(c, x8, y_cache, w_mid, h_box, "8) GitHub publish", ["push snapshot", "и current-pointer"])
@@ -122,6 +124,8 @@ def main():
     arrow(c, x4 + w_big, cy, x5, cy)
 
     # Cache branch arrows
+    arrow(c, x4 + 6 * mm, y_main, x_local + 52 * mm, y_cache + h_box / 2)
+    arrow(c, x_local + 52 * mm, y_cache + h_box / 2, x6, y_cache + h_box / 2)
     arrow(c, x5 - 6 * mm, y_main, x6 + 10 * mm, y_cache + h_box)
     arrow(c, x6 + w_mid, y_cache + h_box / 2, x7, y_cache + h_box / 2)
     arrow(c, x7 + w_mid, y_cache + h_box / 2, x8, y_cache + h_box / 2)
@@ -134,7 +138,7 @@ def main():
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 10 * mm, "Пояснение: затирание может происходить на шаге 4 (Runtime consistency), когда authoritative snapshot выбран старее актуального.")
+    c.drawString(15 * mm, 10 * mm, "LOCAL на схеме: отдельный блок в кэш-слое (локальная FS сервера, data/*).")
 
     c.showPage()
     c.save()
