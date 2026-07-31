@@ -26,28 +26,27 @@ def box(c, x, y, w, h, title, lines):
     c.drawText(t)
 
 
-def warning_box(c, x, y, w, h, title, lines):
+def warning_inline(c, x, y, w, h, text):
     c.setStrokeColor(colors.HexColor("#B44A4A"))
-    c.setLineWidth(1.3)
+    c.setLineWidth(1.1)
     c.setFillColor(colors.HexColor("#FFF3F2"))
-    c.roundRect(x, y, w, h, 5 * mm, stroke=1, fill=1)
-
-    c.setFillColor(colors.HexColor("#8F2323"))
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(x + 4 * mm, y + h - 7 * mm, title)
-
-    c.setFont("Helvetica", 8.7)
-    t = c.beginText(x + 4 * mm, y + h - 13 * mm)
-    t.setFillColor(colors.HexColor("#6F2A2A"))
-    t.setLeading(10)
-    for line in lines:
+    c.roundRect(x, y, w, h, 2.2 * mm, stroke=1, fill=1)
+    c.setFillColor(colors.HexColor("#7D1F1F"))
+    c.setFont("Helvetica-Bold", 7.8)
+    t = c.beginText(x + 2.2 * mm, y + h - 3.2 * mm)
+    t.setLeading(8.6)
+    for line in text:
         t.textLine(line)
     c.drawText(t)
 
 
-def arrow(c, x1, y1, x2, y2):
+def arrow(c, x1, y1, x2, y2, dashed=False):
     c.setStrokeColor(colors.HexColor("#2F3E5F"))
-    c.setLineWidth(1.4)
+    c.setLineWidth(1.5)
+    if dashed:
+        c.setDash(6, 4)
+    else:
+        c.setDash()
     c.line(x1, y1, x2, y2)
 
     # arrow head
@@ -60,6 +59,7 @@ def arrow(c, x1, y1, x2, y2):
         sign = 1 if y2 > y1 else -1
         c.line(x2, y2, x2 + size / 2, y2 - sign * size)
         c.line(x2, y2, x2 - size / 2, y2 - sign * size)
+    c.setDash()
 
 
 def main():
@@ -75,77 +75,66 @@ def main():
 
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.HexColor("#4E5D7A"))
-    c.drawString(15 * mm, height - 21 * mm, "1С OData -> backend обработка -> кэши -> API -> интерфейс")
+    c.drawString(15 * mm, height - 21 * mm, "Четкий поток: 1С -> backend -> snapshot -> API -> UI + обратная запись в 1С")
 
     # Layout
-    y_top = height - 62 * mm
     h_box = 30 * mm
-    w_box = 54 * mm
-    gap = 10 * mm
+    w_small = 42 * mm
+    w_mid = 48 * mm
+    w_big = 58 * mm
 
+    y_main = height - 62 * mm
     x1 = 12 * mm
-    x2 = x1 + w_box + gap
-    x3 = x2 + w_box + gap
-    x4 = x3 + w_box + gap
-    x5 = x4 + w_box + gap
+    x2 = 58 * mm
+    x3 = 109 * mm
+    x4 = 160 * mm
+    x5 = 222 * mm
 
-    box(c, x1, y_top, w_box, h_box, "1) 1С OData", [
-        "Источник документов КП,", "комментариев и реквизитов",
+    box(c, x1, y_main, w_small, h_box, "1) 1С OData", ["Источник документов КП", "и комментариев"])
+    box(c, x2, y_main, w_small, h_box, "2) Backend fetch", ["Чтение из 1С", "первичная сборка"])
+    box(c, x3, y_main, w_small, h_box, "3) Нормализация", ["Правила статусов", "enrichment"])
+    box(c, x4, y_main, w_big, h_box, "4) Runtime consistency", ["Сравнение local/GitHub", "выбор authoritative snapshot"])
+    warning_inline(c, x4 + 2 * mm, y_main + 2 * mm, w_big - 4 * mm, 11 * mm, [
+        "ЗДЕСЬ ИСТОЧНИК ЗАТИРАНИЯ:",
+        "перезапись _cached_rows старым snapshot",
     ])
-    box(c, x2, y_top, w_box, h_box, "2) Fetch в backend", [
-        "Запросы к 1С,", "нормализация полей",
-    ])
-    box(c, x3, y_top, w_box, h_box, "3) Обработка", [
-        "Расчет статусов,", "enrichment правил",
-    ])
-    box(c, x4, y_top, w_box, h_box, "4) Оперативный кэш", [
-        "_cached_rows", "в памяти процесса",
-    ])
-    box(c, x5, y_top, w_box, h_box, "5) Runtime-кэш", [
-        "data/kp_runtime_cache.json", "meta/current + versions",
-    ])
+    box(c, x5, y_main, w_mid, h_box, "5) _cached_rows", ["Оперативный кэш", "в памяти процесса"])
 
-    y_mid = y_top - 46 * mm
-    box(c, x3, y_mid, w_box, h_box, "6) GitHub publish", [
-        "Версии и current-pointer", "публикуются в GitHub",
-    ])
-    box(c, x4 + 20 * mm, y_mid, w_box, h_box, "7) API + UI", [
-        "GET /api/kp/all, WS /ws/kp", "Отрисовка карточек и статусов",
-    ])
+    y_cache = y_main - 44 * mm
+    x6 = 140 * mm
+    x7 = 196 * mm
+    x8 = 252 * mm
+    box(c, x6, y_cache, w_mid, h_box, "6) Runtime-файлы", ["kp_runtime_cache.json", "meta/current"])
+    box(c, x7, y_cache, w_mid, h_box, "7) Версии", ["runtime_versions/*", "version pointer"])
+    box(c, x8, y_cache, w_mid, h_box, "8) GitHub publish", ["push snapshot", "и current-pointer"])
 
-    warning_box(c, x4 + 12 * mm, y_mid - 29 * mm, 72 * mm, 24 * mm, "Источник затирания: backend-этап", [
-        "Runtime consistency выбирает", "authoritative snapshot и", "перезаписывает _cached_rows",
-    ])
+    y_ui = y_cache - 44 * mm
+    x9 = 246 * mm
+    x10 = 160 * mm
+    box(c, x9, y_ui, 56 * mm, h_box, "9) API + UI", ["/api/kp/all, /ws/kp", "карточки в dashboard"])
+    box(c, x10, y_ui, 72 * mm, h_box, "10) Действие в UI", ["Кнопка вызывает endpoint", "backend делает PATCH в 1С"])
 
-    y_low = y_mid - 46 * mm
-    box(c, x2, y_low, w_box + 20 * mm, h_box, "8) Действие пользователя", [
-        "Кнопка в UI вызывает endpoint", "например: /api/kp/process/send-to-client",
-    ])
-    box(c, x1 + 10 * mm, y_low, w_box + 20 * mm, h_box, "9) Обратный PATCH в 1С", [
-        "Обновляется комментарий/статус", "и цикл повторяется",
-    ])
+    # Main line arrows
+    cy = y_main + h_box / 2
+    arrow(c, x1 + w_small, cy, x2, cy)
+    arrow(c, x2 + w_small, cy, x3, cy)
+    arrow(c, x3 + w_small, cy, x4, cy)
+    arrow(c, x4 + w_big, cy, x5, cy)
 
-    # Arrows top row
-    cy = y_top + h_box / 2
-    arrow(c, x1 + w_box, cy, x2, cy)
-    arrow(c, x2 + w_box, cy, x3, cy)
-    arrow(c, x3 + w_box, cy, x4, cy)
-    arrow(c, x4 + w_box, cy, x5, cy)
+    # Cache branch arrows
+    arrow(c, x5 - 6 * mm, y_main, x6 + 10 * mm, y_cache + h_box)
+    arrow(c, x6 + w_mid, y_cache + h_box / 2, x7, y_cache + h_box / 2)
+    arrow(c, x7 + w_mid, y_cache + h_box / 2, x8, y_cache + h_box / 2)
+    arrow(c, x8 + w_mid / 2, y_cache, x9 + 16 * mm, y_ui + h_box)
 
-    # Downward to API/UI
-    arrow(c, x3 + w_box / 2, y_top, x3 + w_box / 2, y_mid + h_box)
-    arrow(c, x4 + w_box / 2 + 20 * mm, y_top, x4 + w_box / 2 + 20 * mm, y_mid + h_box)
-    arrow(c, x3 + w_box, y_mid + h_box / 2, x4 + 20 * mm, y_mid + h_box / 2)
-    arrow(c, x4 + 20 * mm, y_mid + h_box / 2, x4 + 12 * mm, y_mid - 17 * mm)
-
-    # Feedback path
-    arrow(c, x4 + 20 * mm + w_box / 2, y_mid, x2 + 20 * mm, y_low + h_box)
-    arrow(c, x2 + 20 * mm, y_low + h_box / 2, x1 + 10 * mm + w_box + 20 * mm, y_low + h_box / 2)
-    arrow(c, x1 + 10 * mm + w_box / 2, y_low + h_box, x1 + w_box / 2, y_top)
+    # Feedback arrows
+    arrow(c, x9, y_ui + h_box / 2, x10 + 72 * mm, y_ui + h_box / 2, dashed=True)
+    arrow(c, x10, y_ui + h_box / 2, x1 + 12 * mm, y_ui + h_box / 2, dashed=True)
+    arrow(c, x1 + 12 * mm, y_ui + h_box / 2, x1 + 12 * mm, y_main + h_box, dashed=True)
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 10 * mm, "Файл создан автоматически: dataflow_1c_to_ui_diagram.pdf")
+    c.drawString(15 * mm, 10 * mm, "Пояснение: затирание может происходить на шаге 4 (Runtime consistency), когда authoritative snapshot выбран старее актуального.")
 
     c.showPage()
     c.save()
