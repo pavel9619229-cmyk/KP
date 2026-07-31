@@ -4969,8 +4969,15 @@ def _runtime_pick_authoritative_state(
     github_ready = bool(github_rows and github_version > 0 and github_generated_at is not None)
 
     if RUNTIME_STRICT_GITHUB_POINTER:
+        # In strict mode prefer GitHub by default, but do not overwrite a
+        # fresher local runtime snapshot (e.g. recent payment status updates)
+        # with an older GitHub confirmed copy.
+        if local_ready and github_ready and local_generated_at and github_generated_at and local_generated_at > github_generated_at:
+            return "local", local_rows, local_meta, local_pointer
         if github_ready:
             return "github", github_rows, github_meta, github_pointer
+        if local_ready:
+            return "local", local_rows, local_meta, local_pointer
         return "none", [], {}, {}
 
     if local_ready and github_ready:
