@@ -6177,6 +6177,79 @@ def refresh_comment_first_line_only() -> dict:
     return {"ok": True, "touched": touched, "rows": len(refreshed)}
 
 
+def refresh_payments_only_for_cached_rows(cycle_owner: str = "payments-only-refresh") -> dict:
+    global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
+
+    source_rows = list(_cached_rows) if _cached_rows else []
+    if not source_rows:
+        source_rows = load_fresh_runtime_rows() or []
+    if not source_rows:
+        return {"ok": False, "error": "empty-cache"}
+
+    if not _refresh_run_lock.acquire(blocking=False):
+        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+        log(f"payments-only refresh skipped: another refresh cycle is running (owner={owner})")
+        return {"ok": False, "skipped": "another-refresh-running", "owner": owner}
+    if not _partial_refresh_lock.acquire(blocking=False):
+        owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
+        _refresh_run_lock.release()
+        log(f"payments-only refresh skipped: already running (owner={owner})")
+        return {"ok": False, "skipped": "already-running", "owner": owner}
+
+    try:
+        _set_lock_owner(_refresh_run_lock_state, cycle_owner)
+        _set_lock_owner(_partial_refresh_lock_state, "payments-only-refresh")
+
+        refresh_started_at = datetime.now(timezone.utc)
+        headers = _build_headers()
+        refreshed: list[dict] = [dict(r) for r in source_rows]
+
+        # Run only stage6 enrichment (orders/invoices/payments matching).
+        _enrich_group_flags_bulk(refreshed, headers)
+        refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+
+        saved = save_rows(
+            refreshed,
+            refresh_started_at=refresh_started_at,
+            write_source="payments-only-refresh",
+        )
+        if not saved:
+            latest_rows = load_fresh_runtime_rows()
+            if latest_rows:
+                _cached_rows = latest_rows
+                _cached_fp = rows_fingerprint(latest_rows)
+            _last_refresh_error = "payments-only refresh skipped: newer runtime snapshot already exists"
+            log(_last_refresh_error)
+            return {"ok": False, "error": _last_refresh_error}
+
+        _cached_rows = refreshed
+        _cached_fp = rows_fingerprint(refreshed)
+        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+        _last_refresh_error = None
+
+        payment_received_count = sum(1 for row in refreshed if bool(row.get("paymentReceived")))
+        invoice_created_count = sum(1 for row in refreshed if bool(row.get("invoiceCreated")))
+        log(
+            "payments-only refresh success: "
+            f"rows={len(refreshed)}, paymentReceived={payment_received_count}, invoiceCreated={invoice_created_count}"
+        )
+        return {
+            "ok": True,
+            "rows": len(refreshed),
+            "paymentReceivedCount": payment_received_count,
+            "invoiceCreatedCount": invoice_created_count,
+        }
+    except Exception as exc:
+        _last_refresh_error = str(exc)
+        log(f"payments-only refresh failed: {type(exc).__name__}: {exc}")
+        return {"ok": False, "error": str(exc)}
+    finally:
+        _clear_lock_owner(_partial_refresh_lock_state)
+        _partial_refresh_lock.release()
+        _clear_lock_owner(_refresh_run_lock_state)
+        _refresh_run_lock.release()
+
+
 def cache_is_stale() -> bool:
     if not _last_refresh:
         return True
@@ -6767,6 +6840,24 @@ async def manual_refresh(request: Request):
 async def manual_refresh_force(request: Request):
     # Explicit endpoint for forced/manual refresh from external automations.
     return await manual_refresh(request)
+
+
+@app.post("/api/kp/refresh/payments-only")
+async def payments_only_refresh(request: Request):
+    username = "anonymous"
+    try:
+        user = _get_user_from_request(request)
+        username = str(user.get("username") or "anonymous")
+    except HTTPException:
+        # Allow endpoint usage from automations without auth cookie.
+        pass
+
+    result = await asyncio.to_thread(
+        refresh_payments_only_for_cached_rows,
+        f"payments-only-refresh:{username}",
+    )
+    status_code = 200 if result.get("ok") else 202
+    return JSONResponse(status_code=status_code, content=result)
 
 
 async def _run_system_checkpoint_recovery(trigger: str) -> None:
