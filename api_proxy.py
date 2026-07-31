@@ -391,6 +391,8 @@ _payments_only_state: dict = {
     "paymentReceivedCount": None,
     "invoiceCreatedCount": None,
 }
+_single_kp_seed_queue_lock = threading.Lock()
+_single_kp_seed_queue: set[str] = set()
 _resume_interrupted_manual_refresh = False
 
 _startup_live_refresh_lock = threading.Lock()
@@ -435,6 +437,21 @@ def _payments_only_snapshot() -> dict:
 def _set_payments_only_state(**updates: object) -> None:
     with _payments_only_state_lock:
         _payments_only_state.update(updates)
+
+
+def _queue_single_kp_seed_promotion(kp_number: str) -> None:
+    normalized = _normalize_kp_number(kp_number)
+    if not normalized:
+        return
+    with _single_kp_seed_queue_lock:
+        _single_kp_seed_queue.add(normalized)
+
+
+def _take_single_kp_seed_queue() -> set[str]:
+    with _single_kp_seed_queue_lock:
+        queued = set(_single_kp_seed_queue)
+        _single_kp_seed_queue.clear()
+    return queued
 
 
 def _startup_live_refresh_snapshot() -> dict:
@@ -6303,6 +6320,17 @@ def refresh_payments_only_for_cached_rows(
 
         # Run only stage6 enrichment (orders/invoices/payments matching).
         _enrich_group_flags_bulk(refreshed, headers)
+
+        # Apply any queued single-KP seed promotions requested while this
+        # payments-only cycle was already running.
+        queued_targets = _take_single_kp_seed_queue()
+        queued_promotions = _apply_seed_payment_promotions(refreshed, queued_targets)
+        if queued_targets:
+            log(
+                "payments-only refresh: applied queued single-kp promotions "
+                f"targets={sorted(queued_targets)}, promoted={queued_promotions.get('promotedTargets', [])}"
+            )
+
         refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
 
         saved = save_rows(
@@ -6336,6 +6364,8 @@ def refresh_payments_only_for_cached_rows(
             "paymentReceivedCount": payment_received_count,
             "invoiceCreatedCount": invoice_created_count,
             "forcedMode": forced_mode,
+            "queuedSeedTargets": sorted(queued_targets),
+            "queuedSeedPromoted": queued_promotions.get("promotedTargets", []),
         }
     except Exception as exc:
         _last_refresh_error = str(exc)
@@ -6367,6 +6397,14 @@ def refresh_payments_for_single_kp_from_seed(
 
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
+        if owner == "payments-only-refresh":
+            _queue_single_kp_seed_promotion(normalized_target)
+            return {
+                "ok": True,
+                "queued": True,
+                "owner": owner,
+                "message": "queued for running payments-only refresh",
+            }
         return {"ok": False, "skipped": "already-running", "owner": owner}
 
     try:
@@ -6393,29 +6431,11 @@ def refresh_payments_for_single_kp_from_seed(
         if not kp_ref:
             return {"ok": False, "error": "kp-ref-missing"}
 
-        _load_order_cache()
-        _load_payment_seed()
-
-        purpose_nums: set[str] = set()
-        for seed_entry in _payment_seed:
-            for num in seed_entry.get("purposeNums", []):
-                n = str(num or "").strip().lstrip("0")
-                if n:
-                    purpose_nums.add(n)
-
-        kp_order_nums: set[str] = set()
-        with _order_cache_lock:
-            for _, entry in _order_to_kp_cache.items():
-                if str(entry.get("kp") or "").strip() != kp_ref:
-                    continue
-                order_num = str(entry.get("num") or "").strip().lstrip("0")
-                if order_num:
-                    kp_order_nums.add(order_num)
-
-        matched_nums = sorted(kp_order_nums.intersection(purpose_nums), key=lambda x: int(x) if x.isdigit() else x)
         prev_payment_received = bool(target_row.get("paymentReceived"))
-        if matched_nums:
-            target_row["paymentReceived"] = True
+        seed_result = _apply_seed_payment_promotions(refreshed, {normalized_target})
+        matched_nums = list(seed_result.get("matchedOrderNumsByTarget", {}).get(normalized_target, []))
+        kp_order_nums = list(seed_result.get("seedOrderNumsByTarget", {}).get(normalized_target, []))
+        purpose_nums = list(seed_result.get("seedPurposeNums", []))
 
         apply_runtime_defaults(target_row)
         refreshed.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
@@ -6457,6 +6477,78 @@ def refresh_payments_for_single_kp_from_seed(
     finally:
         _clear_lock_owner(_partial_refresh_lock_state)
         _partial_refresh_lock.release()
+
+
+def _apply_seed_payment_promotions(rows: list[dict], normalized_targets: set[str]) -> dict:
+    targets = {str(t or "").strip() for t in set(normalized_targets or set()) if str(t or "").strip()}
+    if not rows or not targets:
+        return {
+            "seedPurposeNums": [],
+            "seedOrderNumsByTarget": {},
+            "matchedOrderNumsByTarget": {},
+            "promotedTargets": [],
+        }
+
+    _load_order_cache()
+    _load_payment_seed()
+
+    purpose_nums: set[str] = set()
+    for seed_entry in _payment_seed:
+        for num in seed_entry.get("purposeNums", []):
+            n = str(num or "").strip().lstrip("0")
+            if n:
+                purpose_nums.add(n)
+
+    target_rows: dict[str, dict] = {}
+    target_refs: dict[str, str] = {}
+    for row in rows:
+        n = _normalize_kp_number(row.get("number") or "")
+        if n in targets:
+            target_rows[n] = row
+            target_refs[n] = str(row.get("refKey") or "").strip()
+
+    seed_order_nums_by_target: dict[str, list[str]] = {}
+    matched_by_target: dict[str, list[str]] = {}
+    promoted_targets: list[str] = []
+
+    # Build kp_ref -> order numbers map once from persistent order cache.
+    kp_ref_to_order_nums: dict[str, set[str]] = {}
+    with _order_cache_lock:
+        for _, entry in _order_to_kp_cache.items():
+            kp_ref = str(entry.get("kp") or "").strip()
+            if not kp_ref:
+                continue
+            order_num = str(entry.get("num") or "").strip().lstrip("0")
+            if not order_num:
+                continue
+            kp_ref_to_order_nums.setdefault(kp_ref, set()).add(order_num)
+
+    for target in targets:
+        row = target_rows.get(target)
+        kp_ref = target_refs.get(target, "")
+        if not row or not kp_ref:
+            seed_order_nums_by_target[target] = []
+            matched_by_target[target] = []
+            continue
+
+        order_nums = sorted(kp_ref_to_order_nums.get(kp_ref, set()), key=lambda x: int(x) if x.isdigit() else x)
+        matched_nums = sorted(set(order_nums).intersection(purpose_nums), key=lambda x: int(x) if x.isdigit() else x)
+
+        seed_order_nums_by_target[target] = order_nums
+        matched_by_target[target] = matched_nums
+
+        prev = bool(row.get("paymentReceived"))
+        if matched_nums:
+            row["paymentReceived"] = True
+        if (not prev) and bool(row.get("paymentReceived")):
+            promoted_targets.append(target)
+
+    return {
+        "seedPurposeNums": sorted(purpose_nums, key=lambda x: int(x) if x.isdigit() else x),
+        "seedOrderNumsByTarget": seed_order_nums_by_target,
+        "matchedOrderNumsByTarget": matched_by_target,
+        "promotedTargets": promoted_targets,
+    }
 
 
 def cache_is_stale() -> bool:
