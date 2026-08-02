@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-02T07:08:07.555873+00:00",
-  "refreshStartedAt": "2026-08-02T06:24:07.203796+00:00",
+  "generatedAt": "2026-08-02T08:37:55.249987+00:00",
+  "refreshStartedAt": "2026-08-02T07:54:19.729283+00:00",
   "rowCount": 300,
   "writeSource": "full-refresh",
-  "cycleVersion": 255,
-  "last1cLoadedVersion": 255,
-  "last1cLoadedAt": "2026-08-02T07:08:07.555873+00:00"
+  "cycleVersion": 257,
+  "last1cLoadedVersion": 257,
+  "last1cLoadedAt": "2026-08-02T08:37:55.249987+00:00"
 }
