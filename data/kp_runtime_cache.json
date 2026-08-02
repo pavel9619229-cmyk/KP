@@ -7,7 +7,7 @@
     "managerName": "Андрей",
     "status": "Черновик",
     "managerFilled": true,
-    "productSpecified": false,
+    "productSpecified": true,
     "priceFilled": false,
     "kpSent": false,
     "receiptConfirmed": false,
