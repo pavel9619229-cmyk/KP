@@ -25,7 +25,7 @@
     }
 
     .page {
-      width: 940px;
+      width: 820px;
       margin: 0 auto;
       padding: 28px 24px 36px;
       box-sizing: border-box;
@@ -45,7 +45,7 @@
 
     .board {
       position: relative;
-      width: 900px;
+      width: 780px;
       height: 1320px;
       background: linear-gradient(180deg, #f9fbff, #f3f6ff);
       border: 1px solid #d5def2;
@@ -102,19 +102,35 @@
       color: #223659;
     }
 
-    .n1 { left: 330px; top: 126px; width: 240px; height: 90px; }
-    .n2 { left: 330px; top: 238px; width: 240px; height: 90px; }
-    .n3 { left: 330px; top: 350px; width: 240px; height: 90px; }
-    .n4 { left: 322px; top: 462px; width: 256px; height: 112px; }
-    .n5 { left: 330px; top: 596px; width: 240px; height: 90px; }
+    .n1 { left: 290px; top: 126px; width: 200px; height: 90px; }
+    .n2 { left: 290px; top: 238px; width: 200px; height: 90px; }
+    .n3 { left: 290px; top: 350px; width: 200px; height: 90px; }
+    .n4 { left: 282px; top: 462px; width: 216px; height: 112px; }
+    .n5 { left: 290px; top: 596px; width: 200px; height: 90px; }
 
-    .n11 { left: 56px; top: 726px; width: 240px; height: 124px; }
-    .n6 { left: 324px; top: 726px; width: 250px; height: 124px; }
-    .n7 { left: 602px; top: 726px; width: 240px; height: 124px; }
-    .n8 { left: 602px; top: 872px; width: 240px; height: 108px; }
+    .n11 { left: 34px; top: 726px; width: 200px; height: 124px; }
+    .n6 { left: 258px; top: 726px; width: 220px; height: 124px; }
+    .n7 { left: 504px; top: 726px; width: 210px; height: 124px; }
+    .n8 { left: 504px; top: 872px; width: 210px; height: 108px; }
 
-    .n9 { left: 324px; top: 1012px; width: 250px; height: 104px; }
-    .n10 { left: 304px; top: 1142px; width: 290px; height: 96px; }
+    .n9 { left: 258px; top: 1012px; width: 220px; height: 104px; }
+    .n10 { left: 248px; top: 1142px; width: 240px; height: 96px; }
+
+    .target-node {
+      position: absolute;
+      border: 2px solid #c23636;
+      background: #fff2f2;
+      border-radius: 10px;
+      padding: 8px 10px;
+      box-sizing: border-box;
+      color: #8b2020;
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .t1 { left: 24px; top: 1008px; width: 212px; height: 94px; }
+    .t2 { left: 24px; top: 1120px; width: 212px; height: 88px; }
 
     .risk-inline {
       margin-top: 8px;
@@ -149,6 +165,14 @@
       marker-end: url(#arrow);
     }
 
+    .arrow-target {
+      stroke: #c23636;
+      stroke-width: 3;
+      fill: none;
+      stroke-dasharray: 9 5;
+      marker-end: url(#arrow-red);
+    }
+
     .legend {
       position: absolute;
       left: 24px;
@@ -177,28 +201,36 @@
       <div class="lane-label lane-cache-label">Слой кэшей и публикации snapshot</div>
       <div class="lane-label lane-feedback-label">Действия пользователя и обратная запись</div>
 
-      <svg viewBox="0 0 900 1320" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg viewBox="0 0 780 1320" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <defs>
           <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0,0 L10,4 L0,8 Z" fill="#2f456f"/>
           </marker>
+          <marker id="arrow-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#c23636"/>
+          </marker>
         </defs>
 
-        <path class="arrow" d="M450,216 L450,238"/>
-        <path class="arrow" d="M450,328 L450,350"/>
-        <path class="arrow" d="M450,440 L450,462"/>
-        <path class="arrow" d="M450,574 L450,596"/>
+        <path class="arrow" d="M390,216 L390,238"/>
+        <path class="arrow" d="M390,328 L390,350"/>
+        <path class="arrow" d="M390,440 L390,462"/>
+        <path class="arrow" d="M390,574 L390,596"/>
 
-        <path class="arrow" d="M450,574 L296,788"/>
-        <path class="arrow" d="M450,574 L449,726"/>
-        <path class="arrow" d="M296,788 L324,788"/>
-        <path class="arrow" d="M574,788 L602,788"/>
-        <path class="arrow" d="M722,850 L722,872"/>
+        <path class="arrow" d="M390,574 L234,788"/>
+        <path class="arrow" d="M390,574 L368,726"/>
+        <path class="arrow" d="M234,788 L258,788"/>
+        <path class="arrow" d="M478,788 L504,788"/>
+        <path class="arrow" d="M609,850 L609,872"/>
 
-        <path class="arrow" d="M450,686 L449,1012"/>
-        <path class="arrow" d="M722,980 L574,1064"/>
-        <path class="arrow-feedback" d="M449,1116 L449,1142"/>
-        <path class="arrow-feedback" d="M304,1190 L110,1190 L110,170 L330,170"/>
+        <path class="arrow" d="M390,686 L368,1012"/>
+        <path class="arrow" d="M609,980 L478,1064"/>
+        <path class="arrow-feedback" d="M368,1116 L368,1142"/>
+        <path class="arrow-feedback" d="M248,1190 L92,1190 L92,170 L290,170"/>
+
+        <path class="arrow-target" d="M478,1064 L236,1054"/>
+        <path class="arrow-target" d="M236,1164 L258,1164"/>
+        <path class="arrow-target" d="M236,1054 L236,1164"/>
+        <path class="arrow-target" d="M236,1164 L236,788 L258,788"/>
       </svg>
 
       <section class="node n1">
@@ -257,8 +289,16 @@
         <p>Кнопка запускает endpoint, backend делает PATCH в 1С и цикл повторяется.</p>
       </section>
 
+      <section class="target-node t1">
+        TARGET: Queue/Lock<br>только один процесс в работе
+      </section>
+
+      <section class="target-node t2">
+        TARGET: verify 5 = 8<br>иначе блокировать следующий шаг
+      </section>
+
       <div class="legend">
-        LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*). Важно: API/UI получает данные не только из ветки GitHub, но и напрямую из local-кэша (_cached_rows). Поэтому затирание возможно до этапа 8, если runtime consistency выбрал старый authoritative snapshot и перезаписал local-кэш.
+        Черные стрелки: текущий поток. Красные стрелки: проектируемый слой очереди и проверки snapshot (после шага процесс идет дальше только если 5 и 8 совпадают). LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
       </div>
     </div>
   </div>

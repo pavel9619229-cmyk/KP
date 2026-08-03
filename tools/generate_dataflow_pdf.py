@@ -62,6 +62,24 @@ def arrow(c, x1, y1, x2, y2, dashed=False):
     c.setDash()
 
 
+def arrow_red(c, x1, y1, x2, y2):
+    c.setStrokeColor(colors.HexColor("#C23636"))
+    c.setLineWidth(1.6)
+    c.setDash(6, 4)
+    c.line(x1, y1, x2, y2)
+
+    size = 4 * mm
+    if x2 != x1:
+        sign = 1 if x2 > x1 else -1
+        c.line(x2, y2, x2 - sign * size, y2 + size / 2)
+        c.line(x2, y2, x2 - sign * size, y2 - size / 2)
+    else:
+        sign = 1 if y2 > y1 else -1
+        c.line(x2, y2, x2 + size / 2, y2 - sign * size)
+        c.line(x2, y2, x2 - size / 2, y2 - sign * size)
+    c.setDash()
+
+
 def main():
     c = canvas.Canvas(OUTPUT, pagesize=A4)
     width, height = A4
@@ -80,8 +98,8 @@ def main():
     # Portrait layout in mm
     h = 16 * mm
     h_big = 20 * mm
-    w_main = 95 * mm
-    x_main = 58 * mm
+    w_main = 82 * mm
+    x_main = 64 * mm
     x_center = x_main + w_main / 2
 
     y1 = 242 * mm
@@ -100,13 +118,26 @@ def main():
     box(c, x_main, y5, w_main, h, "5) Оперативный кэш", ["_cached_rows (память процесса)"])
 
     y_cache = 96 * mm
-    box(c, 12 * mm, y_cache, 56 * mm, 18 * mm, "LOCAL (сервер)", ["локальная FS, data/*"])
-    box(c, 72 * mm, y_cache, 62 * mm, 18 * mm, "6) Runtime-файлы", ["cache + meta + current"])
-    box(c, 138 * mm, y_cache, 60 * mm, 18 * mm, "7) Версии", ["runtime_versions/*"])
-    box(c, 138 * mm, 68 * mm, 60 * mm, 18 * mm, "8) GitHub publish", ["snapshot + pointer"])
+    box(c, 14 * mm, y_cache, 48 * mm, 18 * mm, "LOCAL (сервер)", ["локальная FS, data/*"])
+    box(c, 66 * mm, y_cache, 54 * mm, 18 * mm, "6) Runtime-файлы", ["cache + meta + current"])
+    box(c, 124 * mm, y_cache, 50 * mm, 18 * mm, "7) Версии", ["runtime_versions/*"])
+    box(c, 124 * mm, 68 * mm, 50 * mm, 18 * mm, "8) GitHub publish", ["snapshot + pointer"])
 
-    box(c, 72 * mm, 40 * mm, 86 * mm, 18 * mm, "9) API + UI", ["/api/kp/all + /ws/kp"])
-    box(c, 62 * mm, 16 * mm, 106 * mm, 18 * mm, "10) Действие в UI", ["endpoint -> PATCH в 1С"])
+    box(c, 66 * mm, 40 * mm, 76 * mm, 18 * mm, "9) API + UI", ["/api/kp/all + /ws/kp"])
+    box(c, 58 * mm, 16 * mm, 92 * mm, 18 * mm, "10) Действие в UI", ["endpoint -> PATCH в 1С"])
+
+    # Target overlay callouts
+    c.setStrokeColor(colors.HexColor("#C23636"))
+    c.setLineWidth(1.1)
+    c.setFillColor(colors.HexColor("#FFF2F2"))
+    c.roundRect(14 * mm, 40 * mm, 48 * mm, 18 * mm, 2 * mm, stroke=1, fill=1)
+    c.roundRect(14 * mm, 16 * mm, 48 * mm, 18 * mm, 2 * mm, stroke=1, fill=1)
+    c.setFillColor(colors.HexColor("#8B2020"))
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(16 * mm, 52 * mm, "TARGET: Queue/Lock")
+    c.drawString(16 * mm, 48 * mm, "1 процесс одновременно")
+    c.drawString(16 * mm, 28 * mm, "TARGET: verify 5 = 8")
+    c.drawString(16 * mm, 24 * mm, "иначе stop next step")
 
     # Main vertical arrows
     arrow(c, x_center, y1, x_center, y2 + h)
@@ -115,24 +146,30 @@ def main():
     arrow(c, x_center, y4, x_center, y5 + h)
 
     # Cache branch arrows
-    arrow(c, x_center, y4, 68 * mm, y_cache + 9 * mm)
-    arrow(c, 68 * mm, y_cache + 9 * mm, 72 * mm, y_cache + 9 * mm)
-    arrow(c, 134 * mm, y_cache + 9 * mm, 138 * mm, y_cache + 9 * mm)
-    arrow(c, 168 * mm, y_cache, 168 * mm, 86 * mm)
+    arrow(c, x_center, y4, 62 * mm, y_cache + 9 * mm)
+    arrow(c, 62 * mm, y_cache + 9 * mm, 66 * mm, y_cache + 9 * mm)
+    arrow(c, 120 * mm, y_cache + 9 * mm, 124 * mm, y_cache + 9 * mm)
+    arrow(c, 149 * mm, y_cache, 149 * mm, 86 * mm)
 
     # To UI arrows
-    arrow(c, x_center, y5, 115 * mm, 58 * mm)
-    arrow(c, 168 * mm, 68 * mm, 150 * mm, 58 * mm)
+    arrow(c, x_center, y5, 104 * mm, 58 * mm)
+    arrow(c, 149 * mm, 68 * mm, 131 * mm, 58 * mm)
 
     # Feedback arrows
-    arrow(c, 115 * mm, 40 * mm, 115 * mm, 34 * mm, dashed=True)
-    arrow(c, 62 * mm, 25 * mm, 20 * mm, 25 * mm, dashed=True)
+    arrow(c, 104 * mm, 40 * mm, 104 * mm, 34 * mm, dashed=True)
+    arrow(c, 58 * mm, 25 * mm, 20 * mm, 25 * mm, dashed=True)
     arrow(c, 20 * mm, 25 * mm, 20 * mm, 250 * mm, dashed=True)
-    arrow(c, 20 * mm, 250 * mm, 58 * mm, 250 * mm, dashed=True)
+    arrow(c, 20 * mm, 250 * mm, 64 * mm, 250 * mm, dashed=True)
+
+    # Target overlay arrows
+    arrow_red(c, 66 * mm, 49 * mm, 62 * mm, 49 * mm)
+    arrow_red(c, 38 * mm, 40 * mm, 38 * mm, 34 * mm)
+    arrow_red(c, 38 * mm, 34 * mm, 58 * mm, 34 * mm)
+    arrow_red(c, 38 * mm, 25 * mm, 66 * mm, y_cache + 9 * mm)
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 8 * mm, "API/UI получает данные из local-кэша (_cached_rows) и из подтвержденной ветки snapshot/GitHub.")
+    c.drawString(15 * mm, 8 * mm, "Черный: текущий поток. Красный: проектируемый слой queue/lock и verify 5=8 перед следующим шагом.")
 
     c.showPage()
     c.save()
