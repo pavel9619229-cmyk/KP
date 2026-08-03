@@ -36,6 +36,13 @@ function updateStatusProcessingButtonsVisibility() {
   }
 }
 
+function updateRefreshButtonVisibility() {
+  if (!refreshBtn) return;
+  const isAdmin = String(currentUserRole || '').trim().toLowerCase() === 'admin';
+  refreshBtn.hidden = !isAdmin;
+  refreshBtn.disabled = !isAdmin;
+}
+
 function updateLastDurationBtn() {}
 
 const WS_RECONNECT_MS = 5000;
@@ -118,6 +125,8 @@ let lastFingerprint = '';
 let lastSyncAt = null;
 let statusRules = createDefaultStatusRules();
 let currentUserRole = 'manager';
+
+updateRefreshButtonVisibility();
 
 function applyEmbeddedViewportScale() {
   if (window.innerWidth <= EMBEDDED_SCALE_MAX_WIDTH) {
@@ -954,6 +963,7 @@ async function loadCurrentUserRole() {
       currentUsername = '';
       currentAllowedManagers = [];
       updateStatusProcessingButtonsVisibility();
+      updateRefreshButtonVisibility();
       updateLastDurationBtn();
       return;
     }
@@ -968,12 +978,14 @@ async function loadCurrentUserRole() {
     }
     currentUserRole = role || 'manager';
     updateStatusProcessingButtonsVisibility();
+    updateRefreshButtonVisibility();
     updateLastDurationBtn();
   } catch {
     currentUserRole = 'manager';
     currentUsername = '';
     currentAllowedManagers = [];
     updateStatusProcessingButtonsVisibility();
+    updateRefreshButtonVisibility();
     updateLastDurationBtn();
   }
 }
