@@ -169,7 +169,16 @@ def main():
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 8 * mm, "Черный: текущий поток. Красный: проектируемый слой queue/lock и verify 5=8 перед следующим шагом.")
+    c.drawString(15 * mm, 12 * mm, "Черный: текущий поток. Красный: проектируемый слой queue/lock и verify 5=8 перед следующим шагом.")
+    c.setFont("Helvetica", 7)
+    t = c.beginText(15 * mm, 9 * mm)
+    t.setLeading(8)
+    for line in [
+        "Длительность full refresh зависит от: глубины цикла, скорости 1С OData, объема строк, ретраев/таймаутов stage2.5/3/4,",
+        "скорости publish в GitHub и ожидания lock. Практика: от десятков секунд до минут; hard ceiling manual refresh ~21 мин.",
+    ]:
+        t.textLine(line)
+    c.drawText(t)
 
     c.showPage()
     c.save()

@@ -212,6 +212,33 @@
     .processes li {
       margin-bottom: 6px;
     }
+
+    .timing {
+      margin-top: 16px;
+      background: #ffffff;
+      border: 1px solid #d5def2;
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 4px 12px rgba(21, 39, 79, 0.06);
+    }
+
+    .timing h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      color: #233a63;
+    }
+
+    .timing ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #223659;
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .timing li {
+      margin-bottom: 6px;
+    }
   </style>
 </head>
 <body>
@@ -340,6 +367,19 @@
         <li>Payments-only refresh: обновление оплат с применением к текущему snapshot.</li>
         <li>API /api/kp/all: перед выдачей данных выполняет sync confirmed snapshot.</li>
         <li>WebSocket /ws/kp: перед пушем обновлений выполняет sync confirmed snapshot.</li>
+      </ol>
+    </section>
+
+    <section class="timing">
+      <h2>От чего зависит длительность полного refresh</h2>
+      <ol>
+        <li>Глубина цикла: полный проход дольше, checkpoint-восстановление быстрее.</li>
+        <li>Скорость 1С OData: чем медленнее ответы, тем дольше общий цикл.</li>
+        <li>Объем данных (число КП/строк): больше строк = больше запросов и проверок.</li>
+        <li>Ретраи и таймауты на этапах enrichment (особенно stage2.5/3/4).</li>
+        <li>Скорость publish в GitHub и подтверждения current-pointer.</li>
+        <li>Конкуренция за lock: запуск может ждать завершения уже идущего refresh.</li>
+        <li>Практический диапазон: от десятков секунд до нескольких минут; hard ceiling для manual refresh около 21 минуты.</li>
       </ol>
     </section>
   </div>
