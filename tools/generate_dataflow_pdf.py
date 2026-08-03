@@ -1,5 +1,5 @@
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -63,83 +63,76 @@ def arrow(c, x1, y1, x2, y2, dashed=False):
 
 
 def main():
-    c = canvas.Canvas(OUTPUT, pagesize=landscape(A4))
-    width, height = landscape(A4)
+    c = canvas.Canvas(OUTPUT, pagesize=A4)
+    width, height = A4
 
     c.setFillColor(colors.HexColor("#F4F6FB"))
     c.rect(0, 0, width, height, stroke=0, fill=1)
 
     c.setFillColor(colors.HexColor("#182236"))
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(15 * mm, height - 15 * mm, "Блок-схема: движение данных из 1С в UI")
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(15 * mm, height - 15 * mm, "Блок-схема: движение данных из 1С в UI (portrait)")
 
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.HexColor("#4E5D7A"))
-    c.drawString(15 * mm, height - 21 * mm, "Четкий поток: 1С -> backend -> snapshot -> API -> UI + обратная запись в 1С")
+    c.drawString(15 * mm, height - 21 * mm, "Вертикальный поток: 1С -> backend -> runtime -> API/UI")
 
-    # Layout
-    h_box = 30 * mm
-    w_small = 42 * mm
-    w_mid = 48 * mm
-    w_big = 58 * mm
+    # Portrait layout in mm
+    h = 16 * mm
+    h_big = 20 * mm
+    w_main = 95 * mm
+    x_main = 58 * mm
+    x_center = x_main + w_main / 2
 
-    y_main = height - 62 * mm
-    x1 = 12 * mm
-    x2 = 58 * mm
-    x3 = 109 * mm
-    x4 = 160 * mm
-    x5 = 222 * mm
+    y1 = 242 * mm
+    y2 = 218 * mm
+    y3 = 194 * mm
+    y4 = 166 * mm
+    y5 = 140 * mm
 
-    box(c, x1, y_main, w_small, h_box, "1) 1С OData", ["Источник документов КП", "и комментариев"])
-    box(c, x2, y_main, w_small, h_box, "2) Backend fetch", ["Чтение из 1С", "первичная сборка"])
-    box(c, x3, y_main, w_small, h_box, "3) Нормализация", ["Правила статусов", "enrichment"])
-    box(c, x4, y_main, w_big, h_box, "4) Runtime consistency", ["Сравнение local/GitHub", "выбор authoritative snapshot"])
-    warning_inline(c, x4 + 2 * mm, y_main + 2 * mm, w_big - 4 * mm, 11 * mm, [
-        "ЗДЕСЬ ИСТОЧНИК ЗАТИРАНИЯ:",
-        "перезапись _cached_rows старым snapshot",
+    box(c, x_main, y1, w_main, h, "1) 1С OData", ["Документы КП, реквизиты, комментарии"])
+    box(c, x_main, y2, w_main, h, "2) Backend fetch", ["Чтение из 1С и сбор сырых строк"])
+    box(c, x_main, y3, w_main, h, "3) Нормализация", ["Правила статусов и enrichment"])
+    box(c, x_main, y4, w_main, h_big, "4) Runtime consistency", ["Выбор authoritative snapshot"])
+    warning_inline(c, x_main + 2 * mm, y4 + 2 * mm, w_main - 4 * mm, 8 * mm, [
+        "Источник затирания: перезапись _cached_rows",
     ])
-    box(c, x5, y_main, w_mid, h_box, "5) _cached_rows", ["Оперативный кэш", "в памяти процесса"])
+    box(c, x_main, y5, w_main, h, "5) Оперативный кэш", ["_cached_rows (память процесса)"])
 
-    y_cache = y_main - 44 * mm
-    x_local = 84 * mm
-    x6 = 140 * mm
-    x7 = 196 * mm
-    x8 = 252 * mm
-    box(c, x_local, y_cache, 52 * mm, h_box, "LOCAL (сервер)", ["Локальная FS Render", "директория data/*"])
-    box(c, x6, y_cache, w_mid, h_box, "6) Runtime-файлы", ["kp_runtime_cache.json", "meta/current"])
-    box(c, x7, y_cache, w_mid, h_box, "7) Версии", ["runtime_versions/*", "version pointer"])
-    box(c, x8, y_cache, w_mid, h_box, "8) GitHub publish", ["push snapshot", "и current-pointer"])
+    y_cache = 96 * mm
+    box(c, 12 * mm, y_cache, 56 * mm, 18 * mm, "LOCAL (сервер)", ["локальная FS, data/*"])
+    box(c, 72 * mm, y_cache, 62 * mm, 18 * mm, "6) Runtime-файлы", ["cache + meta + current"])
+    box(c, 138 * mm, y_cache, 60 * mm, 18 * mm, "7) Версии", ["runtime_versions/*"])
+    box(c, 138 * mm, 68 * mm, 60 * mm, 18 * mm, "8) GitHub publish", ["snapshot + pointer"])
 
-    y_ui = y_cache - 44 * mm
-    x9 = 246 * mm
-    x10 = 160 * mm
-    box(c, x9, y_ui, 56 * mm, h_box, "9) API + UI", ["/api/kp/all, /ws/kp", "карточки в dashboard"])
-    box(c, x10, y_ui, 72 * mm, h_box, "10) Действие в UI", ["Кнопка вызывает endpoint", "backend делает PATCH в 1С"])
+    box(c, 72 * mm, 40 * mm, 86 * mm, 18 * mm, "9) API + UI", ["/api/kp/all + /ws/kp"])
+    box(c, 62 * mm, 16 * mm, 106 * mm, 18 * mm, "10) Действие в UI", ["endpoint -> PATCH в 1С"])
 
-    # Main line arrows
-    cy = y_main + h_box / 2
-    arrow(c, x1 + w_small, cy, x2, cy)
-    arrow(c, x2 + w_small, cy, x3, cy)
-    arrow(c, x3 + w_small, cy, x4, cy)
-    arrow(c, x4 + w_big, cy, x5, cy)
+    # Main vertical arrows
+    arrow(c, x_center, y1, x_center, y2 + h)
+    arrow(c, x_center, y2, x_center, y3 + h)
+    arrow(c, x_center, y3, x_center, y4 + h_big)
+    arrow(c, x_center, y4, x_center, y5 + h)
 
     # Cache branch arrows
-    arrow(c, x4 + 6 * mm, y_main, x_local + 52 * mm, y_cache + h_box / 2)
-    arrow(c, x_local + 52 * mm, y_cache + h_box / 2, x6, y_cache + h_box / 2)
-    arrow(c, x5 - 6 * mm, y_main, x6 + 10 * mm, y_cache + h_box)
-    arrow(c, x6 + w_mid, y_cache + h_box / 2, x7, y_cache + h_box / 2)
-    arrow(c, x7 + w_mid, y_cache + h_box / 2, x8, y_cache + h_box / 2)
-    arrow(c, x5 + w_mid / 2, y_main, x9 + 10 * mm, y_ui + h_box)
-    arrow(c, x8 + w_mid / 2, y_cache, x9 + 28 * mm, y_ui + h_box)
+    arrow(c, x_center, y4, 68 * mm, y_cache + 9 * mm)
+    arrow(c, 68 * mm, y_cache + 9 * mm, 72 * mm, y_cache + 9 * mm)
+    arrow(c, 134 * mm, y_cache + 9 * mm, 138 * mm, y_cache + 9 * mm)
+    arrow(c, 168 * mm, y_cache, 168 * mm, 86 * mm)
+
+    # To UI arrows
+    arrow(c, x_center, y5, 115 * mm, 58 * mm)
+    arrow(c, 168 * mm, 68 * mm, 150 * mm, 58 * mm)
 
     # Feedback arrows
-    arrow(c, x9, y_ui + h_box / 2, x10 + 72 * mm, y_ui + h_box / 2, dashed=True)
-    arrow(c, x10, y_ui + h_box / 2, x1 + 12 * mm, y_ui + h_box / 2, dashed=True)
-    arrow(c, x1 + 12 * mm, y_ui + h_box / 2, x1 + 12 * mm, y_main + h_box, dashed=True)
+    arrow(c, 115 * mm, 40 * mm, 115 * mm, 34 * mm, dashed=True)
+    arrow(c, 62 * mm, 25 * mm, 20 * mm, 25 * mm, dashed=True)
+    arrow(c, 20 * mm, 25 * mm, 20 * mm, 250 * mm, dashed=True)
+    arrow(c, 20 * mm, 250 * mm, 58 * mm, 250 * mm, dashed=True)
 
     c.setFillColor(colors.HexColor("#334566"))
     c.setFont("Helvetica", 8)
-    c.drawString(15 * mm, 10 * mm, "API/UI питается из local-кэша (_cached_rows) и из ветки snapshot/GitHub; затирание может произойти до GitHub на этапе Runtime consistency.")
+    c.drawString(15 * mm, 8 * mm, "API/UI получает данные из local-кэша (_cached_rows) и из подтвержденной ветки snapshot/GitHub.")
 
     c.showPage()
     c.save()

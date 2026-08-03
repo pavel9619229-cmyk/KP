@@ -25,7 +25,7 @@
     }
 
     .page {
-      width: 1380px;
+      width: 940px;
       margin: 0 auto;
       padding: 28px 24px 36px;
       box-sizing: border-box;
@@ -45,8 +45,8 @@
 
     .board {
       position: relative;
-      width: 1330px;
-      height: 840px;
+      width: 900px;
+      height: 1320px;
       background: linear-gradient(180deg, #f9fbff, #f3f6ff);
       border: 1px solid #d5def2;
       border-radius: 16px;
@@ -62,9 +62,9 @@
       background: rgba(232, 238, 252, 0.35);
     }
 
-    .lane-main { top: 54px; height: 236px; }
-    .lane-cache { top: 320px; height: 196px; }
-    .lane-feedback { top: 548px; height: 178px; }
+    .lane-main { top: 72px; height: 560px; }
+    .lane-cache { top: 656px; height: 300px; }
+    .lane-feedback { top: 980px; height: 252px; }
 
     .lane-label {
       position: absolute;
@@ -75,9 +75,9 @@
       letter-spacing: 0.02em;
     }
 
-    .lane-main-label { top: 36px; }
-    .lane-cache-label { top: 302px; }
-    .lane-feedback-label { top: 530px; }
+    .lane-main-label { top: 50px; }
+    .lane-cache-label { top: 634px; }
+    .lane-feedback-label { top: 958px; }
 
     .node {
       position: absolute;
@@ -102,19 +102,19 @@
       color: #223659;
     }
 
-    .n1 { left: 36px; top: 94px; width: 190px; height: 124px; }
-    .n2 { left: 250px; top: 94px; width: 210px; height: 124px; }
-    .n3 { left: 486px; top: 94px; width: 210px; height: 124px; }
-    .n4 { left: 722px; top: 86px; width: 256px; height: 142px; }
-    .n5 { left: 1010px; top: 94px; width: 282px; height: 124px; }
+    .n1 { left: 330px; top: 126px; width: 240px; height: 90px; }
+    .n2 { left: 330px; top: 238px; width: 240px; height: 90px; }
+    .n3 { left: 330px; top: 350px; width: 240px; height: 90px; }
+    .n4 { left: 322px; top: 462px; width: 256px; height: 112px; }
+    .n5 { left: 330px; top: 596px; width: 240px; height: 90px; }
 
-    .n6 { left: 550px; top: 354px; width: 220px; height: 124px; }
-    .n7 { left: 794px; top: 354px; width: 220px; height: 124px; }
-    .n8 { left: 1038px; top: 354px; width: 254px; height: 124px; }
-    .n11 { left: 286px; top: 354px; width: 238px; height: 124px; }
+    .n11 { left: 56px; top: 726px; width: 240px; height: 124px; }
+    .n6 { left: 324px; top: 726px; width: 250px; height: 124px; }
+    .n7 { left: 602px; top: 726px; width: 240px; height: 124px; }
+    .n8 { left: 602px; top: 872px; width: 240px; height: 108px; }
 
-    .n9 { left: 862px; top: 586px; width: 210px; height: 120px; }
-    .n10 { left: 562px; top: 586px; width: 270px; height: 120px; }
+    .n9 { left: 324px; top: 1012px; width: 250px; height: 104px; }
+    .n10 { left: 304px; top: 1142px; width: 290px; height: 96px; }
 
     .risk-inline {
       margin-top: 8px;
@@ -177,28 +177,28 @@
       <div class="lane-label lane-cache-label">Слой кэшей и публикации snapshot</div>
       <div class="lane-label lane-feedback-label">Действия пользователя и обратная запись</div>
 
-      <svg viewBox="0 0 1330 840" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg viewBox="0 0 900 1320" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <defs>
           <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0,0 L10,4 L0,8 Z" fill="#2f456f"/>
           </marker>
         </defs>
 
-        <path class="arrow" d="M226,156 L250,156"/>
-        <path class="arrow" d="M460,156 L486,156"/>
-        <path class="arrow" d="M696,156 L722,156"/>
-        <path class="arrow" d="M978,156 L1010,156"/>
+        <path class="arrow" d="M450,216 L450,238"/>
+        <path class="arrow" d="M450,328 L450,350"/>
+        <path class="arrow" d="M450,440 L450,462"/>
+        <path class="arrow" d="M450,574 L450,596"/>
 
-        <path class="arrow" d="M850,228 L850,354"/>
-        <path class="arrow" d="M850,220 L524,416"/>
-        <path class="arrow" d="M524,416 L550,416"/>
-        <path class="arrow" d="M770,416 L794,416"/>
-        <path class="arrow" d="M1014,416 L1038,416"/>
+        <path class="arrow" d="M450,574 L296,788"/>
+        <path class="arrow" d="M450,574 L449,726"/>
+        <path class="arrow" d="M296,788 L324,788"/>
+        <path class="arrow" d="M574,788 L602,788"/>
+        <path class="arrow" d="M722,850 L722,872"/>
 
-        <path class="arrow" d="M1150,218 L1000,586"/>
-        <path class="arrow" d="M1165,478 L967,586"/>
-        <path class="arrow-feedback" d="M862,646 L772,646"/>
-        <path class="arrow-feedback" d="M562,646 L168,646 L168,218"/>
+        <path class="arrow" d="M450,686 L449,1012"/>
+        <path class="arrow" d="M722,980 L574,1064"/>
+        <path class="arrow-feedback" d="M449,1116 L449,1142"/>
+        <path class="arrow-feedback" d="M304,1190 L110,1190 L110,170 L330,170"/>
       </svg>
 
       <section class="node n1">
