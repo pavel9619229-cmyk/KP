@@ -185,6 +185,33 @@
       color: #334b79;
       font-size: 14px;
     }
+
+    .processes {
+      margin-top: 16px;
+      background: #ffffff;
+      border: 1px solid #d5def2;
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 4px 12px rgba(21, 39, 79, 0.06);
+    }
+
+    .processes h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      color: #233a63;
+    }
+
+    .processes ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #223659;
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .processes li {
+      margin-bottom: 6px;
+    }
   </style>
 </head>
 <body>
@@ -301,6 +328,20 @@
         Черные стрелки: текущий поток. Красные стрелки: проектируемый слой очереди и проверки snapshot (после шага процесс идет дальше только если 5 и 8 совпадают). LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
       </div>
     </div>
+
+    <section class="processes">
+      <h2>Процессы, использующие snapshot</h2>
+      <ol>
+        <li>Runtime consistency sync: выбор authoritative snapshot local/GitHub и выравнивание _cached_rows.</li>
+        <li>Manual refresh: полный цикл загрузки и обновления runtime snapshot.</li>
+        <li>Publish confirmed snapshot: запись версии в GitHub и продвижение current-pointer.</li>
+        <li>Background refresh loop: регулярный фоновый пересчет/обновление runtime состояния.</li>
+        <li>Refresh cached rows only: частичный refresh с опорой на текущий snapshot в памяти.</li>
+        <li>Payments-only refresh: обновление оплат с применением к текущему snapshot.</li>
+        <li>API /api/kp/all: перед выдачей данных выполняет sync confirmed snapshot.</li>
+        <li>WebSocket /ws/kp: перед пушем обновлений выполняет sync confirmed snapshot.</li>
+      </ol>
+    </section>
   </div>
 </body>
 </html>
