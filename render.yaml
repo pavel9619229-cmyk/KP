@@ -30,7 +30,7 @@ services:
       - key: REFRESH_SECONDS
         value: "60"
       - key: ENABLE_BACKGROUND_REFRESH
-        value: "true"
+        value: "false"
       - key: MANUAL_REFRESH_INCLUDE_STAGE6
         value: "true"
       - key: GROUP_SCAN_MAX_PAGES
