@@ -6730,10 +6730,6 @@ async def on_startup() -> None:
         if not need_recovery_refresh and _has_pending_refresh_checkpoint():
             need_recovery_refresh = True
             recovery_reason = "pending-refresh-checkpoint"
-        if not need_recovery_refresh and not REQUIRE_LIVE_REFRESH_AFTER_STARTUP:
-            if _is_runtime_snapshot_stale_for_recovery(max_age_hours=6):
-                need_recovery_refresh = True
-                recovery_reason = "stale-runtime-snapshot"
 
         if need_recovery_refresh:
             log(f"[startup] running recovery refresh ({recovery_reason})")
