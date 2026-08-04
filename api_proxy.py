@@ -159,6 +159,17 @@ GROUP_SCAN_MAX_PAGES = int(os.getenv("GROUP_SCAN_MAX_PAGES", "80"))
 GROUP_SCAN_MAX_SECONDS = float(os.getenv("GROUP_SCAN_MAX_SECONDS", "240"))
 PAYMENTS_ONLY_WAIT_SECONDS = int(os.getenv("PAYMENTS_ONLY_WAIT_SECONDS", "180"))
 PAYMENTS_ONLY_PAUSE_SECONDS = int(os.getenv("PAYMENTS_ONLY_PAUSE_SECONDS", "300"))
+# Hard wall-clock deadline for the payments-only worker thread (orders+
+# invoices+payments matching). requests' per-read timeout does not bound
+# total request duration if a server trickles data slowly, so this outer
+# deadline exists purely to stop the reported state from staying
+# running=true forever if the underlying thread hangs. It cannot force-kill
+# the OS thread itself (Python has no safe API for that) — it only frees up
+# the *reported* running/lastOk/lastError state for observability and to
+# unblock the caller; the true mutual-exclusion lock (_partial_refresh_lock)
+# is intentionally left untouched so a genuinely still-running worker cannot
+# race with a new one over shared row mutation.
+PAYMENTS_ONLY_HARD_DEADLINE_SECONDS = int(os.getenv("PAYMENTS_ONLY_HARD_DEADLINE_SECONDS", "900"))
 NAV_LINK_LIMIT = int(os.getenv("NAV_LINK_LIMIT", "4"))
 ORDERS_HINT_SCAN_MAX_PAGES = int(os.getenv("ORDERS_HINT_SCAN_MAX_PAGES", "80"))
 ORDERS_HINT_SCAN_PAGE_SIZE = int(os.getenv("ORDERS_HINT_SCAN_PAGE_SIZE", "20"))
@@ -7648,10 +7659,13 @@ async def payments_only_refresh(request: Request):
                     break
                 await asyncio.sleep(2)
 
-            result = await asyncio.to_thread(
-                refresh_payments_only_for_cached_rows,
-                f"payments-only-refresh:{username}",
-                True,
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    refresh_payments_only_for_cached_rows,
+                    f"payments-only-refresh:{username}",
+                    True,
+                ),
+                timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
             )
             _set_payments_only_state(
                 lastOk=bool(result.get("ok")),
@@ -7660,6 +7674,16 @@ async def payments_only_refresh(request: Request):
                 paymentReceivedCount=result.get("paymentReceivedCount"),
                 invoiceCreatedCount=result.get("invoiceCreatedCount"),
             )
+        except asyncio.TimeoutError:
+            _set_payments_only_state(
+                lastOk=False,
+                lastError=(
+                    f"payments-only refresh hard deadline {PAYMENTS_ONLY_HARD_DEADLINE_SECONDS}s exceeded "
+                    "(worker thread may still be running in background; lock stays held until it exits)"
+                ),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+            )
+            log(f"payments-only refresh hard deadline {PAYMENTS_ONLY_HARD_DEADLINE_SECONDS}s exceeded")
         except Exception as exc:
             _set_payments_only_state(
                 lastOk=False,
@@ -7773,10 +7797,13 @@ async def manual_refresh_stage4_4(request: Request):
                     break
                 await asyncio.sleep(2)
 
-            result = await asyncio.to_thread(
-                refresh_payments_only_for_cached_rows,
-                f"manual-refresh-4of4:{username}",
-                True,
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    refresh_payments_only_for_cached_rows,
+                    f"manual-refresh-4of4:{username}",
+                    True,
+                ),
+                timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
             )
             _set_stage4_4_refresh_state(
                 lastOk=bool(result.get("ok")),
@@ -7790,6 +7817,16 @@ async def manual_refresh_stage4_4(request: Request):
                 f"ok={result.get('ok')}, paymentReceivedCount={result.get('paymentReceivedCount')}, "
                 f"user={username}, host={client_host}"
             )
+        except asyncio.TimeoutError:
+            _set_stage4_4_refresh_state(
+                lastOk=False,
+                lastError=(
+                    f"stage4/4 refresh hard deadline {PAYMENTS_ONLY_HARD_DEADLINE_SECONDS}s exceeded "
+                    "(worker thread may still be running in background; lock stays held until it exits)"
+                ),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+            )
+            log(f"stage4/4 refresh hard deadline {PAYMENTS_ONLY_HARD_DEADLINE_SECONDS}s exceeded")
         except Exception as exc:
             _set_stage4_4_refresh_state(
                 lastOk=False,
