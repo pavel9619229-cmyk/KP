@@ -1596,12 +1596,22 @@ def _send_email(to_email: str, subject: str, body_text: str) -> tuple[bool, str]
         return False, f"{type(exc).__name__}: {exc}"
 
 
-def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[str, dict], headers: dict) -> None:
+def _execute_client_thinking_reminder_rule(
+    rows: list[dict],
+    docs_by_ref: dict[str, dict] | None,
+    headers: dict,
+) -> dict:
+    """Runs the client_thinking_reminder_v1 rule (comment prefix + manager email)
+    for rows currently at the trigger status. Not called automatically during
+    refresh cycles — must be triggered explicitly (see /api/kp/process/client-thinking-reminder).
+    """
+    result = {"processed": 0, "matched": 0, "sent": 0, "skipped": 0, "failed": 0, "errors": []}
+
     with _comment_automation_rules_lock:
         payload = load_comment_automation_rules()
     rules = payload.get("rules") if isinstance(payload, dict) else []
     if not isinstance(rules, list) or not rules:
-        return
+        return result
 
     rule = None
     for item in rules:
@@ -1611,7 +1621,7 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
             rule = item
             break
     if not isinstance(rule, dict) or not bool(rule.get("enabled", True)):
-        return
+        return result
 
     trigger_status = str(rule.get("triggerStatus") or "КЛИЕНТ ДУМАЕТ").strip()
     comment_tpl = str(rule.get("commentPrefixTemplate") or "").strip()
@@ -1619,7 +1629,7 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
     body_tpl = str(rule.get("emailBodyTemplate") or "").strip()
     if not trigger_status or not comment_tpl or not body_tpl:
         log("client-thinking rule skipped: invalid templates")
-        return
+        return result
 
     with _status_rules_lock:
         status_rules = _parse_status_rules_text(load_status_rules_text())
@@ -1634,6 +1644,8 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
     active_refs: set[str] = set()
     sent_count = 0
     skipped_count = 0
+    failed_count = 0
+    errors: list[dict] = []
 
     for row in list(rows or []):
         ref_key = str(row.get("refKey") or "").strip()
@@ -1646,6 +1658,7 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
         if computed_status != trigger_status:
             continue
         active_refs.add(ref_key)
+        result["matched"] += 1
 
         existing_entry = state_items.get(ref_key)
         if isinstance(existing_entry, dict) and str(existing_entry.get("status") or "") == trigger_status:
@@ -1662,24 +1675,33 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
         subject = _render_rule_template(subject_tpl, values)
         body = _render_rule_template(body_tpl, values)
 
-        doc = docs_by_ref.get(ref_key) or {}
+        doc = (docs_by_ref or {}).get(ref_key) or {}
+        if not doc:
+            doc = _fetch_doc_by_ref(ref_key, headers, timeout=max(DOC_TIMEOUT_SECONDS, 8.0)) or {}
         existing_comment = str(doc.get("Комментарий") or "")
         patched = _patch_comment_prefix_line(ref_key, existing_comment, comment_line, headers)
         if not patched:
             log(f"client-thinking rule: comment patch failed for KP {kp_number}")
+            failed_count += 1
+            errors.append({"number": kp_number, "error": "comment patch failed"})
             continue
 
         manager_email = _resolve_manager_email_for_rule(manager_name, rule)
         if not manager_email:
             log(f"client-thinking rule: manager email is not resolved for KP {kp_number} ({manager_name})")
+            failed_count += 1
+            errors.append({"number": kp_number, "error": f"manager email is not resolved ({manager_name})"})
             continue
 
         sent, err = _send_email(manager_email, subject, body)
         if not sent:
             log(f"client-thinking rule: email send failed for KP {kp_number}: {err}")
+            failed_count += 1
+            errors.append({"number": kp_number, "error": f"email send failed: {err}"})
             continue
 
         sent_count += 1
+        result["processed"] += 1
         state_items[ref_key] = {
             "status": trigger_status,
             "kpNumber": kp_number,
@@ -1697,11 +1719,39 @@ def _execute_client_thinking_reminder_rule(rows: list[dict], docs_by_ref: dict[s
     state["updatedAt"] = datetime.now(timezone.utc).isoformat()
     _save_comment_automation_state(state)
 
-    if sent_count or skipped_count:
+    result["sent"] = sent_count
+    result["skipped"] = skipped_count
+    result["failed"] = failed_count
+    result["errors"] = errors
+
+    if sent_count or skipped_count or failed_count:
         log(
             "client-thinking rule run: "
-            f"sent={sent_count}, skipped={skipped_count}, active={len(active_refs)}"
+            f"sent={sent_count}, skipped={skipped_count}, failed={failed_count}, active={len(active_refs)}"
         )
+
+    return result
+
+
+def _process_client_thinking_reminder_for_user(user: dict) -> dict:
+    """Manual trigger for the client_thinking_reminder_v1 rule (button-only,
+    not part of the automatic refresh pipeline)."""
+    if not _cached_rows:
+        return {
+            "ok": False,
+            "detail": "KP data is not available yet",
+            "processed": 0,
+            "matched": 0,
+            "sent": 0,
+            "skipped": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+    visible_rows = _filter_rows_for_user(_cached_rows, user)
+    headers = _build_headers()
+    result = _execute_client_thinking_reminder_rule(visible_rows, None, headers)
+    return {"ok": True, **result}
 
 
 def _push_rules_to_github(rules_text: str, updated_at: str) -> None:
@@ -6049,12 +6099,6 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
         _save_refresh_checkpoint("stage6_group_flags", rows, include_stage6, page_size)
         log("stage6_group_flags skipped (fast mode)")
 
-    # Rule automation: comment/email for specific computed status.
-    try:
-        _execute_client_thinking_reminder_rule(rows, docs_by_ref, headers)
-    except Exception as exc:
-        log(f"client-thinking rule failed: {type(exc).__name__}: {exc}")
-
     for row in rows:
         apply_runtime_defaults(row)
 
@@ -8372,6 +8416,15 @@ async def create_kp_from_new_request(payload: NewRequestPayload, request: Reques
 async def process_send_to_client_status(request: Request):
     user = _get_user_from_request(request)
     result = await asyncio.to_thread(_process_send_to_client_status_for_user, user)
+    if result.get("ok") is False and result.get("detail") == "KP data is not available yet":
+        raise HTTPException(status_code=503, detail=result.get("detail"))
+    return result
+
+
+@app.post("/api/kp/process/client-thinking-reminder")
+async def process_client_thinking_reminder_status(request: Request):
+    user = _get_user_from_request(request)
+    result = await asyncio.to_thread(_process_client_thinking_reminder_for_user, user)
     if result.get("ok") is False and result.get("detail") == "KP data is not available yet":
         raise HTTPException(status_code=503, detail=result.get("detail"))
     return result

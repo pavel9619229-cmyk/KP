@@ -526,6 +526,73 @@ if (processClientStatusBtn) {
   });
 }
 
+if (processThinkStatusBtn) {
+  processThinkStatusBtn.addEventListener('click', async () => {
+    const defaultLabel = 'Обработать статусы Клиент думает';
+    const transientStatuses = new Set([502, 503, 504]);
+    const maxAttempts = 3;
+    processThinkStatusBtn.disabled = true;
+    processThinkStatusBtn.textContent = 'ОБРАБОТКА...';
+
+    try {
+      let payload = {};
+      let response = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        response = await fetch('/api/kp/process/client-thinking-reminder', {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const rawBody = await response.text().catch(() => '');
+        payload = {};
+        if (rawBody) {
+          try {
+            payload = JSON.parse(rawBody);
+          } catch {
+            payload = { error: rawBody };
+          }
+        }
+
+        if (response.ok) {
+          break;
+        }
+
+        const details = payload?.detail || payload?.error || rawBody || `HTTP ${response.status}`;
+        const canRetry = transientStatuses.has(response.status) && attempt < maxAttempts;
+        if (!canRetry) {
+          throw new Error(String(details));
+        }
+
+        updatedAtLabel.textContent = `Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`;
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+      }
+
+      if (!response || !response.ok) {
+        throw new Error('Не удалось обработать статусы после повторов');
+      }
+
+      const matched = Number(payload?.matched || 0);
+      const sent = Number(payload?.sent || 0);
+      const skipped = Number(payload?.skipped || 0);
+      const failed = Number(payload?.failed || 0);
+
+      updatedAtLabel.textContent = `Найдено: ${matched}; отправлено: ${sent}; пропущено: ${skipped}; ошибок: ${failed}`;
+    } catch (error) {
+      updatedAtLabel.textContent = `Ошибка обработки статуса: ${error.message}`;
+    } finally {
+      processThinkStatusBtn.disabled = false;
+      processThinkStatusBtn.textContent = defaultLabel;
+    }
+  });
+}
+
 statusTabs.addEventListener('click', (event) => {
   const button = event.target.closest('[data-status-key]');
   if (!(button instanceof HTMLButtonElement)) {
