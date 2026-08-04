@@ -417,6 +417,26 @@ _payments_only_state: dict = {
     "paymentReceivedCount": None,
     "invoiceCreatedCount": None,
 }
+# Proposed process 4/4 (платежи, Document_ПоступлениеБезналичныхДенежныхСредств):
+# a thin, separately-triggerable wrapper around the existing payments-only
+# refresh (refresh_payments_only_for_cached_rows), with its own state so it
+# never collides with the main "Обновить" button's or payments-only button's
+# reported state. Reuses payments-only logic as-is (orders+invoices+payments
+# matching + seed promotions) — does not change how "Оплата получена" is computed.
+_stage4_4_refresh_state_lock = threading.Lock()
+_stage4_4_refresh_state: dict = {
+    "running": False,
+    "requestedAt": None,
+    "requestedBy": None,
+    "requestedFrom": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastOk": None,
+    "lastError": None,
+    "waitedSeconds": None,
+    "paymentReceivedCount": None,
+    "invoiceCreatedCount": None,
+}
 _single_kp_seed_queue_lock = threading.Lock()
 _single_kp_seed_queue: set[str] = set()
 _resume_interrupted_manual_refresh = False
@@ -477,6 +497,20 @@ def _payments_only_snapshot() -> dict:
 def _set_payments_only_state(**updates: object) -> None:
     with _payments_only_state_lock:
         _payments_only_state.update(updates)
+
+
+def _stage4_4_refresh_snapshot() -> dict:
+    with _stage4_4_refresh_state_lock:
+        state = dict(_stage4_4_refresh_state)
+    state["rows"] = len(_cached_rows)
+    state["lastRefresh"] = _last_refresh
+    state["lastRefreshError"] = _last_refresh_error
+    return state
+
+
+def _set_stage4_4_refresh_state(**updates: object) -> None:
+    with _stage4_4_refresh_state_lock:
+        _stage4_4_refresh_state.update(updates)
 
 
 def _queue_single_kp_seed_promotion(kp_number: str) -> None:
@@ -7673,6 +7707,117 @@ async def payments_only_refresh_single_kp(kp_number: str, request: Request):
     )
     status_code = 200 if result.get("ok") else 202
     return JSONResponse(status_code=status_code, content=result)
+
+
+@app.post("/api/kp/refresh/stage4_4")
+async def manual_refresh_stage4_4(request: Request):
+    """Проект 4/4 (не связан с кнопкой "Обновить" и с payments-only): поиск
+    оплат (Document_ПоступлениеБезналичныхДенежныхСредств) и запись
+    результата в runtime-кэш, откуда его читает блок 3 на /admin/dashboard.
+    Это тонкая обёртка над уже существующей refresh_payments_only_for_cached_rows
+    (переиспользует всю её логику как есть), с отдельным состоянием, чтобы не
+    смешиваться со статусом кнопки "Оплаты" и обычного refresh."""
+    username = "anonymous"
+    try:
+        user = _get_user_from_request(request)
+        username = str(user.get("username") or "anonymous")
+    except HTTPException:
+        pass
+
+    client_host = request.client.host if request.client else "unknown"
+
+    with _stage4_4_refresh_state_lock:
+        if _stage4_4_refresh_state.get("running"):
+            state = dict(_stage4_4_refresh_state)
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "ok": True,
+                    "message": "stage4/4 refresh is already running",
+                    **state,
+                    "rows": len(_cached_rows),
+                    "lastRefresh": _last_refresh,
+                    "lastRefreshError": _last_refresh_error,
+                },
+            )
+
+        _stage4_4_refresh_state.update(
+            {
+                "running": True,
+                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "requestedBy": username,
+                "requestedFrom": client_host,
+                "startedAt": None,
+                "finishedAt": None,
+                "lastOk": None,
+                "lastError": None,
+                "waitedSeconds": None,
+                "paymentReceivedCount": None,
+                "invoiceCreatedCount": None,
+            }
+        )
+
+    async def _run_stage4_4_refresh() -> None:
+        pause_reason = "stage4-4-refresh"
+        wait_started = time.time()
+        _set_stage4_4_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
+        log(f"stage4/4 refresh requested by {username} from {client_host}")
+
+        _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
+        try:
+            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
+            while time.time() < wait_deadline:
+                lock_free = _refresh_run_lock.acquire(blocking=False)
+                if lock_free:
+                    _refresh_run_lock.release()
+                    break
+                await asyncio.sleep(2)
+
+            result = await asyncio.to_thread(
+                refresh_payments_only_for_cached_rows,
+                f"manual-refresh-4of4:{username}",
+                True,
+            )
+            _set_stage4_4_refresh_state(
+                lastOk=bool(result.get("ok")),
+                lastError=result.get("error") or (None if result.get("ok") else result.get("skipped")),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+                paymentReceivedCount=result.get("paymentReceivedCount"),
+                invoiceCreatedCount=result.get("invoiceCreatedCount"),
+            )
+            log(
+                "stage4/4 refresh finished: "
+                f"ok={result.get('ok')}, paymentReceivedCount={result.get('paymentReceivedCount')}, "
+                f"user={username}, host={client_host}"
+            )
+        except Exception as exc:
+            _set_stage4_4_refresh_state(
+                lastOk=False,
+                lastError=str(exc),
+                waitedSeconds=int(max(0, time.time() - wait_started)),
+            )
+            log(f"stage4/4 refresh task crashed: {type(exc).__name__}: {exc}")
+        finally:
+            _clear_refresh_pause(pause_reason)
+            _set_stage4_4_refresh_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            )
+
+    asyncio.create_task(_run_stage4_4_refresh())
+    return JSONResponse(
+        status_code=202,
+        content={
+            "ok": True,
+            "message": "stage4/4 refresh started",
+            **_stage4_4_refresh_snapshot(),
+        },
+    )
+
+
+@app.get("/api/kp/refresh/stage4_4/status")
+async def manual_refresh_stage4_4_status():
+    return _stage4_4_refresh_snapshot()
 
 
 async def _run_system_checkpoint_recovery(trigger: str) -> None:
