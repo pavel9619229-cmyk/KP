@@ -3720,7 +3720,7 @@ def _fetch_orders_by_number_hints(
     return result
 
 
-def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
+def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan: bool = False) -> None:
     target_refs = [str(r.get("refKey") or "") for r in rows]
     target_refs = [r for r in target_refs if r]
     if not target_refs:
@@ -3833,7 +3833,13 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict) -> None:
 
     invoice_order_refs: set[str] = set()
     invoices_complete = False
-    if not target_order_refs:
+    if skip_invoice_scan:
+        # Fast mode (used by "process 4/4"): payments matching does not need
+        # the invoice scan (invoiceCreated is not part of the "Оплата
+        # получена" / block-3 rule), so skip it entirely to save time.
+        # Existing invoiceCreated values on rows are left untouched.
+        log("[invoices] scan skipped (4/4 fast mode); keeping invoiceCreated as-is")
+    elif not target_order_refs:
         # Preserve current invoice flags when order links cannot be resolved,
         # but continue with payments scan so block-3 rule can still promote paymentReceived.
         log("[orders] no order links resolved; preserving invoice flags, continue with block-3 payment scan")
@@ -6471,6 +6477,7 @@ def refresh_comment_first_line_only() -> dict:
 def refresh_payments_only_for_cached_rows(
     cycle_owner: str = "payments-only-refresh",
     allow_when_refresh_busy: bool = False,
+    skip_invoice_scan: bool = False,
 ) -> dict:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
@@ -6510,7 +6517,7 @@ def refresh_payments_only_for_cached_rows(
         refreshed: list[dict] = [dict(r) for r in source_rows]
 
         # Run only stage6 enrichment (orders/invoices/payments matching).
-        _enrich_group_flags_bulk(refreshed, headers)
+        _enrich_group_flags_bulk(refreshed, headers, skip_invoice_scan=skip_invoice_scan)
 
         # Preserve block3-compatible payment source from seed data across
         # payments-only runs, not only for explicitly queued KPs.
@@ -7738,9 +7745,13 @@ async def manual_refresh_stage4_4(request: Request):
     """Проект 4/4 (не связан с кнопкой "Обновить" и с payments-only): поиск
     оплат (Document_ПоступлениеБезналичныхДенежныхСредств) и запись
     результата в runtime-кэш, откуда его читает блок 3 на /admin/dashboard.
-    Это тонкая обёртка над уже существующей refresh_payments_only_for_cached_rows
-    (переиспользует всю её логику как есть), с отдельным состоянием, чтобы не
-    смешиваться со статусом кнопки "Оплаты" и обычного refresh."""
+    Это обёртка над уже существующей refresh_payments_only_for_cached_rows,
+    но со skip_invoice_scan=True — скан накладных (Document_РеализацияТова
+    ровУслуг) пропускается, т.к. он не влияет на "Оплата получена"/блок 3
+    (влияет только на invoiceCreated), а скан заказов остаётся обязательным,
+    т.к. без него не из чего брать номера заказов для сопоставления с
+    назначением платежа. Отдельное состояние, чтобы не смешиваться со
+    статусом кнопки "Оплаты" и обычного refresh."""
     username = "anonymous"
     try:
         user = _get_user_from_request(request)
@@ -7802,6 +7813,7 @@ async def manual_refresh_stage4_4(request: Request):
                     refresh_payments_only_for_cached_rows,
                     f"manual-refresh-4of4:{username}",
                     True,
+                    True,  # skip_invoice_scan=True — this is exactly what makes this "4/4" faster
                 ),
                 timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
             )
