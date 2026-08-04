@@ -17,7 +17,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Елена, предложите Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте)",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
@@ -40,7 +40,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "test",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
@@ -63,7 +63,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест 3",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
@@ -86,7 +86,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест 3",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
@@ -109,7 +109,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест2",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
@@ -132,7 +132,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест2",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
@@ -155,7 +155,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "пнев 28915 - 38 шт.",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
@@ -178,7 +178,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "(Ждем данные по дискам.)",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
@@ -201,7 +201,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "(КП отправлено?) Шинокомплект 6.00-9 PR 10 WESTLAKE CL621 TTF+ запол. шин 6.00-9 полиурет.+диск сбор.HYWG 9.400.002S",
-    "invoiceCreated": false,
+    "invoiceCreated": null,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
