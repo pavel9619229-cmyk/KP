@@ -8408,7 +8408,6 @@ async def create_kp_from_new_request(payload: NewRequestPayload, request: Reques
         raise HTTPException(status_code=400, detail="Request text is too short")
 
     result = await asyncio.to_thread(_create_kp_in_1c_from_request, request_text)
-    await asyncio.to_thread(refresh_cache_and_file)
     return result
 
 
