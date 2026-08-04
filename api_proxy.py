@@ -7150,6 +7150,15 @@ async def manual_refresh(request: Request):
                         break
                 log("[refresh] running cycle completed; proceeding to publish from disk")
 
+            if _last_refresh_error:
+                # refresh_cache_and_file caught its own exception internally
+                # (e.g. subprocess timeout/kill) and returns True regardless
+                # (True only means "was not skipped due to a busy lock").
+                # Do NOT publish whatever happens to be on disk in that case —
+                # it may be a stale/unrelated snapshot never touched by this
+                # cycle's save_rows(). Treat this the same as a hard failure.
+                raise RuntimeError(f"full refresh cycle did not produce a fresh snapshot: {_last_refresh_error}")
+
             candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()
