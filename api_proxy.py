@@ -120,6 +120,15 @@ STAGE34_WORKERS = int(os.getenv("STAGE34_WORKERS", "20"))
 NAV_TIMEOUT_SECONDS = float(os.getenv("NAV_TIMEOUT_SECONDS", "0.8"))
 BASE_BATCH_TIMEOUT_SECONDS = float(os.getenv("BASE_BATCH_TIMEOUT_SECONDS", "120"))
 MANUAL_REFRESH_TIMEOUT_SECONDS = int(os.getenv("MANUAL_REFRESH_TIMEOUT_SECONDS", "900"))
+# Hard kill deadline for the OS subprocess doing the actual 1C fetch work.
+# Must stay BELOW the outer asyncio.wait_for timeout (MANUAL_REFRESH_TIMEOUT_SECONDS + 180)
+# so the subprocess (and the _refresh_run_lock it holds) is actually terminated
+# before the API layer gives up waiting and reports "manual refresh timed out".
+# Otherwise the lock stays held by an orphaned process long after the API
+# already reported the cycle as finished.
+REFRESH_SUBPROCESS_TIMEOUT_SECONDS = float(
+    os.getenv("REFRESH_SUBPROCESS_TIMEOUT_SECONDS", str(MANUAL_REFRESH_TIMEOUT_SECONDS))
+)
 # <=0 means full target window (no top-N cap).
 MANUAL_REFRESH_PAGE_SIZE = int(os.getenv("MANUAL_REFRESH_PAGE_SIZE", "0"))
 # Explicit top-N cap requested by user on 2026-07-27 to reduce stage2.5+ per-doc
@@ -5497,10 +5506,23 @@ def _refresh_subprocess_worker(include_stage6: bool, page_size: int, log_queue, 
         result_queue.put(("error", f"{type(exc).__name__}: {exc}"))
 
 
-def _fetch_rows_from_odata_subprocess(include_stage6: bool = True, page_size: int = 0) -> list:
+def _fetch_rows_from_odata_subprocess(
+    include_stage6: bool = True,
+    page_size: int = 0,
+    timeout_seconds: float | None = None,
+) -> list:
     """Runs fetch_rows_from_odata() in a separate OS process instead of the
     calling thread, so the main event loop (and /healthz) stays responsive
-    during heavy parallel 1C fetch work."""
+    during heavy parallel 1C fetch work.
+
+    If the child process does not report a result within timeout_seconds,
+    it is forcibly terminated (SIGTERM, then SIGKILL if needed) so the
+    _refresh_run_lock held by the caller is released promptly instead of
+    staying held by an orphaned process indefinitely.
+    """
+    if timeout_seconds is None:
+        timeout_seconds = REFRESH_SUBPROCESS_TIMEOUT_SECONDS
+
     try:
         ctx = multiprocessing.get_context("fork")
     except ValueError:
@@ -5550,7 +5572,23 @@ def _fetch_rows_from_odata_subprocess(include_stage6: bool = True, page_size: in
     result_thread.start()
 
     try:
-        result_thread.join()
+        result_thread.join(timeout=timeout_seconds)
+        if result_thread.is_alive():
+            log(
+                f"refresh subprocess exceeded {timeout_seconds:.0f}s "
+                f"(pid={proc.pid}) — forcing termination"
+            )
+            proc.terminate()
+            proc.join(timeout=5)
+            if proc.is_alive():
+                log(f"refresh subprocess (pid={proc.pid}) ignored terminate — sending kill")
+                proc.kill()
+                proc.join(timeout=5)
+            stop_draining.set()
+            drain_thread.join(timeout=2)
+            raise TimeoutError(
+                f"refresh subprocess exceeded {timeout_seconds:.0f}s and was killed (pid={proc.pid})"
+            )
         proc.join(timeout=10)
     finally:
         stop_draining.set()
