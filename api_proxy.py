@@ -388,6 +388,22 @@ _manual_refresh_state: dict = {
     "lastOk": None,
     "lastError": None,
 }
+# Proposed process 1/4 (stage1_base + stage2.5 + stage2 + stage3 + stage4 +
+# stage5, i.e. everything except the heavy stage6 orders/invoices/payments
+# scan): a separate, independently-triggerable refresh cycle with its own
+# state, so it never collides with the main manual-refresh button's state.
+_stage1_4_refresh_state_lock = threading.Lock()
+_stage1_4_refresh_state: dict = {
+    "running": False,
+    "requestedAt": None,
+    "requestedBy": None,
+    "requestedFrom": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastOk": None,
+    "lastError": None,
+    "confirmedVersion": None,
+}
 _payments_only_state_lock = threading.Lock()
 _payments_only_state: dict = {
     "running": False,
@@ -433,6 +449,20 @@ def _manual_refresh_snapshot() -> dict:
     state["lastRefresh"] = _last_refresh
     state["lastRefreshError"] = _last_refresh_error
     return state
+
+
+def _stage1_4_refresh_snapshot() -> dict:
+    with _stage1_4_refresh_state_lock:
+        state = dict(_stage1_4_refresh_state)
+    state["rows"] = len(_cached_rows)
+    state["lastRefresh"] = _last_refresh
+    state["lastRefreshError"] = _last_refresh_error
+    return state
+
+
+def _set_stage1_4_refresh_state(**updates: object) -> None:
+    with _stage1_4_refresh_state_lock:
+        _stage1_4_refresh_state.update(updates)
 
 
 def _payments_only_snapshot() -> dict:
@@ -7263,6 +7293,226 @@ async def manual_refresh(request: Request):
 async def manual_refresh_force(request: Request):
     # Explicit endpoint for forced/manual refresh from external automations.
     return await manual_refresh(request)
+
+
+@app.post("/api/kp/refresh/stage1_4")
+async def manual_refresh_stage1_4(request: Request):
+    """Проект 1/4 (не связан с кнопкой "Обновить"): базовый скан КП +
+    карточка документа (товары/услуги, комментарий, клиент, менеджер, цена
+    товара) — stage1_base+stage2.5+stage2+stage3+stage4+stage5, БЕЗ stage6
+    (заказы/накладные/оплаты). Публикует результат в GitHub/UI сразу после
+    завершения, независимо от полного цикла refresh."""
+    username = "anonymous"
+    try:
+        user = _get_user_from_request(request)
+        username = str(user.get("username") or "anonymous")
+    except HTTPException:
+        pass
+
+    client_host = request.client.host if request.client else "unknown"
+
+    with _stage1_4_refresh_state_lock:
+        if _stage1_4_refresh_state.get("running"):
+            state = dict(_stage1_4_refresh_state)
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "ok": True,
+                    "message": "stage1/4 refresh is already running",
+                    **state,
+                    "rows": len(_cached_rows),
+                    "lastRefresh": _last_refresh,
+                    "lastRefreshError": _last_refresh_error,
+                },
+            )
+
+        _stage1_4_refresh_state.update(
+            {
+                "running": True,
+                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "requestedBy": username,
+                "requestedFrom": client_host,
+                "startedAt": None,
+                "finishedAt": None,
+                "lastOk": None,
+                "lastError": None,
+                "confirmedVersion": None,
+            }
+        )
+
+    async def _run_stage1_4_refresh() -> None:
+        global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
+
+        _set_stage1_4_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
+        log(f"stage1/4 refresh requested by {username} from {client_host}")
+
+        refresh_wait_timeout = max(60, MANUAL_REFRESH_TIMEOUT_SECONDS) + 180
+        TOTAL_HARD_DEADLINE = refresh_wait_timeout + 180
+        deadline_task: asyncio.Task | None = None
+
+        async def _deadline_killer():
+            await asyncio.sleep(TOTAL_HARD_DEADLINE)
+            log(f"[refresh-1of4] hard deadline {TOTAL_HARD_DEADLINE}s reached — forcing running=False")
+            _set_stage1_4_refresh_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                lastOk=False,
+                lastError="stage1/4 refresh hard deadline exceeded",
+            )
+
+        deadline_task = asyncio.create_task(_deadline_killer())
+
+        previous_rows, previous_meta, previous_pointer = _load_confirmed_runtime_from_github()
+        if not previous_rows:
+            previous_rows = load_fresh_runtime_rows() or list(_cached_rows)
+        if not previous_meta:
+            previous_meta = _read_runtime_meta() or {
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "rowCount": len(previous_rows),
+            }
+        if not previous_pointer and previous_rows and previous_meta:
+            try:
+                previous_pointer = _build_runtime_current_pointer(previous_rows, previous_meta)
+            except Exception:
+                previous_pointer = {}
+
+        previous_last_refresh = _last_refresh
+        previous_last_refresh_error = _last_refresh_error
+        previous_last_confirmed_sync_check = _last_confirmed_runtime_sync_check
+
+        try:
+            ran = await asyncio.wait_for(
+                asyncio.to_thread(
+                    refresh_cache_and_file,
+                    True,
+                    False,  # include_stage6=False — this is exactly what makes this "1/4"
+                    MANUAL_REFRESH_PAGE_SIZE,
+                    True,
+                    False,
+                    False,
+                    f"manual-refresh-1of4:{username}",
+                ),
+                timeout=refresh_wait_timeout,
+            )
+
+            if not ran:
+                log("[refresh-1of4] cycle was skipped — waiting for running cycle to complete")
+                wait_deadline = time.time() + max(120, MANUAL_REFRESH_TIMEOUT_SECONDS)
+                while time.time() < wait_deadline:
+                    await asyncio.sleep(5)
+                    lock_free = _refresh_run_lock.acquire(blocking=False)
+                    if lock_free:
+                        _refresh_run_lock.release()
+                        break
+                log("[refresh-1of4] running cycle completed; proceeding to publish from disk")
+
+            if _last_refresh_error:
+                raise RuntimeError(f"stage1/4 refresh cycle did not produce a fresh snapshot: {_last_refresh_error}")
+
+            candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+            candidate_meta = _read_runtime_meta()
+            _publish_t0 = time.time()
+            log(f"[refresh-1of4] starting github publish ({len(candidate_rows)} rows)")
+            publish_source = "github-current"
+            try:
+                github_rows, _, github_pointer = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _publish_confirmed_runtime_snapshot_or_raise,
+                        candidate_rows,
+                        candidate_meta,
+                    ),
+                    timeout=120,
+                )
+                log(f"[refresh-1of4] github publish done in {time.time()-_publish_t0:.1f}s")
+            except Exception as publish_exc:
+                if RUNTIME_STRICT_GITHUB_POINTER:
+                    log(
+                        "[refresh-1of4] versioned github publish failed in strict mode: "
+                        f"{type(publish_exc).__name__}: {publish_exc}"
+                    )
+                    raise RuntimeError(
+                        f"strict runtime publish failed: {type(publish_exc).__name__}: {publish_exc}"
+                    ) from publish_exc
+
+                log(
+                    f"[refresh-1of4] versioned github publish failed: {type(publish_exc).__name__}: {publish_exc}; "
+                    "using local runtime snapshot instead"
+                )
+                github_rows = list(candidate_rows)
+                github_meta = _runtime_normalize_meta(
+                    dict(candidate_meta or {}),
+                    github_rows,
+                    pointer=previous_pointer,
+                    fallback_source="consistency-recovery:stage1_4-refresh-fallback",
+                )
+                try:
+                    github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                except Exception:
+                    github_pointer = {}
+                if github_pointer:
+                    _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
+                else:
+                    _write_runtime_snapshot_files(github_rows, github_meta)
+                publish_source = "local-runtime"
+                log(f"[refresh-1of4] local runtime fallback done in {time.time()-_publish_t0:.1f}s")
+
+            _cached_rows = list(github_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _last_confirmed_runtime_sync_check = time.time()
+            _last_refresh_error = None
+            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+            confirmed_version = github_pointer.get("version") if github_pointer else None
+            _set_stage1_4_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
+            log(
+                "stage1/4 refresh finished: "
+                f"rows={len(_cached_rows)}, lastRefresh={_last_refresh}, confirmedVersion={confirmed_version}, "
+                f"source={publish_source}, user={username}, host={client_host}"
+            )
+        except Exception as exc:
+            _cached_rows = list(previous_rows)
+            _cached_fp = rows_fingerprint(_cached_rows)
+            _write_local_confirmed_runtime(_cached_rows, previous_meta, previous_pointer)
+            _last_refresh = previous_last_refresh
+            _last_refresh_error = previous_last_refresh_error
+            _last_confirmed_runtime_sync_check = previous_last_confirmed_sync_check
+
+            if isinstance(exc, asyncio.TimeoutError):
+                _set_stage1_4_refresh_state(
+                    confirmedVersion=previous_pointer.get("version") if previous_pointer else None,
+                    lastOk=False,
+                    lastError="stage1/4 refresh timed out",
+                )
+                log("stage1/4 refresh timed out")
+            else:
+                _set_stage1_4_refresh_state(
+                    confirmedVersion=previous_pointer.get("version") if previous_pointer else None,
+                    lastOk=False,
+                    lastError=str(exc),
+                )
+                log(f"stage1/4 refresh crashed and kept previous confirmed snapshot: {type(exc).__name__}: {exc}")
+        finally:
+            if deadline_task and not deadline_task.done():
+                deadline_task.cancel()
+            _set_stage1_4_refresh_state(
+                running=False,
+                finishedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            )
+
+    asyncio.create_task(_run_stage1_4_refresh())
+    return JSONResponse(
+        status_code=202,
+        content={
+            "ok": True,
+            "message": "stage1/4 refresh started",
+            **_stage1_4_refresh_snapshot(),
+        },
+    )
+
+
+@app.get("/api/kp/refresh/stage1_4/status")
+async def manual_refresh_stage1_4_status():
+    return _stage1_4_refresh_snapshot()
 
 
 @app.post("/api/kp/refresh/payments-only")

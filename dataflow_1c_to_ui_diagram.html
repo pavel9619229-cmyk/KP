@@ -213,6 +213,43 @@
       margin-bottom: 6px;
     }
 
+    .disabled-process {
+      color: #8a4b4b;
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+    }
+
+    .process-note {
+      margin: 10px 0 0;
+      font-size: 13px;
+      color: #6a4e4e;
+    }
+
+    .proposed-process {
+      color: #c0392b;
+      font-weight: 600;
+    }
+
+    .proposed-substeps {
+      margin: 6px 0 4px;
+      padding-left: 22px;
+      font-weight: 400;
+      color: #a83a2c;
+      font-size: 13px;
+      list-style-type: lower-alpha;
+    }
+
+    .proposed-substeps li {
+      margin-bottom: 4px;
+    }
+
+    .proposed-note {
+      margin: 10px 0 0;
+      font-size: 13px;
+      color: #c0392b;
+      font-style: italic;
+    }
+
     .timing {
       margin-top: 16px;
       background: #ffffff;
@@ -362,12 +399,29 @@
         <li>Runtime consistency sync: выбор authoritative snapshot local/GitHub и выравнивание _cached_rows.</li>
         <li>Manual refresh: полный цикл загрузки и обновления runtime snapshot.</li>
         <li>Publish confirmed snapshot: запись версии в GitHub и продвижение current-pointer.</li>
-        <li>Background refresh loop: регулярный фоновый пересчет/обновление runtime состояния.</li>
+        <li class="disabled-process">Background refresh loop: регулярный фоновый пересчет/обновление runtime состояния.</li>
         <li>Refresh cached rows only: частичный refresh с опорой на текущий snapshot в памяти.</li>
         <li>Payments-only refresh: обновление оплат с применением к текущему snapshot.</li>
         <li>API /api/kp/all: перед выдачей данных выполняет sync confirmed snapshot.</li>
         <li>WebSocket /ws/kp: перед пушем обновлений выполняет sync confirmed snapshot.</li>
+        <li class="proposed-process">ПРОЕКТ (обсуждается, не реализовано) 1/4: базовый скан КП + карточка документа (товары/услуги, комментарий, клиент, менеджер, цена товара) — объединяет нынешние stage1_base + stage2.5 + stage2 + stage3 + stage4 + stage5 в один проход:
+          <ol class="proposed-substeps">
+            <li>Скан Document_КоммерческоеПредложениеКлиенту (backward pagination, как сейчас stage1_base) — получает актуальный список Ref_Key в целевом диапазоне дат.</li>
+            <li>Сравнение полученных Ref_Key с текущим snapshot — любой новый Ref_Key считается новым КП (без доп. запроса к 1С).</li>
+            <li>Для каждого КП (нового и уже известного) — fetch полного документа по Ref_Key (как сейчас stage2.5) — параллельно, получает строки Товары/услуги, поле Комментарий и navigation-links на клиента/менеджера.</li>
+            <li>Парсинг поля Комментарий → флаги (как сейчас stage2).</li>
+            <li>Резолв имени клиента по navigation-link — доп. HTTP-запрос на КП (как сейчас stage3).</li>
+            <li>Резолв имени и «заполненности» менеджера по navigation-link — доп. HTTP-запрос на КП (как сейчас stage4).</li>
+            <li>Проверка наличия товара и заполненности цены по первой строке (как сейчас stage5) — берётся из уже выгруженного документа, доп. запрос нужен только в редком fallback-случае, когда Товары отдаётся как nav-link без inline-данных.</li>
+            <li>Публикация результата шага — commit в GitHub + обновление runtime snapshot / UI — до того, как запустятся шаги 2/4-4/4.</li>
+          </ol>
+          <em>Что НЕ попадает в 1/4:</em> stage6 (заказы/накладные/оплаты, включая статус «Оплата получена») — он остаётся в шагах 2/4-4/4 и не вычисляется в этом проходе.</li>
+        <li class="proposed-process">ПРОЕКТ 2/4: скан появления новых созданных заказов (счетов) — Document_ЗаказКлиента; после завершения — публикация найденных изменений в GitHub и UI.</li>
+        <li class="proposed-process">ПРОЕКТ 3/4: скан появления новых созданных накладных — Document_РеализацияТоваровУслуг; после завершения — публикация найденных изменений в GitHub и UI.</li>
+        <li class="proposed-process">ПРОЕКТ 4/4: скан появления новых приходов оплаты — Document_ПоступлениеБезналичныхДенежныхСредств; после завершения — публикация найденных изменений в GitHub и UI.</li>
       </ol>
+      <p class="process-note">Сейчас дополнительно весь сервис временно suspended в Render, поэтому все runtime-процессы остановлены до ручного Resume.</p>
+      <p class="proposed-note">Проект 1-4 (красным): разбить нынешний монолитный цикл refresh (stage1_base → stage2.5 → stage2 → stage3 → stage4 → stage5 → stage6 — единая попытка на весь цикл) на 4 последовательных процесса с промежуточной публикацией после каждого шага: 1/4 = stage1_base+stage2.5+stage2+stage3+stage4+stage5 (карточка КП целиком, кроме заказов/накладных/оплат); 2/4-4/4 = три под-скана, из которых сейчас состоит stage6 (заказы/накладные/оплаты), каждый — отдельным шагом со своей публикацией. Цель — не ускорение сканирования (объем запросов к 1С тот же), а устойчивость к таймауту: если поздний шаг (например, платежи) не укладывается в лимит, уже найденные и опубликованные изменения из более ранних шагов не теряются. Процессы остаются последовательными (не параллельными) — параллелизация трех сканов обсуждалась и была отклонена как более рискованная без доказанной пользы.</p>
     </section>
 
     <section class="timing">
