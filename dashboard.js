@@ -388,7 +388,7 @@ if (stage1of4Btn) {
 }
 if (stage4of4Btn) {
   stage4of4Btn.addEventListener('click', () => {
-    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel, stage4of4Btn);
+    runStageRefresh('/api/kp/refresh/stage4_4', '/api/kp/refresh/stage4_4/status', stage4of4Btn, stage4of4TimeLabel);
   });
 }
 

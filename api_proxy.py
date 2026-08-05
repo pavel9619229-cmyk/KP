@@ -447,6 +447,7 @@ _stage4_4_refresh_state: dict = {
     "waitedSeconds": None,
     "paymentReceivedCount": None,
     "invoiceCreatedCount": None,
+    "confirmedVersion": None,
 }
 _single_kp_seed_queue_lock = threading.Lock()
 _single_kp_seed_queue: set[str] = set()
@@ -7793,6 +7794,8 @@ async def manual_refresh_stage4_4(request: Request):
         )
 
     async def _run_stage4_4_refresh() -> None:
+        global _cached_rows, _cached_fp, _last_confirmed_runtime_sync_check
+
         pause_reason = "stage4-4-refresh"
         wait_started = time.time()
         _set_stage4_4_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
@@ -7817,17 +7820,61 @@ async def manual_refresh_stage4_4(request: Request):
                 ),
                 timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
             )
+
+            # Публикуем полный версионированный снапшот в GitHub/UI (тот же механизм,
+            # что и у 1/4) — refresh_payments_only_for_cached_rows сам по себе делает
+            # только legacy-запись, чего недостаточно для доставки на дашборд.
+            confirmed_version = None
+            if result.get("ok"):
+                try:
+                    candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
+                    candidate_meta = _read_runtime_meta()
+                    _publish_t0 = time.time()
+                    log(f"[refresh-4of4] starting github publish ({len(candidate_rows)} rows)")
+                    try:
+                        github_rows, _, github_pointer = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                _publish_confirmed_runtime_snapshot_or_raise,
+                                candidate_rows,
+                                candidate_meta,
+                            ),
+                            timeout=120,
+                        )
+                        log(f"[refresh-4of4] github publish done in {time.time()-_publish_t0:.1f}s")
+                        _cached_rows = list(github_rows)
+                        _cached_fp = rows_fingerprint(_cached_rows)
+                        _last_confirmed_runtime_sync_check = time.time()
+                        confirmed_version = github_pointer.get("version") if github_pointer else None
+                    except Exception as publish_exc:
+                        if RUNTIME_STRICT_GITHUB_POINTER:
+                            log(
+                                "[refresh-4of4] versioned github publish failed in strict mode: "
+                                f"{type(publish_exc).__name__}: {publish_exc}"
+                            )
+                            raise RuntimeError(
+                                f"strict runtime publish failed: {type(publish_exc).__name__}: {publish_exc}"
+                            ) from publish_exc
+                        log(
+                            "[refresh-4of4] versioned github publish failed: "
+                            f"{type(publish_exc).__name__}: {publish_exc}; keeping legacy snapshot"
+                        )
+                except Exception as publish_outer_exc:
+                    result["ok"] = False
+                    result["error"] = f"github publish failed: {type(publish_outer_exc).__name__}: {publish_outer_exc}"
+                    log(f"[refresh-4of4] publish step failed: {type(publish_outer_exc).__name__}: {publish_outer_exc}")
+
             _set_stage4_4_refresh_state(
                 lastOk=bool(result.get("ok")),
                 lastError=result.get("error") or (None if result.get("ok") else result.get("skipped")),
                 waitedSeconds=int(max(0, time.time() - wait_started)),
                 paymentReceivedCount=result.get("paymentReceivedCount"),
                 invoiceCreatedCount=result.get("invoiceCreatedCount"),
+                confirmedVersion=confirmed_version,
             )
             log(
                 "stage4/4 refresh finished: "
                 f"ok={result.get('ok')}, paymentReceivedCount={result.get('paymentReceivedCount')}, "
-                f"user={username}, host={client_host}"
+                f"confirmedVersion={confirmed_version}, user={username}, host={client_host}"
             )
         except asyncio.TimeoutError:
             _set_stage4_4_refresh_state(
