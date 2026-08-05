@@ -115,6 +115,95 @@ function startStageStatusPolling() {
   setInterval(poll, STAGE_STATUS_POLL_MS);
 }
 
+// Запускает процесс на backend (POST startUrl), опрашивает statusUrl до завершения
+// и, при успехе, перезагружает данные дашборда без смены активной вкладки/поиска.
+async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
+  if (!btn) return;
+  const pollIntervalMs = 3000;
+  // Небольшой запас сверх серверного hard deadline для этой стадии (~1260с у stage1/4).
+  const maxWaitMs = 1400000;
+  const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
+  const originalText = btn.textContent;
+
+  btn.disabled = true;
+  if (labelEl) labelEl.textContent = 'Запуск...';
+
+  try {
+    const startResponse = await fetch(startUrl, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (startResponse.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+    const startPayload = await startResponse.json().catch(() => ({}));
+    if (!startResponse.ok || startPayload?.ok === false) {
+      const details = startPayload?.detail || startPayload?.error || `HTTP ${startResponse.status}`;
+      throw new Error(String(details));
+    }
+
+    let done = false;
+    let lastState = startPayload;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let statePayload;
+      try {
+        const stateResponse = await fetch(statusUrl, { method: 'GET', credentials: 'include', cache: 'no-store' });
+        if (stateResponse.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        if (!stateResponse.ok) {
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          continue;
+        }
+        statePayload = await stateResponse.json().catch(() => ({}));
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
+      }
+
+      lastState = statePayload;
+      renderStageStatusLabel(labelEl, statePayload);
+
+      if (statePayload?.running) {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
+      }
+
+      if (statePayload?.finishedAt) {
+        done = true;
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    if (!done) {
+      throw new Error(String(lastState?.lastError || 'Превышено время ожидания'));
+    }
+
+    if (lastState?.lastOk === false) {
+      // Ошибка уже отражена в labelEl через renderStageStatusLabel — данные не перезагружаем.
+      return;
+    }
+
+    const _savedTab = activeTab;
+    const _savedSearch = searchInput.value;
+    await refreshData(false);
+    activeTab = _savedTab;
+    searchInput.value = _savedSearch;
+    updateClearSearchButton();
+    renderBoard();
+  } catch (error) {
+    if (labelEl) labelEl.textContent = `Ошибка: ${error.message}`;
+  } finally {
+    btn.disabled = !isInfoLogin();
+    btn.textContent = originalText;
+  }
+}
+
 function updateLastDurationBtn() {}
 
 const WS_RECONNECT_MS = 5000;
@@ -244,7 +333,7 @@ managerFilter.addEventListener('change', () => {
 // buttons is a separate, explicitly-approved next step.
 if (stage1of4Btn) {
   stage1of4Btn.addEventListener('click', () => {
-    pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
+    runStageRefresh('/api/kp/refresh/stage1_4', '/api/kp/refresh/stage1_4/status', stage1of4Btn, stage1of4TimeLabel);
   });
 }
 if (stage4of4Btn) {
