@@ -117,6 +117,7 @@ textarea {
 
 .stage-action-group .ghost-button {
   flex: 0 0 auto;
+  width: auto;
 }
 
 .stage-time-label {

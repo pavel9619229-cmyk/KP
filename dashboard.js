@@ -92,31 +92,44 @@ function renderStageStatusLabel(labelEl, state) {
   }
 }
 
-async function pollStageStatus(url, labelEl) {
-  if (!labelEl) return;
+// Исходный текст кнопок ("1/4", "4/4") — чтобы возвращать его, когда процесс не выполняется.
+const STAGE_DEFAULT_TEXT = new Map();
+if (stage1of4Btn) STAGE_DEFAULT_TEXT.set(stage1of4Btn, stage1of4Btn.textContent);
+if (stage4of4Btn) STAGE_DEFAULT_TEXT.set(stage4of4Btn, stage4of4Btn.textContent);
+
+// Кнопки, которыми в данный момент управляет активный runStageRefresh в ЭТОЙ вкладке —
+// фоновый опрос ниже их текст/disabled не трогает (сам runStageRefresh уже это делает точнее).
+const stageManualControl = new Set();
+
+function applyStageState(state, btn, labelEl) {
+  if (labelEl) renderStageStatusLabel(labelEl, state);
+  if (!btn || stageManualControl.has(btn)) return;
+  if (state?.running) {
+    btn.textContent = 'ВЫПОЛНЯЕТСЯ...';
+    btn.disabled = true;
+  } else {
+    btn.textContent = STAGE_DEFAULT_TEXT.get(btn) || btn.textContent;
+    btn.disabled = !isInfoLogin();
+  }
+}
+
+async function pollStageStatus(url, labelEl, btn) {
   try {
     const response = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' });
     if (!response.ok) return;
     const state = await response.json().catch(() => null);
-    renderStageStatusLabel(labelEl, state);
+    applyStageState(state, btn, labelEl);
   } catch {
     // ignore — next poll will retry
   }
 }
 
 const STAGE_STATUS_POLL_MS = 15000;
-// Метки, которыми в данный момент управляет активный runStageRefresh —
-// фоновый опрос ниже их не трогает, чтобы не затирать индикацию выполнения.
-const stageLabelsUnderManualControl = new Set();
 function startStageStatusPolling() {
   const poll = () => {
     if (!isInfoLogin()) return;
-    if (!stageLabelsUnderManualControl.has(stage1of4TimeLabel)) {
-      pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
-    }
-    if (!stageLabelsUnderManualControl.has(stage4of4TimeLabel)) {
-      pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
-    }
+    pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel, stage1of4Btn);
+    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel, stage4of4Btn);
   };
   poll();
   setInterval(poll, STAGE_STATUS_POLL_MS);
@@ -146,7 +159,7 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
     labelEl.textContent = `Выполняется... ${formatElapsed(elapsedSec)}`;
   };
 
-  if (labelEl) stageLabelsUnderManualControl.add(labelEl);
+  stageManualControl.add(btn);
   btn.disabled = true;
   btn.textContent = 'ВЫПОЛНЯЕТСЯ...';
   setRunningLabel();
@@ -235,7 +248,7 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
     if (labelEl) labelEl.textContent = `Ошибка: ${error.message}`;
   } finally {
     if (tickTimerId) clearInterval(tickTimerId);
-    if (labelEl) stageLabelsUnderManualControl.delete(labelEl);
+    stageManualControl.delete(btn);
     btn.disabled = !isInfoLogin();
     btn.textContent = originalText;
   }
@@ -375,7 +388,7 @@ if (stage1of4Btn) {
 }
 if (stage4of4Btn) {
   stage4of4Btn.addEventListener('click', () => {
-    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
+    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel, stage4of4Btn);
   });
 }
 
