@@ -17,8 +17,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Елена, предложите Пневм. шина 23*5 (6.00-13) PR10 ADDO INDIA  TTF (ободная лента не в комплекте)",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -40,8 +40,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "test",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -63,8 +63,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест 3",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
   },
@@ -86,8 +86,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест 3",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
   },
@@ -109,8 +109,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест2",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
   },
@@ -132,8 +132,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Тест2",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
   },
@@ -155,8 +155,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "пнев 28915 - 38 шт.",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -178,8 +178,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "(Ждем данные по дискам.)",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -201,8 +201,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "(КП отправлено?) Шинокомплект 6.00-9 PR 10 WESTLAKE CL621 TTF+ запол. шин 6.00-9 полиурет.+диск сбор.HYWG 9.400.002S",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -248,7 +248,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елена, прошу отправить данное КП клиенту, связаться с клиентом и записать в КП результат и статус) Диск (обод) 10-16.5 (8.25-16.5) ET15 PCD8/203.2 HUB152.4 RALJMH (COPRA'H)",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -271,7 +271,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "18*7-8 - 4 шт. Отправлен счет. КП отправлено 31.07.2026, а цена в ВИЛМЕ выросла с понедельника, 03.07.2026. Скидку НЕ сделали",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -386,7 +386,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елене) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -409,7 +409,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "ПРОБЛЕМА (в ЭДО нужно загрузить ЕЩЕ 2 марки в Счет-фактура № УТ-157 от 28 июля 2026 г - ЛАГСТЕР",
     "invoiceCreated": true,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -455,7 +455,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяне) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -616,7 +616,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елена, прошу связаться с клиентом и записать в КП результат и статус) литые 65010 28915",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -731,7 +731,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяне) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -800,7 +800,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елене) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": true,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -937,7 +937,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяне) отправлен емайл с напоминанием записать текущую ситуацию",
-    "invoiceCreated": false,
+    "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
@@ -1766,7 +1766,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяне) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
