@@ -105,11 +105,18 @@ async function pollStageStatus(url, labelEl) {
 }
 
 const STAGE_STATUS_POLL_MS = 15000;
+// Метки, которыми в данный момент управляет активный runStageRefresh —
+// фоновый опрос ниже их не трогает, чтобы не затирать индикацию выполнения.
+const stageLabelsUnderManualControl = new Set();
 function startStageStatusPolling() {
   const poll = () => {
     if (!isInfoLogin()) return;
-    pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
-    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
+    if (!stageLabelsUnderManualControl.has(stage1of4TimeLabel)) {
+      pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
+    }
+    if (!stageLabelsUnderManualControl.has(stage4of4TimeLabel)) {
+      pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
+    }
   };
   poll();
   setInterval(poll, STAGE_STATUS_POLL_MS);
@@ -124,9 +131,26 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
   const maxWaitMs = 1400000;
   const maxAttempts = Math.ceil(maxWaitMs / pollIntervalMs);
   const originalText = btn.textContent;
+  const startedAt = Date.now();
+  let tickTimerId = null;
 
+  const formatElapsed = (seconds) => {
+    const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const ss = String(seconds % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  const setRunningLabel = () => {
+    if (!labelEl) return;
+    const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    labelEl.textContent = `Выполняется... ${formatElapsed(elapsedSec)}`;
+  };
+
+  if (labelEl) stageLabelsUnderManualControl.add(labelEl);
   btn.disabled = true;
-  if (labelEl) labelEl.textContent = 'Запуск...';
+  btn.textContent = 'ВЫПОЛНЯЕТСЯ...';
+  setRunningLabel();
+  tickTimerId = setInterval(setRunningLabel, 1000);
 
   try {
     const startResponse = await fetch(startUrl, {
@@ -165,9 +189,9 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
       }
 
       lastState = statePayload;
-      renderStageStatusLabel(labelEl, statePayload);
 
       if (statePayload?.running) {
+        setRunningLabel();
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         continue;
       }
@@ -180,9 +204,16 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
 
+    if (tickTimerId) {
+      clearInterval(tickTimerId);
+      tickTimerId = null;
+    }
+
     if (!done) {
       throw new Error(String(lastState?.lastError || 'Превышено время ожидания'));
     }
+
+    renderStageStatusLabel(labelEl, lastState);
 
     if (lastState?.lastOk === false) {
       // Ошибка уже отражена в labelEl через renderStageStatusLabel — данные не перезагружаем.
@@ -197,8 +228,14 @@ async function runStageRefresh(startUrl, statusUrl, btn, labelEl) {
     updateClearSearchButton();
     renderBoard();
   } catch (error) {
+    if (tickTimerId) {
+      clearInterval(tickTimerId);
+      tickTimerId = null;
+    }
     if (labelEl) labelEl.textContent = `Ошибка: ${error.message}`;
   } finally {
+    if (tickTimerId) clearInterval(tickTimerId);
+    if (labelEl) stageLabelsUnderManualControl.delete(labelEl);
     btn.disabled = !isInfoLogin();
     btn.textContent = originalText;
   }
