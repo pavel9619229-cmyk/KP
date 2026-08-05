@@ -100,6 +100,33 @@ textarea {
   white-space: normal;
 }
 
+.topbar-actions-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.stage-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+}
+
+.stage-action-group .ghost-button {
+  flex: 0 0 auto;
+}
+
+.stage-time-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .topbar-actions > * {
   min-width: 0;
   flex: 1 1 0;
@@ -131,6 +158,12 @@ textarea {
     flex: initial;
     width: 100%;
     white-space: nowrap;
+  }
+
+  .topbar-actions-stage {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 

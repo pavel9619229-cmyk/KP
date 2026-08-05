@@ -14,6 +14,10 @@ const updatedAtLabel = document.getElementById('updatedAtLabel');
 const processClientStatusBtn = document.getElementById('processClientStatusBtn');
 const processReceiptStatusBtn = document.getElementById('processReceiptStatusBtn');
 const processThinkStatusBtn = document.getElementById('processThinkStatusBtn');
+const stage1of4Btn = document.getElementById('stage1of4Btn');
+const stage1of4TimeLabel = document.getElementById('stage1of4TimeLabel');
+const stage4of4Btn = document.getElementById('stage4of4Btn');
+const stage4of4TimeLabel = document.getElementById('stage4of4TimeLabel');
 
 const boardContent = document.getElementById('boardContent');
 
@@ -38,9 +42,77 @@ function updateStatusProcessingButtonsVisibility() {
 
 function updateRefreshButtonVisibility() {
   if (!refreshBtn) return;
-  const isAdmin = String(currentUserRole || '').trim().toLowerCase() === 'admin';
-  refreshBtn.hidden = !isAdmin;
-  refreshBtn.disabled = !isAdmin;
+  const isAllowed = isInfoLogin();
+  refreshBtn.hidden = !isAllowed;
+  refreshBtn.disabled = !isAllowed;
+}
+
+function updateStageButtonsVisibility() {
+  const isAllowed = isInfoLogin();
+  const targets = [stage1of4Btn, stage1of4TimeLabel, stage4of4Btn, stage4of4TimeLabel];
+  for (const el of targets) {
+    if (!el) continue;
+    el.hidden = !isAllowed;
+  }
+  if (stage1of4Btn) stage1of4Btn.disabled = !isAllowed;
+  if (stage4of4Btn) stage4of4Btn.disabled = !isAllowed;
+}
+
+function formatStageTimestamp(value) {
+  if (!value) return '';
+  const parsed = new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function renderStageStatusLabel(labelEl, state) {
+  if (!labelEl || !state) return;
+  if (state.running) {
+    const startedText = formatStageTimestamp(state.startedAt || state.requestedAt);
+    labelEl.textContent = startedText ? `Выполняется... (с ${startedText})` : 'Выполняется...';
+    return;
+  }
+  if (!state.finishedAt) {
+    labelEl.textContent = 'Ещё не запускался';
+    return;
+  }
+  const finishedText = formatStageTimestamp(state.finishedAt);
+  if (state.lastOk === false) {
+    labelEl.textContent = `Последний запуск: ${finishedText} — ошибка`;
+  } else if (state.lastOk === true) {
+    labelEl.textContent = `Последний запуск: ${finishedText} — успешно`;
+  } else {
+    labelEl.textContent = `Последний запуск: ${finishedText}`;
+  }
+}
+
+async function pollStageStatus(url, labelEl) {
+  if (!labelEl) return;
+  try {
+    const response = await fetch(url, { method: 'GET', credentials: 'include', cache: 'no-store' });
+    if (!response.ok) return;
+    const state = await response.json().catch(() => null);
+    renderStageStatusLabel(labelEl, state);
+  } catch {
+    // ignore — next poll will retry
+  }
+}
+
+const STAGE_STATUS_POLL_MS = 15000;
+function startStageStatusPolling() {
+  const poll = () => {
+    if (!isInfoLogin()) return;
+    pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
+    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
+  };
+  poll();
+  setInterval(poll, STAGE_STATUS_POLL_MS);
 }
 
 function updateLastDurationBtn() {}
@@ -166,6 +238,20 @@ clearSearchBtn.addEventListener('click', () => {
 managerFilter.addEventListener('change', () => {
   renderBoard();
 });
+
+// NOTE: click handlers intentionally do not trigger any refresh process yet —
+// only re-check status. Wiring the actual 1/4 and 4/4 processes to these
+// buttons is a separate, explicitly-approved next step.
+if (stage1of4Btn) {
+  stage1of4Btn.addEventListener('click', () => {
+    pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel);
+  });
+}
+if (stage4of4Btn) {
+  stage4of4Btn.addEventListener('click', () => {
+    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel);
+  });
+}
 
 refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ';
@@ -1031,6 +1117,7 @@ async function loadCurrentUserRole() {
       currentAllowedManagers = [];
       updateStatusProcessingButtonsVisibility();
       updateRefreshButtonVisibility();
+      updateStageButtonsVisibility();
       updateLastDurationBtn();
       return;
     }
@@ -1046,6 +1133,7 @@ async function loadCurrentUserRole() {
     currentUserRole = role || 'manager';
     updateStatusProcessingButtonsVisibility();
     updateRefreshButtonVisibility();
+    updateStageButtonsVisibility();
     updateLastDurationBtn();
   } catch {
     currentUserRole = 'manager';
@@ -1053,6 +1141,7 @@ async function loadCurrentUserRole() {
     currentAllowedManagers = [];
     updateStatusProcessingButtonsVisibility();
     updateRefreshButtonVisibility();
+    updateStageButtonsVisibility();
     updateLastDurationBtn();
   }
 }
@@ -1363,6 +1452,7 @@ async function init() {
   await refreshData(true);
   connectWebSocket();
   startKeepAlive();
+  startStageStatusPolling();
 
   // При инициализации обновить кнопку длительности
   updateLastDurationBtn();
