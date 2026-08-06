@@ -2,7 +2,7 @@
   {
     "refKey": "ee69ccfc-9164-11f1-8d57-bc97e15eb091",
     "number": "ПСУТ-000749",
-    "createdAt": "2026-08-06 10:24:04",
+    "createdAt": "2026-08-06 11:07:59",
     "customerName": "Вохмянина Яна Олеговна",
     "managerName": "Татьяна",
     "status": "Действует",
@@ -16,7 +16,7 @@
     "problem": false,
     "shipmentPending": false,
     "statusKp": "",
-    "additionalInfoFirstLine": "vohmyaninayo@vdkanal.ru",
+    "additionalInfoFirstLine": "Шина заднего колеса 5.00-8 NHS – 2 шт.",
     "invoiceCreated": null,
     "paymentReceived": null,
     "statusHash": "",
