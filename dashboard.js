@@ -26,6 +26,11 @@ const STATUS_PROCESSING_ALLOWED_LOGIN = 'info@10-16-5.ru';
 let currentUsername = '';
 let currentAllowedManagers = [];
 
+function setUpdatedAtText(text) {
+  if (!updatedAtLabel) return;
+  updatedAtLabel.textContent = String(text || '');
+}
+
 function isInfoLogin() {
   return String(currentUsername || '').trim().toLowerCase() === STATUS_PROCESSING_ALLOWED_LOGIN;
 }
@@ -42,9 +47,10 @@ function updateStatusProcessingButtonsVisibility() {
 
 function updateRefreshButtonVisibility() {
   if (!refreshBtn) return;
-  const isAllowed = isInfoLogin();
-  refreshBtn.hidden = !isAllowed;
-  refreshBtn.disabled = !isAllowed;
+  // Кнопка ОБНОВИТЬ больше не показывается ни для одного логина, включая
+  // info@10-16-5.ru — панель полностью заменена кнопками 1/4 и 4/4.
+  refreshBtn.hidden = true;
+  refreshBtn.disabled = true;
 }
 
 function updateStageButtonsVisibility() {
@@ -392,7 +398,8 @@ if (stage4of4Btn) {
   });
 }
 
-refreshBtn.addEventListener('click', async () => {
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', async () => {
   const defaultLabel = 'ОБНОВИТЬ';
   const pollIntervalMs = 2000;
   // Backend manual refresh timeout is now 900s (15 min) to handle slow 1C API read timeouts.
@@ -410,11 +417,11 @@ refreshBtn.addEventListener('click', async () => {
 
   const setRefreshingLabel = () => {
     if (!isAdmin) {
-      updatedAtLabel.textContent = 'ИДЕТ ОБНОВЛЕНИЕ';
+      setUpdatedAtText('ИДЕТ ОБНОВЛЕНИЕ');
       return;
     }
     const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-    updatedAtLabel.textContent = formatElapsed(elapsedSec);
+    setUpdatedAtText(formatElapsed(elapsedSec));
   };
 
   const setRefreshButtonText = (value) => {
@@ -610,7 +617,7 @@ refreshBtn.addEventListener('click', async () => {
     updateClearSearchButton();
     renderBoard();
   } catch (error) {
-    updatedAtLabel.textContent = `Ошибка обновления: ${error.message}`;
+    setUpdatedAtText(`Ошибка обновления: ${error.message}`);
   } finally {
     if (refreshTimerId) {
       clearInterval(refreshTimerId);
@@ -619,7 +626,8 @@ refreshBtn.addEventListener('click', async () => {
     refreshBtn.disabled = false;
     setRefreshButtonText(defaultLabel);
   }
-});
+  });
+}
 
 function closeRequestPanel() {
   newRequestPanel.hidden = true;
@@ -727,7 +735,7 @@ if (processClientStatusBtn) {
           throw new Error(String(details));
         }
 
-        updatedAtLabel.textContent = `Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`;
+        setUpdatedAtText(`Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`);
         await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
       }
 
@@ -741,9 +749,9 @@ if (processClientStatusBtn) {
       const failed = Number(payload?.failed || 0);
 
       await refreshData(false);
-      updatedAtLabel.textContent = `Обработано: ${processed}; обновлено: ${updated}; пропущено: ${skipped}; ошибок: ${failed}`;
+      setUpdatedAtText(`Обработано: ${processed}; обновлено: ${updated}; пропущено: ${skipped}; ошибок: ${failed}`);
     } catch (error) {
-      updatedAtLabel.textContent = `Ошибка обработки статуса: ${error.message}`;
+      setUpdatedAtText(`Ошибка обработки статуса: ${error.message}`);
     } finally {
       processClientStatusBtn.disabled = false;
       processClientStatusBtn.textContent = defaultLabel;
@@ -795,7 +803,7 @@ if (processThinkStatusBtn) {
           throw new Error(String(details));
         }
 
-        updatedAtLabel.textContent = `Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`;
+        setUpdatedAtText(`Временная ошибка ${response.status}, повтор ${attempt + 1}/${maxAttempts}...`);
         await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
       }
 
@@ -808,9 +816,9 @@ if (processThinkStatusBtn) {
       const skipped = Number(payload?.skipped || 0);
       const failed = Number(payload?.failed || 0);
 
-      updatedAtLabel.textContent = `Найдено: ${matched}; отправлено: ${sent}; пропущено: ${skipped}; ошибок: ${failed}`;
+      setUpdatedAtText(`Найдено: ${matched}; отправлено: ${sent}; пропущено: ${skipped}; ошибок: ${failed}`);
     } catch (error) {
-      updatedAtLabel.textContent = `Ошибка обработки статуса: ${error.message}`;
+      setUpdatedAtText(`Ошибка обработки статуса: ${error.message}`);
     } finally {
       processThinkStatusBtn.disabled = false;
       processThinkStatusBtn.textContent = defaultLabel;
@@ -1398,7 +1406,7 @@ function renderBoard() {
 
   renderTabs(counts, rowsForCounts.length);
 
-  updatedAtLabel.textContent = formatUpdatedAtForRole(lastSyncAt);
+  setUpdatedAtText(formatUpdatedAtForRole(lastSyncAt));
   updateLastDurationBtn();
 
   if (!filtered.length) {
@@ -1523,7 +1531,7 @@ async function refreshData(initial = false) {
   } catch (error) {
     if (initial) {
       boardContent.innerHTML = `<div class="board-empty">Не удалось загрузить данные: ${escapeHtml(error.message)}<br><small>Повторная попытка через несколько секунд…</small></div>`;
-      updatedAtLabel.textContent = 'Ошибка';
+      setUpdatedAtText('Ошибка');
       // Keep status tags visible even when the first data request fails.
       renderTabs(getStatusCounts(rows), rows.length);
       // Retry initial load after a delay (Render free tier may be waking up)
