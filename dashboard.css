@@ -759,6 +759,62 @@ body.light .phone-link {
   }
 }
 
+@media (max-width: 1024px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .topbar-actions > * {
+    min-width: 0;
+  }
+
+  .topbar-actions .search-box {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+
+  .topbar-actions .manager-filter {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  #newRequestBtn {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  #themeBtn {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  #logoutLink {
+    grid-column: 3 / 5;
+    grid-row: 2;
+  }
+
+  .manager-filter select,
+  .search-box input,
+  .ghost-button {
+    min-height: 42px;
+    font-size: 0.8rem;
+  }
+
+  .ghost-button {
+    padding: 10px 12px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .logout-button {
+    width: 100%;
+    flex: initial;
+  }
+}
+
 @media (max-width: 720px) {
   .dashboard-shell {
     width: min(100% - 20px, 1520px);
