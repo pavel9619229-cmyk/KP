@@ -6014,12 +6014,30 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
     # Stage 3: customer — parallel nav-link resolution.
     if not _stage_completed("stage3_customer", checkpoint_stage):
         _t3 = time.time()
+        stage1_fast_mode = not include_stage6
+
         def _resolve_customer(row: dict) -> dict:
             ref_key = str(row.get("refKey") or "")
+            # For 1/4 runs we already seed rows from the current snapshot.
+            # Reuse existing non-empty customer to avoid 300 full nav-resolve
+            # calls every launch; only unresolved/new rows hit 1C.
+            if stage1_fast_mode:
+                existing_customer = str(row.get("customerName") or "").strip()
+                if existing_customer:
+                    return {
+                        "refKey": ref_key,
+                        "customerName": existing_customer,
+                    }
+
             doc = docs_by_ref.get(ref_key) or {}
             customer_name = ""
             if doc:
-                customer_name = resolve_customer_name_for_ref(ref_key, headers, doc=doc, use_cache=False) or ""
+                customer_name = resolve_customer_name_for_ref(
+                    ref_key,
+                    headers,
+                    doc=doc,
+                    use_cache=stage1_fast_mode,
+                ) or ""
             return {
                 "refKey": ref_key,
                 "customerName": customer_name or row.get("customerName") or "",
@@ -6054,15 +6072,39 @@ def fetch_rows_from_odata(include_stage6: bool = True, page_size: int = 0) -> li
     # Stage 4: manager — parallel nav-link resolution.
     if not _stage_completed("stage4_manager", checkpoint_stage):
         _t4 = time.time()
+        stage1_fast_mode = not include_stage6
+
         def _resolve_manager(row: dict) -> dict:
             ref_key = str(row.get("refKey") or "")
+            # Same optimization as stage3: keep already-known manager fields in
+            # 1/4 mode and resolve only missing values.
+            if stage1_fast_mode:
+                existing_name = str(row.get("managerName") or "").strip()
+                existing_filled = row.get("managerFilled")
+                if existing_name and existing_name != UNKNOWN_MANAGER_NAME and existing_filled is not None:
+                    return {
+                        "refKey": ref_key,
+                        "managerName": existing_name,
+                        "managerFilled": bool(existing_filled),
+                    }
+
             doc = docs_by_ref.get(ref_key) or {}
             result: dict = {"refKey": ref_key}
             if doc:
-                manager_filled = resolve_manager_filled_for_ref(ref_key, headers, doc=doc, use_cache=False)
+                manager_filled = resolve_manager_filled_for_ref(
+                    ref_key,
+                    headers,
+                    doc=doc,
+                    use_cache=stage1_fast_mode,
+                )
                 if manager_filled is not None:
                     result["managerFilled"] = manager_filled
-                    manager_name = resolve_manager_name_for_ref(ref_key, headers, doc=doc, use_cache=False)
+                    manager_name = resolve_manager_name_for_ref(
+                        ref_key,
+                        headers,
+                        doc=doc,
+                        use_cache=stage1_fast_mode,
+                    )
                     if manager_name:
                         result["managerName"] = manager_name
             return result
@@ -8068,7 +8110,10 @@ async def _run_system_checkpoint_recovery(trigger: str) -> None:
 async def manual_refresh_status():
     with _manual_refresh_state_lock:
         running = bool(_manual_refresh_state.get("running"))
-    if not running and not _is_refresh_paused() and _has_pending_refresh_checkpoint():
+    with _stage1_4_refresh_state_lock:
+        stage1_running = bool(_stage1_4_refresh_state.get("running"))
+
+    if not running and not stage1_running and not _is_refresh_paused() and _has_pending_refresh_checkpoint():
         task = getattr(app.state, "checkpoint_recovery_task", None)
         if task is None or task.done():
             app.state.checkpoint_recovery_task = asyncio.create_task(
