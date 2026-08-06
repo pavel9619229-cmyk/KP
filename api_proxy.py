@@ -7801,6 +7801,20 @@ async def manual_refresh_stage4_4(request: Request):
         _set_stage4_4_refresh_state(startedAt=datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"))
         log(f"stage4/4 refresh requested by {username} from {client_host}")
 
+        previous_rows, previous_meta, previous_pointer = _load_confirmed_runtime_from_github()
+        if not previous_rows:
+            previous_rows = load_fresh_runtime_rows() or list(_cached_rows)
+        if not previous_meta:
+            previous_meta = _read_runtime_meta() or {
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "rowCount": len(previous_rows),
+            }
+        if not previous_pointer and previous_rows and previous_meta:
+            try:
+                previous_pointer = _build_runtime_current_pointer(previous_rows, previous_meta)
+            except Exception:
+                previous_pointer = {}
+
         _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
         try:
             wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
@@ -7825,6 +7839,7 @@ async def manual_refresh_stage4_4(request: Request):
             # что и у 1/4) — refresh_payments_only_for_cached_rows сам по себе делает
             # только legacy-запись, чего недостаточно для доставки на дашборд.
             confirmed_version = None
+            publish_source = "github-current"
             if result.get("ok"):
                 try:
                     candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
@@ -7845,6 +7860,7 @@ async def manual_refresh_stage4_4(request: Request):
                         _cached_fp = rows_fingerprint(_cached_rows)
                         _last_confirmed_runtime_sync_check = time.time()
                         confirmed_version = github_pointer.get("version") if github_pointer else None
+                        publish_source = "github-current"
                     except Exception as publish_exc:
                         if RUNTIME_STRICT_GITHUB_POINTER:
                             log(
@@ -7856,8 +7872,29 @@ async def manual_refresh_stage4_4(request: Request):
                             ) from publish_exc
                         log(
                             "[refresh-4of4] versioned github publish failed: "
-                            f"{type(publish_exc).__name__}: {publish_exc}; keeping legacy snapshot"
+                            f"{type(publish_exc).__name__}: {publish_exc}; using local runtime fallback instead"
                         )
+                        github_rows = list(candidate_rows)
+                        github_meta = _runtime_normalize_meta(
+                            dict(candidate_meta or {}),
+                            github_rows,
+                            pointer=previous_pointer,
+                            fallback_source="consistency-recovery:stage4_4-refresh-fallback",
+                        )
+                        try:
+                            github_pointer = _build_runtime_current_pointer(github_rows, github_meta)
+                        except Exception:
+                            github_pointer = {}
+                        if github_pointer:
+                            _write_local_confirmed_runtime(github_rows, github_meta, github_pointer)
+                        else:
+                            _write_runtime_snapshot_files(github_rows, github_meta)
+                        _cached_rows = list(github_rows)
+                        _cached_fp = rows_fingerprint(_cached_rows)
+                        _last_confirmed_runtime_sync_check = time.time()
+                        confirmed_version = github_pointer.get("version") if github_pointer else None
+                        publish_source = "local-runtime"
+                        log(f"[refresh-4of4] local runtime fallback done in {time.time()-_publish_t0:.1f}s")
                 except Exception as publish_outer_exc:
                     result["ok"] = False
                     result["error"] = f"github publish failed: {type(publish_outer_exc).__name__}: {publish_outer_exc}"
@@ -7874,7 +7911,7 @@ async def manual_refresh_stage4_4(request: Request):
             log(
                 "stage4/4 refresh finished: "
                 f"ok={result.get('ok')}, paymentReceivedCount={result.get('paymentReceivedCount')}, "
-                f"confirmedVersion={confirmed_version}, user={username}, host={client_host}"
+                f"confirmedVersion={confirmed_version}, source={publish_source}, user={username}, host={client_host}"
             )
         except asyncio.TimeoutError:
             _set_stage4_4_refresh_state(
