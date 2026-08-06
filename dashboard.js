@@ -80,6 +80,11 @@ function formatStageTimestamp(value) {
 function renderStageStatusLabel(labelEl, state) {
   if (!labelEl || !state) return;
   if (state.running) {
+    if (state.phase === 'queued') {
+      const queuedText = formatStageTimestamp(state.requestedAt);
+      labelEl.textContent = queuedText ? `В очереди... (с ${queuedText})` : 'В очереди...';
+      return;
+    }
     const startedText = formatStageTimestamp(state.startedAt || state.requestedAt);
     labelEl.textContent = startedText ? `Выполняется... (с ${startedText})` : 'Выполняется...';
     return;
@@ -135,7 +140,7 @@ function startStageStatusPolling() {
   const poll = () => {
     if (!isInfoLogin()) return;
     pollStageStatus('/api/kp/refresh/stage1_4/status', stage1of4TimeLabel, stage1of4Btn);
-    pollStageStatus('/api/kp/refresh/stage4_4/status', stage4of4TimeLabel, stage4of4Btn);
+    pollStageStatus('/api/kp/refresh/stage4_4/local-queue/status', stage4of4TimeLabel, stage4of4Btn);
   };
   poll();
   setInterval(poll, STAGE_STATUS_POLL_MS);
@@ -394,7 +399,7 @@ if (stage1of4Btn) {
 }
 if (stage4of4Btn) {
   stage4of4Btn.addEventListener('click', () => {
-    runStageRefresh('/api/kp/refresh/stage4_4', '/api/kp/refresh/stage4_4/status', stage4of4Btn, stage4of4TimeLabel);
+    runStageRefresh('/api/kp/refresh/stage4_4/local-queue', '/api/kp/refresh/stage4_4/local-queue/status', stage4of4Btn, stage4of4TimeLabel);
   });
 }
 

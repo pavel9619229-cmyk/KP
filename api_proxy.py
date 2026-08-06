@@ -13,6 +13,7 @@ import re
 import smtplib
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -258,6 +259,7 @@ STATUS_KP_PROPERTY_KEY = os.getenv(
 )
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
+LOCAL_STAGE4_AGENT_TOKEN = os.getenv("LOCAL_STAGE4_AGENT_TOKEN", "").strip()
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
@@ -449,6 +451,27 @@ _stage4_4_refresh_state: dict = {
     "invoiceCreatedCount": None,
     "confirmedVersion": None,
 }
+# Queue state for local 4/4 bridge (Render UI -> local watchdog -> GitHub publish).
+_stage4_4_local_queue_lock = threading.Lock()
+_stage4_4_local_queue_state: dict = {
+    "running": False,
+    "phase": "idle",  # idle | queued | claimed | running | success | error
+    "taskId": None,
+    "requestedAt": None,
+    "requestedBy": None,
+    "requestedFrom": None,
+    "claimedAt": None,
+    "claimedBy": None,
+    "startedAt": None,
+    "finishedAt": None,
+    "lastOk": None,
+    "lastError": None,
+    "waitedSeconds": None,
+    "paymentReceivedCount": None,
+    "invoiceCreatedCount": None,
+    "confirmedVersion": None,
+    "resultSource": None,
+}
 _single_kp_seed_queue_lock = threading.Lock()
 _single_kp_seed_queue: set[str] = set()
 _resume_interrupted_manual_refresh = False
@@ -523,6 +546,20 @@ def _stage4_4_refresh_snapshot() -> dict:
 def _set_stage4_4_refresh_state(**updates: object) -> None:
     with _stage4_4_refresh_state_lock:
         _stage4_4_refresh_state.update(updates)
+
+
+def _stage4_4_local_queue_snapshot() -> dict:
+    with _stage4_4_local_queue_lock:
+        state = dict(_stage4_4_local_queue_state)
+    state["rows"] = len(_cached_rows)
+    state["lastRefresh"] = _last_refresh
+    state["lastRefreshError"] = _last_refresh_error
+    return state
+
+
+def _set_stage4_4_local_queue_state(**updates: object) -> None:
+    with _stage4_4_local_queue_lock:
+        _stage4_4_local_queue_state.update(updates)
 
 
 def _queue_single_kp_seed_promotion(kp_number: str) -> None:
@@ -856,6 +893,17 @@ class AccessRightsPayload(BaseModel):
     users: list[dict] = Field(default_factory=list)
 
 
+class LocalStage44Report(BaseModel):
+    taskId: str
+    ok: bool
+    error: Optional[str] = None
+    paymentReceivedCount: Optional[int] = None
+    invoiceCreatedCount: Optional[int] = None
+    confirmedVersion: Optional[int] = None
+    source: Optional[str] = None
+    runner: Optional[str] = None
+
+
 def _status_rules_path() -> Path:
     return Path(STATUS_RULES_FILE)
 
@@ -1131,6 +1179,16 @@ def _get_user_from_request(request: Request) -> dict:
             return user
 
     raise HTTPException(status_code=401, detail="Login required")
+
+
+def _require_local_stage4_agent_auth(request: Request) -> str:
+    token = str(request.headers.get("X-Local-Agent-Token") or "").strip()
+    if not LOCAL_STAGE4_AGENT_TOKEN:
+        raise HTTPException(status_code=503, detail="LOCAL_STAGE4_AGENT_TOKEN is not configured")
+    if not token or not hmac.compare_digest(token, LOCAL_STAGE4_AGENT_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid local agent token")
+    runner_id = str(request.headers.get("X-Local-Agent-Id") or "").strip()
+    return runner_id or "local-agent"
 
 
 def _get_user_from_websocket(websocket: WebSocket) -> dict | None:
@@ -7781,6 +7839,155 @@ async def payments_only_refresh_single_kp(kp_number: str, request: Request):
     )
     status_code = 200 if result.get("ok") else 202
     return JSONResponse(status_code=status_code, content=result)
+
+
+@app.post("/api/kp/refresh/stage4_4/local-queue")
+async def enqueue_local_stage4_4_refresh(request: Request):
+    """Queue a 4/4 task for a local watchdog agent (Windows machine).
+
+    This endpoint DOES NOT run 1C scan on Render. It only records a queue task
+    that a trusted local agent can claim and execute locally.
+    """
+    user = _get_user_from_request(request)
+    username = str(user.get("username") or "anonymous")
+    client_host = request.client.host if request.client else "unknown"
+
+    with _stage4_4_local_queue_lock:
+        if _stage4_4_local_queue_state.get("running"):
+            state = dict(_stage4_4_local_queue_state)
+            state["rows"] = len(_cached_rows)
+            state["lastRefresh"] = _last_refresh
+            state["lastRefreshError"] = _last_refresh_error
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "ok": True,
+                    "message": "stage4/4 local task is already queued or running",
+                    **state,
+                },
+            )
+
+        task_id = uuid.uuid4().hex
+        _stage4_4_local_queue_state.update(
+            {
+                "running": True,
+                "phase": "queued",
+                "taskId": task_id,
+                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "requestedBy": username,
+                "requestedFrom": client_host,
+                "claimedAt": None,
+                "claimedBy": None,
+                "startedAt": None,
+                "finishedAt": None,
+                "lastOk": None,
+                "lastError": None,
+                "waitedSeconds": None,
+                "paymentReceivedCount": None,
+                "invoiceCreatedCount": None,
+                "confirmedVersion": None,
+                "resultSource": None,
+            }
+        )
+
+    log(f"stage4/4 local queue: task {task_id} queued by {username} from {client_host}")
+    return JSONResponse(
+        status_code=202,
+        content={
+            "ok": True,
+            "message": "stage4/4 local task queued",
+            **_stage4_4_local_queue_snapshot(),
+        },
+    )
+
+
+@app.get("/api/kp/refresh/stage4_4/local-queue/status")
+async def local_stage4_4_queue_status(request: Request):
+    _get_user_from_request(request)
+    return _stage4_4_local_queue_snapshot()
+
+
+@app.post("/api/kp/local-agent/stage4_4/claim")
+async def local_stage4_4_claim(request: Request):
+    runner_id = _require_local_stage4_agent_auth(request)
+
+    with _stage4_4_local_queue_lock:
+        running = bool(_stage4_4_local_queue_state.get("running"))
+        phase = str(_stage4_4_local_queue_state.get("phase") or "")
+        task_id = str(_stage4_4_local_queue_state.get("taskId") or "")
+        requested_at = _stage4_4_local_queue_state.get("requestedAt")
+
+        if not running or phase != "queued" or not task_id:
+            state = dict(_stage4_4_local_queue_state)
+            state["rows"] = len(_cached_rows)
+            state["lastRefresh"] = _last_refresh
+            state["lastRefreshError"] = _last_refresh_error
+            return {"ok": True, "claimed": False, "state": state}
+
+        _stage4_4_local_queue_state.update(
+            {
+                "phase": "running",
+                "claimedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                "claimedBy": runner_id,
+                "startedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+
+    log(f"stage4/4 local queue: task {task_id} claimed by {runner_id}")
+    return {
+        "ok": True,
+        "claimed": True,
+        "taskId": task_id,
+        "requestedAt": requested_at,
+    }
+
+
+@app.post("/api/kp/local-agent/stage4_4/report")
+async def local_stage4_4_report(payload: LocalStage44Report, request: Request):
+    runner_id = _require_local_stage4_agent_auth(request)
+
+    now_text = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+    with _stage4_4_local_queue_lock:
+        current_task_id = str(_stage4_4_local_queue_state.get("taskId") or "")
+        current_running = bool(_stage4_4_local_queue_state.get("running"))
+        requested_at_text = str(_stage4_4_local_queue_state.get("requestedAt") or "")
+
+        if not current_task_id or payload.taskId != current_task_id:
+            raise HTTPException(status_code=409, detail="Task mismatch or no active local queue task")
+        if not current_running:
+            raise HTTPException(status_code=409, detail="Local queue task is not running")
+
+        waited_seconds = None
+        try:
+            if requested_at_text:
+                requested_at = datetime.strptime(requested_at_text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_TZ_MSK)
+                waited_seconds = int(max(0, (datetime.now(_TZ_MSK) - requested_at).total_seconds()))
+        except Exception:
+            waited_seconds = None
+
+        _stage4_4_local_queue_state.update(
+            {
+                "running": False,
+                "phase": "success" if payload.ok else "error",
+                "finishedAt": now_text,
+                "lastOk": bool(payload.ok),
+                "lastError": None if payload.ok else str(payload.error or "local-agent reported failure"),
+                "waitedSeconds": waited_seconds,
+                "paymentReceivedCount": payload.paymentReceivedCount,
+                "invoiceCreatedCount": payload.invoiceCreatedCount,
+                "confirmedVersion": payload.confirmedVersion,
+                "resultSource": payload.source or "local-agent",
+                "claimedBy": runner_id,
+            }
+        )
+
+    log(
+        "stage4/4 local queue: task "
+        f"{payload.taskId} reported by {runner_id}, ok={payload.ok}, "
+        f"confirmedVersion={payload.confirmedVersion}, source={payload.source or 'local-agent'}"
+    )
+    return {"ok": True, "state": _stage4_4_local_queue_snapshot()}
 
 
 @app.post("/api/kp/refresh/stage4_4")
