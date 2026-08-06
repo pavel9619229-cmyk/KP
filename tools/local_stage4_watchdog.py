@@ -20,12 +20,15 @@ Optional env vars:
 from __future__ import annotations
 
 import os
+import random
 import socket
 import sys
 import time
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 def _load_dotenv(path: Path) -> None:
@@ -49,6 +52,10 @@ QUEUE_BASE_URL = os.getenv("LOCAL_STAGE4_QUEUE_BASE_URL", "https://onec-kp-realt
 AGENT_TOKEN = os.getenv("LOCAL_STAGE4_AGENT_TOKEN", "").strip()
 AGENT_ID = os.getenv("LOCAL_STAGE4_AGENT_ID", socket.gethostname()).strip() or "local-agent"
 POLL_SECONDS = max(2, int(os.getenv("LOCAL_STAGE4_POLL_SECONDS", "5")))
+CLAIM_TIMEOUT_SECONDS = max(5, int(os.getenv("LOCAL_STAGE4_CLAIM_TIMEOUT_SECONDS", "20")))
+REPORT_TIMEOUT_SECONDS = max(10, int(os.getenv("LOCAL_STAGE4_REPORT_TIMEOUT_SECONDS", "30")))
+REQUEST_RETRIES = max(0, int(os.getenv("LOCAL_STAGE4_REQUEST_RETRIES", "3")))
+RETRY_BACKOFF_SECONDS = float(os.getenv("LOCAL_STAGE4_RETRY_BACKOFF_SECONDS", "1.0"))
 
 if not AGENT_TOKEN:
     print("ERROR: LOCAL_STAGE4_AGENT_TOKEN is not set.")
@@ -68,6 +75,26 @@ CLAIM_URL = f"{QUEUE_BASE_URL}/api/kp/local-agent/stage4_4/claim"
 REPORT_URL = f"{QUEUE_BASE_URL}/api/kp/local-agent/stage4_4/report"
 
 
+def _build_http_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=REQUEST_RETRIES,
+        connect=REQUEST_RETRIES,
+        read=REQUEST_RETRIES,
+        backoff_factor=max(0.0, RETRY_BACKOFF_SECONDS),
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET", "POST"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=4)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+HTTP = _build_http_session()
+
+
 def _headers() -> dict[str, str]:
     return {
         "X-Local-Agent-Token": AGENT_TOKEN,
@@ -77,14 +104,20 @@ def _headers() -> dict[str, str]:
 
 
 def _claim_task() -> dict:
-    resp = requests.post(CLAIM_URL, headers=_headers(), timeout=20)
+    resp = HTTP.post(CLAIM_URL, headers=_headers(), timeout=CLAIM_TIMEOUT_SECONDS)
     resp.raise_for_status()
     return resp.json()
 
 
 def _report(payload: dict) -> None:
-    resp = requests.post(REPORT_URL, headers=_headers(), json=payload, timeout=30)
+    resp = HTTP.post(REPORT_URL, headers=_headers(), json=payload, timeout=REPORT_TIMEOUT_SECONDS)
     resp.raise_for_status()
+
+
+def _sleep_with_jitter(base_seconds: int) -> None:
+    delay = max(1.0, float(base_seconds))
+    delay = delay + random.uniform(0.0, min(2.5, delay * 0.25))
+    time.sleep(delay)
 
 
 def _run_local_stage4(task_id: str) -> dict:
@@ -159,9 +192,24 @@ def main() -> int:
         except KeyboardInterrupt:
             print("Stopped by user")
             return 0
+        except requests.HTTPError as exc:
+            code = exc.response.status_code if exc.response is not None else None
+            if code == 503:
+                print(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] watchdog HTTP 503: "
+                    "Render side likely misses LOCAL_STAGE4_AGENT_TOKEN env or is temporarily unavailable"
+                )
+            elif code == 401:
+                print(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] watchdog HTTP 401: "
+                    "token mismatch between local agent and Render LOCAL_STAGE4_AGENT_TOKEN"
+                )
+            else:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] watchdog HTTP error: {code} {exc}")
+            _sleep_with_jitter(POLL_SECONDS)
         except Exception as exc:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] watchdog loop error: {type(exc).__name__}: {exc}")
-            time.sleep(POLL_SECONDS)
+            _sleep_with_jitter(POLL_SECONDS)
 
 
 if __name__ == "__main__":
