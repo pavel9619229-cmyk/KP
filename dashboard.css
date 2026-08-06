@@ -762,8 +762,8 @@ body.light .phone-link {
 @media (max-width: 1024px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
   .topbar-actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(0, 1fr));
+    gap: 8px;
     align-items: stretch;
   }
 
@@ -772,41 +772,52 @@ body.light .phone-link {
   }
 
   .topbar-actions .search-box {
-    grid-column: 1 / 3;
+    grid-column: 1;
     grid-row: 1;
   }
 
   .topbar-actions .manager-filter {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1;
   }
 
   #newRequestBtn {
-    grid-column: 4;
+    grid-column: 3;
     grid-row: 1;
   }
 
   #themeBtn {
-    grid-column: 1 / 3;
-    grid-row: 2;
+    grid-column: 4;
+    grid-row: 1;
   }
 
   #logoutLink {
-    grid-column: 3 / 5;
-    grid-row: 2;
+    grid-column: 5;
+    grid-row: 1;
   }
 
   .manager-filter select,
   .search-box input,
   .ghost-button {
     min-height: 42px;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
+  }
+
+  .search-box input {
+    padding: 10px 72px 10px 10px;
+  }
+
+  .search-clear-btn {
+    width: 64px;
+    right: 6px;
+    padding: 5px 8px;
+    font-size: 0.7rem;
   }
 
   .ghost-button {
-    padding: 10px 12px;
+    padding: 10px 8px;
     text-align: center;
-    white-space: normal;
+    white-space: nowrap;
   }
 
   .logout-button {
