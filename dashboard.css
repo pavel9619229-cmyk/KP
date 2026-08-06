@@ -824,6 +824,24 @@ body.light .phone-link {
     width: 100%;
     flex: initial;
   }
+
+  .topbar-actions-secondary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .topbar-actions-secondary .ghost-button {
+    width: 100%;
+    flex: initial;
+    min-height: 42px;
+    font-size: 0.72rem;
+    padding: 10px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 @media (max-width: 720px) {
