@@ -18,7 +18,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Шина заднего колеса 5.00-8 NHS – 2 шт.(проверить наличие в И-1)",
     "invoiceCreated": null,
-    "paymentReceived": null,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -41,7 +41,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Шина пневмо 21.00-35 с уплотнительным кольцом - 4шт",
     "invoiceCreated": null,
-    "paymentReceived": null,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -225,7 +225,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(диски похоже только есть в ЕМГ - предложить от ЕМГ)",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
@@ -1329,7 +1329,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "КЛИЕНТ КП УВИДЕЛ",
     "invoiceCreated": false,
-    "paymentReceived": false,
+    "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
   },
