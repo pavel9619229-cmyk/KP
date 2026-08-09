@@ -7938,21 +7938,26 @@ async def payments_only_refresh(request: Request):
 
         _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
         try:
-            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
+            # Wait for the main refresh lock (stage1/4 etc.) to be free instead of
+            # forcing through in isolated mode — avoids two cycles writing rows at once.
+            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_HARD_DEADLINE_SECONDS)
             while time.time() < wait_deadline:
                 lock_free = _refresh_run_lock.acquire(blocking=False)
                 if lock_free:
                     _refresh_run_lock.release()
                     break
                 await asyncio.sleep(2)
+            else:
+                log("payments-only refresh: main refresh lock still busy after full wait; skipping this cycle")
 
+            remaining_budget = max(30, PAYMENTS_ONLY_HARD_DEADLINE_SECONDS - (time.time() - wait_started))
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     refresh_payments_only_for_cached_rows,
                     f"payments-only-refresh:{username}",
-                    True,
+                    False,
                 ),
-                timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
+                timeout=remaining_budget,
             )
             _set_payments_only_state(
                 lastOk=bool(result.get("ok")),
@@ -8256,22 +8261,27 @@ async def manual_refresh_stage4_4(request: Request):
 
         _set_refresh_pause(PAYMENTS_ONLY_PAUSE_SECONDS, pause_reason, username)
         try:
-            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_WAIT_SECONDS)
+            # Wait for the main refresh lock (stage1/4 etc.) to be free instead of
+            # forcing through in isolated mode — avoids two cycles writing rows at once.
+            wait_deadline = wait_started + max(10, PAYMENTS_ONLY_HARD_DEADLINE_SECONDS)
             while time.time() < wait_deadline:
                 lock_free = _refresh_run_lock.acquire(blocking=False)
                 if lock_free:
                     _refresh_run_lock.release()
                     break
                 await asyncio.sleep(2)
+            else:
+                log("stage4/4 refresh: main refresh lock still busy after full wait; skipping this cycle")
 
+            remaining_budget = max(30, PAYMENTS_ONLY_HARD_DEADLINE_SECONDS - (time.time() - wait_started))
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     refresh_payments_only_for_cached_rows,
                     f"manual-refresh-4of4:{username}",
-                    True,
+                    False,
                     True,  # skip_invoice_scan=True — this is exactly what makes this "4/4" faster
                 ),
-                timeout=PAYMENTS_ONLY_HARD_DEADLINE_SECONDS,
+                timeout=remaining_budget,
             )
 
             # Публикуем полный версионированный снапшот в GitHub/UI (тот же механизм,
