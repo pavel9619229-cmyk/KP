@@ -1,4 +1,5 @@
 import importlib.util
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,3 +18,10 @@ def test_first_line_refresh_uses_comment_from_doc():
     raw_comment = str(doc.get('Комментарий') or '')
     row['additionalInfoFirstLine'] = module.first_line(raw_comment) or row.get('additionalInfoFirstLine') or ''
     assert row['additionalInfoFirstLine'] == 'new first line'
+
+
+def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
+    started_at = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
+    current_generated_at = datetime(2026, 8, 10, 12, 5, tzinfo=timezone.utc)
+
+    assert module._should_skip_runtime_save(started_at, current_generated_at) is True

@@ -5591,6 +5591,14 @@ def _to_int_or_none(value: object) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _should_skip_runtime_save(started_at: datetime, current_generated_at: datetime | None) -> bool:
+    if not current_generated_at:
+        return False
+    if current_generated_at > started_at + timedelta(minutes=10):
+        return False
+    return current_generated_at > started_at
+
+
 def save_rows(
     rows: list,
     *,
@@ -5621,7 +5629,7 @@ def save_rows(
                 f"ignoring guard value {current_generated_at.isoformat()}"
             )
             current_generated_at = None
-        if current_generated_at and current_generated_at > started_at:
+        if _should_skip_runtime_save(started_at, current_generated_at):
             log(
                 "save_rows skipped: newer runtime snapshot already exists "
                 f"(source={write_source}, current={current_generated_at.isoformat()}, "
