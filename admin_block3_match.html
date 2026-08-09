@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Блок 3: Совпадение</title>
+  <title>Блок 3: Совпадение № КП ↔ № заказа ↔ № прихода ДС</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=4">
 </head>
@@ -12,8 +12,11 @@
     <section class="panel">
       <div class="panel-top">
         <div class="panel-top__row">
-          <strong>Блок 3: Совпадение</strong>
+          <strong>Блок 3: Совпадение № КП ↔ № заказа ↔ № прихода ДС</strong>
         </div>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:0.86rem;">
+          КП считается совпавшим, если номер его заказа (Блок 1) найден в номере счёта из назначения платежа прихода ДС (Блок 2).
+        </p>
       </div>
       <div class="rules-panel__footer">
         <button id="loadBtn" type="button">Загрузить / обновить</button>
@@ -23,7 +26,10 @@
         <table class="pay-match-table">
           <thead>
             <tr>
-              <th>Совпадение</th>
+              <th>№ КП</th>
+              <th>№ заказа</th>
+              <th>№ прихода ДС</th>
+              <th>№ счёта из назначения платежа</th>
             </tr>
           </thead>
           <tbody id="blockBody"></tbody>
@@ -71,24 +77,40 @@
         if (r.purpose) r.purpose.split(',').forEach((s) => { const t = s.trim(); if (t) purposeNumSet.add(t); });
       });
 
-      // Block 3: KP whose linked order number appears in purposeNum set.
-      const block3KpSet = new Set();
+      // Block 3: KP ↔ order ↔ payment/purpose — full match chain, not just KP number.
+      const list = [];
       block1Map.forEach(({ kp, order }) => {
-        if (kp && order && purposeNumSet.has(order)) block3KpSet.add(kp);
+        if (!kp || !order || !purposeNumSet.has(order)) return;
+        block2Map.forEach(({ pay, purpose }) => {
+          if (!purpose) return;
+          const purposeParts = purpose.split(',').map((s) => s.trim()).filter(Boolean);
+          if (purposeParts.includes(order)) {
+            list.push({ kp, order, pay, purpose });
+          }
+        });
       });
-      const list = Array.from(block3KpSet).sort((a, b) => toNumDesc(b) - toNumDesc(a));
+      list.sort((a, b) => toNumDesc(b.kp) - toNumDesc(a.kp));
 
       if (list.length) {
-        list.forEach((kp) => {
+        list.forEach((r) => {
           const tr = document.createElement('tr');
-          const td = document.createElement('td');
-          td.textContent = kp;
-          tr.appendChild(td);
+          tr.classList.add('pm-match');
+          const tdKp = document.createElement('td');
+          const tdOrder = document.createElement('td');
+          const tdPay = document.createElement('td');
+          const tdPurpose = document.createElement('td');
+          tdKp.textContent = r.kp;
+          tdKp.classList.add('pm-match-cell');
+          tdOrder.textContent = r.order;
+          tdPay.textContent = r.pay || 'не определено';
+          tdPurpose.textContent = r.purpose;
+          tr.append(tdKp, tdOrder, tdPay, tdPurpose);
           blockBody.appendChild(tr);
         });
       } else {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
+        td.colSpan = 4;
         td.textContent = 'нет совпадений';
         td.classList.add('pm-empty');
         tr.appendChild(td);
