@@ -8949,6 +8949,46 @@ async def debug_kp_payment_chain(kp_number: str):
     }
 
 
+@app.get("/api/debug/kp/invoice-check")
+async def debug_kp_invoice_check(numbers: str):
+    """Temporary read-only diagnostic: run the exact same _enrich_group_flags_bulk
+    logic used by payments-only, but only for the given KP numbers (comma-separated),
+    to see whether invoiceCreated resolves to True/False in isolation.
+    """
+    if not _cached_rows:
+        raise HTTPException(status_code=503, detail="KP data is not available yet")
+
+    targets = [_normalize_kp_number(n) for n in numbers.split(",") if n.strip()]
+    targets = [t for t in targets if t]
+    if not targets:
+        raise HTTPException(status_code=400, detail="numbers is required")
+
+    copies = []
+    for row in _cached_rows:
+        if _normalize_kp_number(row.get("number") or "") in targets:
+            copies.append(dict(row))
+
+    if not copies:
+        raise HTTPException(status_code=404, detail="no matching KPs found in cache")
+
+    headers = _build_headers()
+    diag = await asyncio.to_thread(_enrich_group_flags_bulk, copies, headers, False)
+
+    return {
+        "ok": True,
+        "diag": diag,
+        "rows": [
+            {
+                "number": r.get("number"),
+                "refKey": r.get("refKey"),
+                "invoiceCreated": r.get("invoiceCreated"),
+                "paymentReceived": r.get("paymentReceived"),
+            }
+            for r in copies
+        ],
+    }
+
+
 @app.get("/api/debug/invoices/2026")
 async def debug_invoices_2026():
     """Temporary read-only diagnostic: list all накладные (Document_РеализацияТоваровУслуг)
