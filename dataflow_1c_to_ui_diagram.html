@@ -170,6 +170,23 @@
       text-decoration: underline;
     }
 
+    .arrow-highlight {
+      stroke: #c23636;
+      stroke-width: 3.6;
+      fill: none;
+      marker-end: url(#arrow-red);
+    }
+
+    .node-highlight {
+      border-color: #c23636;
+      border-width: 3px;
+      background: #fff2f2;
+    }
+
+    .node-highlight h2 {
+      color: #c23636;
+    }
+
     .legend {
       position: absolute;
       left: 24px;
@@ -273,6 +290,9 @@
           <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0,0 L10,4 L0,8 Z" fill="#000000"/>
           </marker>
+          <marker id="arrow-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#c23636"/>
+          </marker>
         </defs>
 
         <path class="arrow" d="M390,216 L390,238"/>
@@ -286,7 +306,7 @@
         <path class="arrow" d="M478,788 L504,788"/>
         <path class="arrow" d="M609,850 L609,872"/>
 
-        <path class="arrow" d="M390,686 L368,1012"/>
+        <path class="arrow-highlight" d="M390,686 L368,1012"/>
         <path class="arrow-added" d="M609,980 L609,1012"/>
         <path class="arrow-added" d="M504,1064 L478,1064"/>
         <path class="arrow-added" d="M132,1008 L132,820 L258,820"/>
@@ -351,9 +371,9 @@
         <p>/api/admin/payment-match-table: при открытии страницы найденные совпадения сразу пишутся в runtime-кэш (paymentReceived, только повышение False→True).</p>
       </section>
 
-      <section class="node n9">
+      <section class="node n9 node-highlight">
         <h2>9) API + UI</h2>
-        <p>/api/kp/all и /ws/kp → отрисовка карточек на dashboard.</p>
+        <p>/api/kp/all и /ws/kp → отрисовка карточек на dashboard. <b>Здесь данные из 1С фактически попадают на экран dashboard.</b></p>
       </section>
 
       <section class="node n10">
@@ -362,7 +382,7 @@
       </section>
 
       <div class="legend">
-        Все стрелки чёрные: сплошные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
+        Все стрелки чёрные, кроме одной: сплошные чёрные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). <b style="color:#c23636">Красным выделено место, где данные из 1С фактически записываются/отображаются на dashboard — узел 9 (API + UI) и стрелка в него.</b> LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
       </div>
     </div>
 
