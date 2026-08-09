@@ -17,8 +17,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Шина цельнолитая 250-15/7.0 ADVANCE STD — 2 шт.",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -40,8 +40,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Шина 17.5-25   E-3/L-3 181A2 20PR TTF   шинокомплект ,Протектор волна.",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -63,7 +63,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Диск (обод) 3.00D-8 ET0 PCD5/140 HUB110  сборный (в компл. с болтами), 2 шт.",
-    "invoiceCreated": null,
+    "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
@@ -86,8 +86,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "шины для катка 225/75-16 гладкие, 4 шт. Предложены шины 10.5/80-16",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -109,8 +109,8 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Колесо в сборе 5.00-8 10PR 8 шт.",
-    "invoiceCreated": null,
-    "paymentReceived": null,
+    "invoiceCreated": false,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -132,7 +132,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Шина заднего колеса 5.00-8 NHS – 2 шт.(проверить наличие в И-1)",
-    "invoiceCreated": null,
+    "invoiceCreated": false,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
@@ -155,7 +155,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Шина пневмо 21.00-35 с уплотнительным кольцом - 4шт",
-    "invoiceCreated": null,
+    "invoiceCreated": false,
     "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
@@ -178,7 +178,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Цельнолитая шина 18*9-8 (7.00) ADVANCE TR  2 шт",
-    "invoiceCreated": false,
+    "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
@@ -431,7 +431,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "Диск (обод) 10-16.5 (8.25-16.5) ET15 PCD8/203.2 HUB152.4 RALJMH (COPRA'H)",
-    "invoiceCreated": false,
+    "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
@@ -454,7 +454,7 @@
     "shipmentPending": false,
     "statusKp": "",
     "additionalInfoFirstLine": "18*7-8 - 4 шт. Отправлен счет. КП отправлено 31.07.2026, а цена в ВИЛМЕ выросла с понедельника, 03.07.2026. Скидку НЕ сделали",
-    "invoiceCreated": false,
+    "invoiceCreated": true,
     "paymentReceived": true,
     "statusHash": "",
     "clientFilled": true
