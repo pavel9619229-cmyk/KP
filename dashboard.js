@@ -389,12 +389,11 @@ managerFilter.addEventListener('change', () => {
   renderBoard();
 });
 
-// NOTE: click handlers intentionally do not trigger any refresh process yet —
-// only re-check status. Wiring the actual 1/4 and 4/4 processes to these
-// buttons is a separate, explicitly-approved next step.
+// Кнопка 1/4 запускает полный цикл refresh с публикацией в GitHub/UI.
+// Кнопка 4/4 остаётся привязанной к локальной очереди stage4/4.
 if (stage1of4Btn) {
   stage1of4Btn.addEventListener('click', () => {
-    runStageRefresh('/api/kp/refresh/stage1_4', '/api/kp/refresh/stage1_4/status', stage1of4Btn, stage1of4TimeLabel);
+    runStageRefresh('/api/kp/refresh', '/api/kp/refresh/status', stage1of4Btn, stage1of4TimeLabel);
   });
 }
 if (stage4of4Btn) {

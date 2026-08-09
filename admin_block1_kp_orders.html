@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Блок 1: КП и заказы</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=4">
+</head>
+<body>
+  <main class="container">
+    <section class="panel">
+      <div class="panel-top">
+        <div class="panel-top__row">
+          <strong>Блок 1: КП и заказы</strong>
+        </div>
+      </div>
+      <div class="rules-panel__footer">
+        <button id="loadBtn" type="button">Загрузить / обновить</button>
+        <span id="statusLabel" style="margin-left:12px;color:var(--muted);font-size:0.88rem;"></span>
+      </div>
+      <div class="pay-match-wrap">
+        <table class="pay-match-table">
+          <thead>
+            <tr>
+              <th>№ КП</th>
+              <th>№ заказа</th>
+            </tr>
+          </thead>
+          <tbody id="blockBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const loadBtn = document.getElementById('loadBtn');
+    const statusLabel = document.getElementById('statusLabel');
+    const blockBody = document.getElementById('blockBody');
+
+    const toNumDesc = (value) => {
+      const n = Number.parseInt(String(value || '').replace(/\D+/g, ''), 10);
+      return Number.isFinite(n) ? n : -1;
+    };
+
+    function render(data) {
+      blockBody.innerHTML = '';
+      const rows = data.rows || [];
+
+      const map = new Map();
+      rows.forEach((r) => {
+        const kp = String(r.kpNum || '').trim();
+        const order = String(r.orderNum || '').trim();
+        if (!kp && !order) return;
+        const key = `${kp}|${order}`;
+        if (!map.has(key)) map.set(key, { kp, order });
+      });
+      const list = Array.from(map.values()).sort((a, b) => {
+        const kpCmp = toNumDesc(b.kp) - toNumDesc(a.kp);
+        if (kpCmp !== 0) return kpCmp;
+        return toNumDesc(b.order) - toNumDesc(a.order);
+      });
+
+      list.forEach((r) => {
+        const tr = document.createElement('tr');
+        const tdKp = document.createElement('td');
+        const tdOrder = document.createElement('td');
+        tdKp.textContent = r.kp || 'не определено';
+        tdOrder.textContent = r.order || 'не определено';
+        if (!r.kp) tdKp.classList.add('pm-empty');
+        if (!r.order) tdOrder.classList.add('pm-empty');
+        tr.append(tdKp, tdOrder);
+        blockBody.appendChild(tr);
+      });
+
+      if (!list.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 2;
+        td.textContent = 'нет данных';
+        td.classList.add('pm-empty');
+        tr.appendChild(td);
+        blockBody.appendChild(tr);
+      }
+
+      statusLabel.textContent =
+        `Строк: ${list.length} | Заказы: ${data.ordersScanComplete ? 'полный скан' : 'неполный скан'}, ` +
+        `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
+    }
+
+    async function load() {
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Загружаю...';
+      statusLabel.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
+      blockBody.innerHTML = '';
+      try {
+        const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        render(data);
+      } catch (err) {
+        statusLabel.textContent = `Ошибка: ${err.message}`;
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Загрузить / обновить';
+      }
+    }
+
+    loadBtn.addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

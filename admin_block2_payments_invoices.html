@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Блок 2: приходы ДС и счета</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=4">
+</head>
+<body>
+  <main class="container">
+    <section class="panel">
+      <div class="panel-top">
+        <div class="panel-top__row">
+          <strong>Блок 2: приходы ДС и счета</strong>
+        </div>
+      </div>
+      <div class="rules-panel__footer">
+        <button id="loadBtn" type="button">Загрузить / обновить</button>
+        <span id="statusLabel" style="margin-left:12px;color:var(--muted);font-size:0.88rem;"></span>
+      </div>
+      <div class="pay-match-wrap">
+        <table class="pay-match-table">
+          <thead>
+            <tr>
+              <th>№ прихода ДС</th>
+              <th>№ счёта из назначения платежа</th>
+            </tr>
+          </thead>
+          <tbody id="blockBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const loadBtn = document.getElementById('loadBtn');
+    const statusLabel = document.getElementById('statusLabel');
+    const blockBody = document.getElementById('blockBody');
+
+    const toNumDesc = (value) => {
+      const n = Number.parseInt(String(value || '').replace(/\D+/g, ''), 10);
+      return Number.isFinite(n) ? n : -1;
+    };
+
+    function render(data) {
+      blockBody.innerHTML = '';
+      const rows = data.rows || [];
+
+      const map = new Map();
+      rows.forEach((r) => {
+        const pay = String(r.payNum || '').trim();
+        const purpose = String(r.purposeNum || '').trim();
+        if (!pay && !purpose) return;
+        const key = `${pay}|${purpose}`;
+        if (!map.has(key)) map.set(key, { pay, purpose });
+      });
+      const list = Array.from(map.values()).sort((a, b) => toNumDesc(b.pay) - toNumDesc(a.pay));
+
+      list.forEach((r) => {
+        const tr = document.createElement('tr');
+        const tdPay = document.createElement('td');
+        const tdPurpose = document.createElement('td');
+        tdPay.textContent = r.pay || 'не определено';
+        tdPurpose.textContent = r.purpose || 'не определено';
+        if (!r.pay) tdPay.classList.add('pm-empty');
+        if (!r.purpose) tdPurpose.classList.add('pm-empty');
+        tr.append(tdPay, tdPurpose);
+        blockBody.appendChild(tr);
+      });
+
+      if (!list.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 2;
+        td.textContent = 'нет данных';
+        td.classList.add('pm-empty');
+        tr.appendChild(td);
+        blockBody.appendChild(tr);
+      }
+
+      statusLabel.textContent =
+        `Строк: ${list.length} | Заказы: ${data.ordersScanComplete ? 'полный скан' : 'неполный скан'}, ` +
+        `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
+    }
+
+    async function load() {
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Загружаю...';
+      statusLabel.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
+      blockBody.innerHTML = '';
+      try {
+        const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        render(data);
+      } catch (err) {
+        statusLabel.textContent = `Ошибка: ${err.message}`;
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Загрузить / обновить';
+      }
+    }
+
+    loadBtn.addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

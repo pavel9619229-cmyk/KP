@@ -4549,6 +4549,29 @@ def _promote_payment_received_from_match_table(rows: list[dict], headers: dict) 
     }
 
 
+def _count_payment_received_promotions(before_rows: list[dict], after_rows: list[dict]) -> int:
+    """Count how many KP rows were promoted to paymentReceived=True during this pass."""
+    if not before_rows or not after_rows:
+        return 0
+
+    before_by_ref: dict[str, bool] = {}
+    for row in before_rows:
+        ref = str(row.get("refKey") or "")
+        if ref:
+            before_by_ref[ref] = bool(row.get("paymentReceived"))
+
+    promoted = 0
+    for row in after_rows:
+        ref = str(row.get("refKey") or "")
+        if not ref:
+            continue
+        before_value = bool(before_by_ref.get(ref, False))
+        after_value = bool(row.get("paymentReceived"))
+        if (not before_value) and after_value:
+            promoted += 1
+    return promoted
+
+
 def _build_payment_coverage_audit(max_rows: int = 300) -> dict:
     """Compare runtime payment flags with block3 payment-match scan for latest KP rows."""
     if not _cached_rows:
@@ -6681,6 +6704,7 @@ def refresh_payments_only_for_cached_rows(
         refresh_started_at = datetime.now(timezone.utc)
         headers = _build_headers()
         refreshed: list[dict] = [dict(r) for r in source_rows]
+        before_refresh_rows: list[dict] = [dict(r) for r in source_rows]
 
         # Run only stage6 enrichment (orders/invoices/payments matching).
         stage6_diag = _enrich_group_flags_bulk(refreshed, headers, skip_invoice_scan=skip_invoice_scan)
@@ -6702,16 +6726,16 @@ def refresh_payments_only_for_cached_rows(
         # payments-only runs, not only for explicitly queued KPs.
         _apply_seed_payment_promotions_for_all_rows(refreshed)
 
-        # Bridge admin block2 matches into runtime flags: if payment match table
-        # finds a КП↔order↔payment match, persist paymentReceived for that КП.
-        match_promotions = _promote_payment_received_from_match_table(refreshed, headers)
-        if int(match_promotions.get("promoted") or 0) > 0:
+        # Important: do not rescan orders/payments again here. 4/4 already ran
+        # the full stage6 matching once above, and we must keep one data source
+        # per cycle to avoid mismatched "what user sees" vs "what was persisted".
+        promoted_in_stage6 = _count_payment_received_promotions(before_refresh_rows, refreshed)
+        if promoted_in_stage6 > 0:
             log(
-                "payments-only refresh: promoted paymentReceived from match table "
-                f"promoted={match_promotions.get('promoted')}, "
-                f"matchedKpCount={match_promotions.get('matchedKpCount')}, "
-                f"ordersScanComplete={match_promotions.get('ordersScanComplete')}, "
-                f"paymentsScanComplete={match_promotions.get('paymentsScanComplete')}"
+                "payments-only refresh: promoted paymentReceived in stage6 "
+                f"promoted={promoted_in_stage6}, matchedKpCount={int(stage6_diag.get('matchedKpCount') or 0)}, "
+                f"ordersScanComplete={bool(stage6_diag.get('ordersScanComplete'))}, "
+                f"paymentsScanComplete={bool(stage6_diag.get('paymentsScanComplete'))}"
             )
 
         # Apply any queued single-KP seed promotions requested while this
@@ -7289,6 +7313,53 @@ async def admin_dashboard(request: Request):
     )
 
     return response
+
+
+def _require_admin_dashboard_access(request: Request) -> dict:
+    admin_username = _get_admin_username(request)
+    if admin_username:
+        return {"username": admin_username, "role": "admin", "allowedManagers": "*"}
+    user = _get_user_from_request(request)
+    role = str(user.get("role") or "manager").lower()
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return user
+
+
+@app.get("/admin/dashboard/block1")
+async def admin_dashboard_block1(request: Request):
+    try:
+        _require_admin_dashboard_access(request)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=302)
+
+    return FileResponse(
+        "admin_block1_kp_orders.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@app.get("/admin/dashboard/block2")
+async def admin_dashboard_block2(request: Request):
+    try:
+        _require_admin_dashboard_access(request)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=302)
+
+    return FileResponse(
+        "admin_block2_payments_invoices.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/admin/rights")
