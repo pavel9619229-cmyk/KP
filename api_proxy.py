@@ -7362,6 +7362,24 @@ async def admin_dashboard_block2(request: Request):
     )
 
 
+@app.get("/admin/dashboard/block3")
+async def admin_dashboard_block3(request: Request):
+    try:
+        _require_admin_dashboard_access(request)
+    except HTTPException:
+        return RedirectResponse(url="/login", status_code=302)
+
+    return FileResponse(
+        "admin_block3_match.html",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
 @app.get("/admin/rights")
 async def admin_rights():
     return FileResponse("admin_rights.html", media_type="text/html")

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Блок 3: Совпадение</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=4">
+</head>
+<body>
+  <main class="container">
+    <section class="panel">
+      <div class="panel-top">
+        <div class="panel-top__row">
+          <strong>Блок 3: Совпадение</strong>
+        </div>
+      </div>
+      <div class="rules-panel__footer">
+        <button id="loadBtn" type="button">Загрузить / обновить</button>
+        <span id="statusLabel" style="margin-left:12px;color:var(--muted);font-size:0.88rem;"></span>
+      </div>
+      <div class="pay-match-wrap">
+        <table class="pay-match-table">
+          <thead>
+            <tr>
+              <th>Совпадение</th>
+            </tr>
+          </thead>
+          <tbody id="blockBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const loadBtn = document.getElementById('loadBtn');
+    const statusLabel = document.getElementById('statusLabel');
+    const blockBody = document.getElementById('blockBody');
+
+    const toNumDesc = (value) => {
+      const n = Number.parseInt(String(value || '').replace(/\D+/g, ''), 10);
+      return Number.isFinite(n) ? n : -1;
+    };
+
+    function render(data) {
+      blockBody.innerHTML = '';
+      const rows = data.rows || [];
+
+      // Block 1: unique (kp, order) pairs.
+      const block1Map = new Map();
+      rows.forEach((r) => {
+        const kp = String(r.kpNum || '').trim();
+        const order = String(r.orderNum || '').trim();
+        if (!kp && !order) return;
+        const key = `${kp}|${order}`;
+        if (!block1Map.has(key)) block1Map.set(key, { kp, order });
+      });
+
+      // Block 2: unique (pay, purpose) pairs, used to build purposeNum set.
+      const block2Map = new Map();
+      rows.forEach((r) => {
+        const pay = String(r.payNum || '').trim();
+        const purpose = String(r.purposeNum || '').trim();
+        if (!pay && !purpose) return;
+        const key = `${pay}|${purpose}`;
+        if (!block2Map.has(key)) block2Map.set(key, { pay, purpose });
+      });
+
+      const purposeNumSet = new Set();
+      block2Map.forEach((r) => {
+        if (r.purpose) r.purpose.split(',').forEach((s) => { const t = s.trim(); if (t) purposeNumSet.add(t); });
+      });
+
+      // Block 3: KP whose linked order number appears in purposeNum set.
+      const block3KpSet = new Set();
+      block1Map.forEach(({ kp, order }) => {
+        if (kp && order && purposeNumSet.has(order)) block3KpSet.add(kp);
+      });
+      const list = Array.from(block3KpSet).sort((a, b) => toNumDesc(b) - toNumDesc(a));
+
+      if (list.length) {
+        list.forEach((kp) => {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.textContent = kp;
+          tr.appendChild(td);
+          blockBody.appendChild(tr);
+        });
+      } else {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.textContent = 'нет совпадений';
+        td.classList.add('pm-empty');
+        tr.appendChild(td);
+        blockBody.appendChild(tr);
+      }
+
+      statusLabel.textContent =
+        `Совпадений: ${list.length} | Заказы: ${data.ordersScanComplete ? 'полный скан' : 'неполный скан'}, ` +
+        `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
+    }
+
+    async function load() {
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Загружаю...';
+      statusLabel.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
+      blockBody.innerHTML = '';
+      try {
+        const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        render(data);
+      } catch (err) {
+        statusLabel.textContent = `Ошибка: ${err.message}`;
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Загрузить / обновить';
+      }
+    }
+
+    loadBtn.addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
