@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-09T12:45:01.307272+00:00",
-  "refreshStartedAt": "2026-08-09T12:34:54.859236+00:00",
+  "generatedAt": "2026-08-09T14:22:21.737969+00:00",
+  "refreshStartedAt": "2026-08-09T14:22:21.737707+00:00",
   "rowCount": 300,
-  "writeSource": "payments-only-refresh",
+  "writeSource": "block3-match-view",
   "cycleVersion": 232,
   "last1cLoadedVersion": 232,
-  "last1cLoadedAt": "2026-08-09T12:45:01.307272+00:00"
+  "last1cLoadedAt": "2026-08-09T14:22:21.737969+00:00"
 }
