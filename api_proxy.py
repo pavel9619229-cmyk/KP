@@ -6509,9 +6509,14 @@ def refresh_cache_and_file(
                     if update_live_cache and latest_rows:
                         _cached_rows = latest_rows
                         _cached_fp = rows_fingerprint(latest_rows)
+                    if latest_rows:
+                        _last_refresh_error = None
+                        _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                        log("full refresh skipped: newer runtime snapshot already exists; using current snapshot")
+                        return True
                     _last_refresh_error = "full refresh skipped: newer runtime snapshot already exists"
                     log(_last_refresh_error)
-                    return
+                    return False
                 if update_live_cache:
                     _cached_rows = fetched
                     _cached_fp = rows_fingerprint(fetched)
@@ -6557,9 +6562,14 @@ def refresh_cache_and_file(
                             if update_live_cache and latest_rows:
                                 _cached_rows = latest_rows
                                 _cached_fp = rows_fingerprint(latest_rows)
+                            if latest_rows:
+                                _last_refresh_error = None
+                                _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+                                log("partial fallback skipped: newer runtime snapshot already exists; using current snapshot")
+                                return True
                             _last_refresh_error = "partial fallback skipped: newer runtime snapshot already exists"
                             log(_last_refresh_error)
-                            return
+                            return False
                         if update_live_cache:
                             _cached_rows = partial_rows
                             _cached_fp = rows_fingerprint(partial_rows)
@@ -6714,6 +6724,10 @@ def refresh_comment_first_line_only() -> dict:
         if latest_rows:
             _cached_rows = latest_rows
             _cached_fp = rows_fingerprint(latest_rows)
+            _last_refresh_error = None
+            _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
+            log("comment refresh skipped: newer runtime snapshot already exists; using current snapshot")
+            return {"ok": True, "touched": 0, "rows": len(latest_rows), "skipped": "newer-runtime-snapshot"}
         _last_refresh_error = "comment refresh skipped: newer runtime snapshot already exists"
         log(_last_refresh_error)
         return {"ok": False, "error": _last_refresh_error}
