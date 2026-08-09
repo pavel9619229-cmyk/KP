@@ -187,6 +187,23 @@
       color: #c23636;
     }
 
+    .arrow-highlight-green {
+      stroke: #1f9d55;
+      stroke-width: 3.6;
+      fill: none;
+      marker-end: url(#arrow-green);
+    }
+
+    .node-highlight-green {
+      border-color: #1f9d55;
+      border-width: 3px;
+      background: #effcf4;
+    }
+
+    .node-highlight-green h2 {
+      color: #1f9d55;
+    }
+
     .legend {
       position: absolute;
       left: 24px;
@@ -293,6 +310,9 @@
           <marker id="arrow-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0,0 L10,4 L0,8 Z" fill="#c23636"/>
           </marker>
+          <marker id="arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#1f9d55"/>
+          </marker>
         </defs>
 
         <path class="arrow" d="M390,216 L390,238"/>
@@ -307,6 +327,7 @@
         <path class="arrow" d="M609,850 L609,872"/>
 
         <path class="arrow-highlight" d="M390,686 L368,1012"/>
+        <path class="arrow-highlight-green" d="M290,140 L60,140 L60,1008 L132,1008"/>
         <path class="arrow-added" d="M609,980 L609,1012"/>
         <path class="arrow-added" d="M504,1064 L478,1064"/>
         <path class="arrow-added" d="M132,1008 L132,820 L258,820"/>
@@ -366,9 +387,9 @@
         <p>Статус оплаты берётся из текущего прохода stage6 (блоки 1/2-4/4) и сохраняется сразу, без повторного пересканирования тех же данных.</p>
       </section>
 
-      <section class="node n13 node-added">
+      <section class="node n13 node-added node-highlight-green">
         <h2>8.6) Просмотр Блок 1/2/3</h2>
-        <p>/api/admin/payment-match-table: при открытии страницы найденные совпадения сразу пишутся в runtime-кэш (paymentReceived, только повышение False→True).</p>
+        <p>/api/admin/payment-match-table: отдельный live-скан 1С (минуя кэш) — его результат и есть то, что показывает страница /admin/dashboard/block3. Заодно пишет paymentReceived в runtime-кэш (только повышение False→True).</p>
       </section>
 
       <section class="node n9 node-highlight">
@@ -382,7 +403,7 @@
       </section>
 
       <div class="legend">
-        Все стрелки чёрные, кроме одной: сплошные чёрные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). <b style="color:#c23636">Красным выделено место, где данные из 1С фактически записываются/отображаются на dashboard — узел 9 (API + UI) и стрелка в него.</b> LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
+        Все стрелки чёрные, кроме двух: сплошные чёрные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). <b style="color:#c23636">Красным выделено место, где данные из 1С фактически записываются/отображаются на основном dashboard — узел 9 (API + UI) и стрелка в него.</b> <b style="color:#1f9d55">Зелёным выделено место, где данные из 1С попадают на страницу /admin/dashboard/block3 — узел 8.6 (отдельный live-скан, в обход кэша 4-5) и стрелка из 1С OData прямо в него.</b> LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
       </div>
     </div>
 
