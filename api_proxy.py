@@ -8949,6 +8949,85 @@ async def debug_kp_payment_chain(kp_number: str):
     }
 
 
+@app.get("/api/debug/invoices/2026")
+async def debug_invoices_2026():
+    """Temporary read-only diagnostic: list all накладные (Document_РеализацияТоваровУслуг)
+    dated in 2026, with their linked order ref. Does not touch any cached/persisted data.
+    """
+    headers = _build_headers()
+
+    def _scan() -> dict:
+        year_start = datetime(2026, 1, 1)
+        pages: list[list] = []
+        try:
+            response = requests.get(
+                f"{BASE}/Document_РеализацияТоваровУслуг/$count",
+                headers=headers,
+                timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+                verify=False,
+            )
+            if response.status_code != 200:
+                return {"ok": False, "error": f"count HTTP {response.status_code}"}
+            total_count = int(response.text.strip())
+        except Exception as exc:
+            return {"ok": False, "error": f"count failed: {exc}"}
+
+        page_size = 50
+        skip = ((total_count - 1) // page_size) * page_size if total_count > 0 else 0
+        select_expr = "Ref_Key,Number,Date,ЗаказКлиента,ЗаказКлиента_Type"
+        max_pages = max(1, GROUP_SCAN_MAX_PAGES)
+        max_seconds = max(10.0, GROUP_SCAN_MAX_SECONDS)
+        started_at = time.time()
+
+        while True:
+            payload, error = _get_json_with_retry(
+                f"{BASE}/Document_РеализацияТоваровУслуг",
+                headers,
+                params={"$select": select_expr, "$top": str(page_size), "$skip": str(skip)},
+                timeout=GROUP_CHECK_TIMEOUT_SECONDS,
+                retries=2,
+            )
+            if error or not isinstance(payload, dict):
+                break
+            batch = payload.get("value", [])
+            if not batch:
+                break
+            pages.append(batch)
+            if len(pages) >= max_pages or (time.time() - started_at) >= max_seconds:
+                break
+            batch_dates = [_parse_odata_datetime(item.get("Date")) for item in batch if isinstance(item, dict)]
+            batch_dates = [d for d in batch_dates if d is not None]
+            if batch_dates and max(batch_dates) < year_start:
+                break
+            if skip == 0:
+                break
+            skip = max(0, skip - page_size)
+
+        rows_2026 = []
+        for batch in pages:
+            for item in batch:
+                dt = _parse_odata_datetime(item.get("Date"))
+                if dt and dt.year == 2026:
+                    rows_2026.append(
+                        {
+                            "number": item.get("Number"),
+                            "date": item.get("Date"),
+                            "orderRef": item.get("ЗаказКлиента"),
+                            "orderRefType": item.get("ЗаказКлиента_Type"),
+                        }
+                    )
+        return {
+            "ok": True,
+            "totalDocsInEntity": total_count,
+            "pagesScanned": len(pages),
+            "invoices2026Count": len(rows_2026),
+            "invoices2026": rows_2026,
+        }
+
+    result = await asyncio.to_thread(_scan)
+    return result
+
+
 @app.get("/api/status-rules")
 async def get_status_rules():
     with _status_rules_lock:
