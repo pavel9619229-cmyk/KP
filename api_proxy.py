@@ -429,6 +429,7 @@ _payments_only_state: dict = {
     "waitedSeconds": None,
     "paymentReceivedCount": None,
     "invoiceCreatedCount": None,
+    "confirmedVersion": None,
 }
 # Proposed process 4/4 (платежи, Document_ПоступлениеБезналичныхДенежныхСредств):
 # a thin, separately-triggerable wrapper around the existing payments-only
@@ -7981,6 +7982,7 @@ async def payments_only_refresh(request: Request):
                 "waitedSeconds": None,
                 "paymentReceivedCount": None,
                 "invoiceCreatedCount": None,
+                "confirmedVersion": None,
             }
         )
 
@@ -8012,12 +8014,34 @@ async def payments_only_refresh(request: Request):
                 ),
                 timeout=remaining_budget,
             )
+
+            confirmed_version = None
+            if result.get("ok"):
+                # Mirror the 4/4 local watchdog: publish the confirmed runtime
+                # pointer so the fingerprint-consistency check does not treat
+                # this refresh's on-disk write as stale and roll it back.
+                try:
+                    candidate_rows = await asyncio.to_thread(load_rows_from_path, Path(RUNTIME_DATA_FILE))
+                    candidate_meta = await asyncio.to_thread(_read_runtime_meta)
+                    _, _, confirmed_pointer = await asyncio.to_thread(
+                        _publish_confirmed_runtime_snapshot_or_raise,
+                        candidate_rows,
+                        candidate_meta,
+                    )
+                    confirmed_version = confirmed_pointer.get("version")
+                    log(f"payments-only refresh: published confirmed runtime snapshot v{confirmed_version}")
+                except Exception as publish_exc:
+                    result["ok"] = False
+                    result["error"] = f"publish-confirmed-pointer failed: {type(publish_exc).__name__}: {publish_exc}"
+                    log(f"payments-only refresh: {result['error']}")
+
             _set_payments_only_state(
                 lastOk=bool(result.get("ok")),
                 lastError=result.get("error") or (None if result.get("ok") else result.get("skipped")),
                 waitedSeconds=int(max(0, time.time() - wait_started)),
                 paymentReceivedCount=result.get("paymentReceivedCount"),
                 invoiceCreatedCount=result.get("invoiceCreatedCount"),
+                confirmedVersion=confirmed_version,
             )
         except asyncio.TimeoutError:
             _set_payments_only_state(
