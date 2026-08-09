@@ -3628,12 +3628,10 @@ def _resolve_order_refs_to_target_kps(
         except Exception:
             return order_ref, {}
 
-    with ThreadPoolExecutor(max_workers=min(12, max(1, len(target_order_refs)))) as pool:
-        futures = {pool.submit(_fetch_one, order_ref): order_ref for order_ref in target_order_refs}
-        for future in as_completed(futures):
-            order_ref, payload = future.result()
-            if payload:
-                resolved[order_ref] = payload
+    for order_ref in sorted(target_order_refs):
+        _, payload = _fetch_one(order_ref)
+        if payload:
+            resolved[order_ref] = payload
 
     return resolved
 
@@ -3779,11 +3777,16 @@ def _fetch_orders_by_number_hints(
     return result
 
 
-def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan: bool = False) -> None:
+def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan: bool = False) -> dict:
     target_refs = [str(r.get("refKey") or "") for r in rows]
     target_refs = [r for r in target_refs if r]
     if not target_refs:
-        return
+        return {
+            "ordersScanComplete": False,
+            "paymentsScanComplete": False,
+            "paymentsRows": 0,
+            "matchedKpCount": 0,
+        }
 
     kp_ref_set = set(target_refs)
 
@@ -3932,6 +3935,17 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
         timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
     if not payments_complete and not payment_pages:
+        # One extra probe before declaring scan unavailable.
+        payment_pages_probe, payments_complete_probe, _ = _collect_tail_pages_with_field_fallback(
+            "Document_ПоступлениеБезналичныхДенежныхСредств",
+            headers,
+            PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
+            timeout=max(180.0, GROUP_CHECK_TIMEOUT_SECONDS),
+        )
+        if payment_pages_probe:
+            payment_pages = payment_pages_probe
+        payments_complete = bool(payments_complete or payments_complete_probe)
+    if not payments_complete and not payment_pages:
         # Payment scan completely failed — no data to confirm any payment.
         # Continue to row update loop so stale cached True values are reset to False,
         # consistent with Block 3 showing "нет совпадений" when data unavailable.
@@ -4023,6 +4037,13 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
                 # Partial orders/invoices scan: only upgrade to True; do not force False.
                 row["invoiceCreated"] = True
             row["paymentReceived"] = kp_payment_map.get(kp_ref, False) or bool(row.get("paymentReceived"))
+
+    return {
+        "ordersScanComplete": bool(orders_complete),
+        "paymentsScanComplete": bool(payments_complete),
+        "paymentsRows": sum(len(batch) for batch in payment_pages),
+        "matchedKpCount": len(block3_ui_kp_hits),
+    }
 
 
 def _normalize_kp_number(value: str) -> str:
@@ -4263,14 +4284,15 @@ def _trace_kp_group_chain(kp_ref: str, headers: dict) -> dict:
     return trace
 
 
-def _build_payment_match_table(headers: dict) -> dict:
+def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = None) -> dict:
     """Scan all orders and payment docs, return table rows for the admin match UI."""
     _load_order_cache()
 
     # Target the latest 300 KPs from current runtime cache.
     target_kp_refs: set[str] = set()
-    if _cached_rows:
-        for row in _cached_rows[:300]:
+    source_rows = target_rows if isinstance(target_rows, list) and target_rows else _cached_rows
+    if source_rows:
+        for row in source_rows[:300]:
             ref = str(row.get("refKey") or "").strip()
             if ref:
                 target_kp_refs.add(ref)
@@ -4320,8 +4342,8 @@ def _build_payment_match_table(headers: dict) -> dict:
 
     # Map kp_ref → КП display number
     kp_number_map: dict[str, str] = {}
-    if _cached_rows:
-        for row in _cached_rows:
+    if source_rows:
+        for row in source_rows:
             ref = str(row.get("refKey") or "")
             num = str(row.get("number") or "")
             if ref:
@@ -4479,6 +4501,51 @@ def _build_payment_match_table(headers: dict) -> dict:
         "ordersScanComplete": orders_complete,
         "paymentsScanComplete": payments_complete,
         "rows": table_rows,
+    }
+
+
+def _promote_payment_received_from_match_table(rows: list[dict], headers: dict) -> dict:
+    """Promote paymentReceived=True for rows that have admin-style payment matches.
+
+    Uses the same matching logic as /api/admin/payment-match-table so a detected
+    block2 match reaches the runtime flag persisted for dashboard cards.
+    """
+    if not rows:
+        return {
+            "promoted": 0,
+            "matchedKpCount": 0,
+            "ordersScanComplete": False,
+            "paymentsScanComplete": False,
+        }
+
+    table = _build_payment_match_table(headers, target_rows=rows)
+    table_rows = table.get("rows") if isinstance(table, dict) else []
+    table_rows = table_rows if isinstance(table_rows, list) else []
+
+    matched_kp_numbers: set[str] = set()
+    for item in table_rows:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("match") or "") != "СОВПАДЕНИЕ":
+            continue
+        kp_num = _normalize_kp_number(str(item.get("kpNum") or ""))
+        if kp_num:
+            matched_kp_numbers.add(kp_num)
+
+    promoted = 0
+    for row in rows:
+        kp_num = _normalize_kp_number(str(row.get("number") or ""))
+        if not kp_num or kp_num not in matched_kp_numbers:
+            continue
+        if not bool(row.get("paymentReceived")):
+            row["paymentReceived"] = True
+            promoted += 1
+
+    return {
+        "promoted": promoted,
+        "matchedKpCount": len(matched_kp_numbers),
+        "ordersScanComplete": bool(table.get("ordersScanComplete")) if isinstance(table, dict) else False,
+        "paymentsScanComplete": bool(table.get("paymentsScanComplete")) if isinstance(table, dict) else False,
     }
 
 
@@ -5321,12 +5388,10 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
         except Exception as e:
             _push_meta_err[0] = e
 
-    t_cache = threading.Thread(target=_do_push_cache, daemon=True)
-    t_meta = threading.Thread(target=_do_push_meta, daemon=True)
-    t_cache.start()
-    t_meta.start()
-    t_cache.join()
-    t_meta.join()
+    # Keep publish strictly sequential so one snapshot writer does not race
+    # another writer updating the same GitHub branch/files.
+    _do_push_cache()
+    _do_push_meta()
 
     if not _push_cache_ok[0]:
         raise RuntimeError(f"GitHub cache version push failed: {_push_cache_err[0]}")
@@ -6618,11 +6683,36 @@ def refresh_payments_only_for_cached_rows(
         refreshed: list[dict] = [dict(r) for r in source_rows]
 
         # Run only stage6 enrichment (orders/invoices/payments matching).
-        _enrich_group_flags_bulk(refreshed, headers, skip_invoice_scan=skip_invoice_scan)
+        stage6_diag = _enrich_group_flags_bulk(refreshed, headers, skip_invoice_scan=skip_invoice_scan)
+        if not bool(stage6_diag.get("paymentsScanComplete")):
+            _last_refresh_error = (
+                "payments-only refresh aborted: payment scan from 1C is unavailable "
+                f"(paymentsRows={int(stage6_diag.get('paymentsRows') or 0)})"
+            )
+            log(_last_refresh_error)
+            return {
+                "ok": False,
+                "error": _last_refresh_error,
+                "ordersScanComplete": bool(stage6_diag.get("ordersScanComplete")),
+                "paymentsScanComplete": bool(stage6_diag.get("paymentsScanComplete")),
+                "paymentsRows": int(stage6_diag.get("paymentsRows") or 0),
+            }
 
         # Preserve block3-compatible payment source from seed data across
         # payments-only runs, not only for explicitly queued KPs.
         _apply_seed_payment_promotions_for_all_rows(refreshed)
+
+        # Bridge admin block2 matches into runtime flags: if payment match table
+        # finds a КП↔order↔payment match, persist paymentReceived for that КП.
+        match_promotions = _promote_payment_received_from_match_table(refreshed, headers)
+        if int(match_promotions.get("promoted") or 0) > 0:
+            log(
+                "payments-only refresh: promoted paymentReceived from match table "
+                f"promoted={match_promotions.get('promoted')}, "
+                f"matchedKpCount={match_promotions.get('matchedKpCount')}, "
+                f"ordersScanComplete={match_promotions.get('ordersScanComplete')}, "
+                f"paymentsScanComplete={match_promotions.get('paymentsScanComplete')}"
+            )
 
         # Apply any queued single-KP seed promotions requested while this
         # payments-only cycle was already running.
@@ -7905,6 +7995,17 @@ async def enqueue_local_stage4_4_refresh(request: Request):
 async def local_stage4_4_queue_status(request: Request):
     _get_user_from_request(request)
     return _stage4_4_local_queue_snapshot()
+
+
+@app.get("/api/kp/local-agent/stage4_4/state")
+async def local_stage4_4_state(request: Request):
+    """Read-only queue state for trusted local agents.
+
+    Unlike /claim, this endpoint does not mutate queue state and therefore
+    cannot accidentally steal a queued task during diagnostics.
+    """
+    _require_local_stage4_agent_auth(request)
+    return {"ok": True, "state": _stage4_4_local_queue_snapshot()}
 
 
 @app.post("/api/kp/local-agent/stage4_4/claim")
