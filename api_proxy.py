@@ -4504,6 +4504,59 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
     }
 
 
+def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
+    """Write block3 match results (already scanned, no extra 1C call here) into
+    the runtime cache so /admin/dashboard's "Оплата получена" reflects exactly
+    what block3 shows, instead of only relying on separate 1/4-4/4 runs."""
+    global _cached_rows, _cached_fp
+
+    if not _cached_rows:
+        return {"applied": False, "reason": "empty-cache"}
+
+    matched_kp_numbers: set[str] = set()
+    for item in table_rows or []:
+        if not isinstance(item, dict) or str(item.get("match") or "") != "СОВПАДЕНИЕ":
+            continue
+        kp_num = _normalize_kp_number(str(item.get("kpNum") or ""))
+        if kp_num:
+            matched_kp_numbers.add(kp_num)
+
+    if not matched_kp_numbers:
+        return {"applied": True, "promoted": 0, "matchedKpCount": 0}
+
+    if not _refresh_run_lock.acquire(blocking=False):
+        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+        log(f"block3 persist skipped: main refresh cycle is running (owner={owner})")
+        return {"applied": False, "reason": "another-refresh-running"}
+    if not _partial_refresh_lock.acquire(blocking=False):
+        _refresh_run_lock.release()
+        owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
+        log(f"block3 persist skipped: another partial refresh is running (owner={owner})")
+        return {"applied": False, "reason": "already-running"}
+
+    try:
+        refreshed = [dict(r) for r in _cached_rows]
+        promoted = 0
+        for row in refreshed:
+            kp_num = _normalize_kp_number(str(row.get("number") or ""))
+            if kp_num and kp_num in matched_kp_numbers and not bool(row.get("paymentReceived")):
+                row["paymentReceived"] = True
+                promoted += 1
+
+        if promoted == 0:
+            return {"applied": True, "promoted": 0, "matchedKpCount": len(matched_kp_numbers)}
+
+        saved = save_rows(refreshed, write_source="block3-match-view")
+        if saved:
+            _cached_rows = refreshed
+            _cached_fp = rows_fingerprint(refreshed)
+            log(f"block3 persist: promoted paymentReceived for {promoted} KP(s) from block3 match view")
+        return {"applied": bool(saved), "promoted": promoted, "matchedKpCount": len(matched_kp_numbers)}
+    finally:
+        _partial_refresh_lock.release()
+        _refresh_run_lock.release()
+
+
 def _promote_payment_received_from_match_table(rows: list[dict], headers: dict) -> dict:
     """Promote paymentReceived=True for rows that have admin-style payment matches.
 
@@ -8938,6 +8991,14 @@ async def admin_payment_match_table(request: Request):
         raise HTTPException(status_code=401, detail="Admin auth required")
     headers = _build_headers()
     result = await asyncio.to_thread(_build_payment_match_table, headers)
+    try:
+        persist_outcome = await asyncio.to_thread(
+            _persist_payment_match_result_to_cache, result.get("rows") or []
+        )
+        if persist_outcome.get("promoted"):
+            log(f"block3 view persisted paymentReceived promotions: {persist_outcome}")
+    except Exception as exc:
+        log(f"block3 persist failed: {type(exc).__name__}: {exc}")
     return {"ok": True, **result}
 
 
