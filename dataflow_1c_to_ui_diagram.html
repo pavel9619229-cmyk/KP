@@ -204,6 +204,23 @@
       color: #1f9d55;
     }
 
+    .arrow-highlight-orange {
+      stroke: #e08e0b;
+      stroke-width: 3.6;
+      fill: none;
+      marker-end: url(#arrow-orange);
+    }
+
+    .node-highlight-orange {
+      border-color: #e08e0b;
+      border-width: 3px;
+      background: #fff7e6;
+    }
+
+    .node-highlight-orange h2 {
+      color: #e08e0b;
+    }
+
     .legend {
       position: absolute;
       left: 24px;
@@ -313,6 +330,9 @@
           <marker id="arrow-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
             <path d="M0,0 L10,4 L0,8 Z" fill="#1f9d55"/>
           </marker>
+          <marker id="arrow-orange" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#e08e0b"/>
+          </marker>
         </defs>
 
         <path class="arrow" d="M390,216 L390,238"/>
@@ -328,6 +348,7 @@
 
         <path class="arrow-highlight" d="M390,686 L368,1012"/>
         <path class="arrow-highlight-green" d="M290,140 L60,140 L60,1008 L132,1008"/>
+        <path class="arrow-highlight-orange" d="M390,574 L368,726"/>
         <path class="arrow-added" d="M609,980 L609,1012"/>
         <path class="arrow-added" d="M504,1064 L478,1064"/>
         <path class="arrow-added" d="M132,1008 L132,820 L258,820"/>
@@ -358,14 +379,15 @@
         <div class="risk-inline">Источник затирания: здесь может быть перезапись _cached_rows старым snapshot.</div>
       </section>
 
-      <section class="node n5">
+      <section class="node n5 node-highlight-orange">
         <h2>5) Оперативный кэш</h2>
         <p>Актуальный набор в памяти процесса: _cached_rows.</p>
       </section>
 
-      <section class="node n6">
+      <section class="node n6 node-highlight-orange">
         <h2>6) Runtime-файлы</h2>
         <p>data/kp_runtime_cache.json + meta + current.</p>
+        <div class="risk-inline" style="border-color:#e08e0b;color:#e08e0b;">«ОБНОВИТЬ ПЛАТЕЖИ ПО ПОСЛЕДНИМ 300 КП» пишет только сюда (save_rows) и останавливается — до 7)/8)/подтверждённого pointer не доходит.</div>
       </section>
 
       <section class="node n11">
@@ -404,7 +426,7 @@
       </section>
 
       <div class="legend">
-        Все стрелки чёрные, кроме двух: сплошные чёрные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). <b style="color:#c23636">Красным выделено место, где данные из 1С фактически записываются/отображаются на основном dashboard — узел 9 (API + UI) и стрелка в него.</b> <b style="color:#1f9d55">Зелёным выделено место, где данные из 1С попадают на страницу /admin/dashboard/block3 — узел 8.6 (отдельный live-скан, в обход кэша 4-5) и стрелка из 1С OData прямо в него.</b> LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
+        Все стрелки чёрные, кроме трёх цветов: сплошные чёрные — основной поток данных, пунктирные крупные — обратная связь от действий пользователя, пунктирные мелкие — точки записи статуса в кэш (8.5, 8.6). <b style="color:#c23636">Красным выделено место, где данные из 1С фактически записываются/отображаются на основном dashboard — узел 9 (API + UI) и стрелка в него.</b> <b style="color:#1f9d55">Зелёным выделено место, где данные из 1С попадают на страницу /admin/dashboard/block3 — узел 8.6 (отдельный live-скан, в обход кэша 4-5) и стрелка из 1С OData прямо в него.</b> <b style="color:#e08e0b">Оранжевым выделен путь кнопки «ОБНОВИТЬ ПЛАТЕЖИ ПО ПОСЛЕДНИМ 300 КП» (/api/kp/refresh/payments-only) — заказы+накладные+платежи пишутся в 5) и 6), но публикация в 7)/8)/подтверждённый pointer не вызывается, поэтому до 9) эти данные надёжно не доходят.</b> LOCAL находится в блоке "LOCAL (сервер)": это локальная файловая система сервера (папка data/*).
       </div>
     </div>
 
