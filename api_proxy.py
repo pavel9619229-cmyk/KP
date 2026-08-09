@@ -7892,6 +7892,15 @@ async def manual_refresh_stage1_4(request: Request):
             _last_refresh_error = None
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 
+            try:
+                refreshed_comment_rows = refresh_comment_first_line_only()
+                log(
+                    "stage1/4 refresh: comment-first-line refresh completed: "
+                    f"ok={refreshed_comment_rows.get('ok')}, touched={refreshed_comment_rows.get('touched')}"
+                )
+            except Exception as comment_exc:
+                log(f"stage1/4 refresh: comment-first-line refresh failed: {type(comment_exc).__name__}: {comment_exc}")
+
             confirmed_version = github_pointer.get("version") if github_pointer else None
             _set_stage1_4_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)
             log(

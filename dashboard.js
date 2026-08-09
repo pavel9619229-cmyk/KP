@@ -389,11 +389,12 @@ managerFilter.addEventListener('change', () => {
   renderBoard();
 });
 
-// Кнопка 1/4 запускает полный цикл refresh с публикацией в GitHub/UI.
-// Кнопка 4/4 остаётся привязанной к локальной очереди stage4/4.
+// Кнопка 1/4 запускает stage1/4 refresh: обновление комментария и базовых
+// полей КП без загрузки накладных/платежей. Кнопка 4/4 остаётся привязанной
+// к локальной очереди stage4/4.
 if (stage1of4Btn) {
   stage1of4Btn.addEventListener('click', () => {
-    runStageRefresh('/api/kp/refresh', '/api/kp/refresh/status', stage1of4Btn, stage1of4TimeLabel);
+    runStageRefresh('/api/kp/refresh/stage1_4', '/api/kp/refresh/stage1_4/status', stage1of4Btn, stage1of4TimeLabel);
   });
 }
 if (stage4of4Btn) {
