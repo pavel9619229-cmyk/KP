@@ -40,6 +40,10 @@
       <a id="openBlock2Btn" href="/admin/dashboard/block2" target="_blank" rel="noopener" class="logout-link" style="text-decoration:none;">БЛОК 2: ПРИХОДЫ ДС И СЧЕТА</a>
       <a id="openBlock3Btn" href="/admin/dashboard/block3" target="_blank" rel="noopener" class="logout-link" style="text-decoration:none;">БЛОК 3: СОВПАДЕНИЕ КП ↔ ЗАКАЗ ↔ ПРИХОД ДС</a>
       <button id="paymentsOnlyRefreshTopBtn" type="button">ОБНОВИТЬ ПЛАТЕЖИ ПО ПОСЛЕДНИМ 300 КП</button>
+      <output id="snapshotVersion" class="snapshot-version" aria-live="polite">
+        <span>Актуальный снапшот</span>
+        <strong id="snapshotVersionValue">...</strong>
+      </output>
       <a id="logoutLink" href="/logout" class="logout-link">Выйти</a>
     </section>
 
@@ -257,6 +261,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=9"></script>
+  <script src="/app.js?v=10"></script>
 </body>
 </html>

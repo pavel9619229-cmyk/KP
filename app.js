@@ -35,6 +35,7 @@ const enrichStatusLabel = document.getElementById('enrichStatusLabel');
 const saveRulesBtn = document.getElementById('saveRulesBtn');
 const rulesSaveMsg = document.getElementById('rulesSaveMsg');
 const lastRefreshLabel = document.getElementById('lastRefreshLabel');
+const snapshotVersionValue = document.getElementById('snapshotVersionValue');
 
 (function initDark() {
   if (localStorage.getItem('darkMode') === '1') {
@@ -445,6 +446,12 @@ function renderVersionNumbers(info = {}) {
     .join('\n');
 }
 
+function renderSnapshotVersion(info = {}) {
+  if (!snapshotVersionValue) return;
+  const version = Number(info.lastGithubBackupVersion);
+  snapshotVersionValue.textContent = Number.isFinite(version) && version > 0 ? `v${version}` : 'недоступен';
+}
+
 async function loadVersionInfo() {
   const sources = ['/api/kp/version-info', 'https://onec-kp-realtime.onrender.com/api/kp/version-info'];
 
@@ -478,7 +485,9 @@ async function refreshVersionNumbers(syncFrontendVersion = false) {
     const nextVersion = Number(info.frontendRecommendedVersion);
     frontendLoadedVersion = Number.isFinite(nextVersion) && nextVersion > 0 ? nextVersion : null;
     renderVersionNumbers(info);
+    renderSnapshotVersion(info);
   } catch (err) {
+    renderSnapshotVersion();
     if (versionNumbersInput) {
       versionNumbersInput.value = `Не удалось загрузить версии: ${err.message}`;
     }

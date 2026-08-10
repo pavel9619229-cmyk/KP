@@ -171,6 +171,30 @@ button:hover {
   min-width: 92px;
 }
 
+.snapshot-version {
+  display: grid;
+  align-self: stretch;
+  align-content: center;
+  min-width: 164px;
+  padding: 7px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+
+.snapshot-version span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.snapshot-version strong {
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
 .panel {
   margin-top: 16px;
   background: var(--panel);
