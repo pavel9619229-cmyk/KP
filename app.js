@@ -1029,6 +1029,7 @@ async function init() {
   renderRulesStorageLocations();
   await loadStatusRulesFromServer();
   await refreshData(true);
+  await refreshVersionNumbers(false);
   connectWebSocket();
   if (ENABLE_AUTO_REFRESH) {
     setInterval(() => {
