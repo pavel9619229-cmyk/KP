@@ -5074,6 +5074,66 @@ def _load_json_from_github_path(file_path: str) -> object | None:
         return None
 
 
+def _load_json_with_sha_from_github_path(file_path: str) -> tuple[object | None, str]:
+    if not GITHUB_REPO or not file_path:
+        return None, ""
+
+    gh_headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if GITHUB_TOKEN:
+        gh_headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    try:
+        resp = requests.get(api_url, headers=gh_headers, params={"ref": _github_runtime_ref()}, timeout=20)
+        if resp.status_code == 404:
+            return None, ""
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+        response_payload = resp.json()
+        content_b64 = str(response_payload.get("content") or "").replace("\n", "")
+        decoded_payload = json.loads(base64.b64decode(content_b64.encode("ascii")).decode("utf-8"))
+        return decoded_payload, str(response_payload.get("sha") or "")
+    except Exception as exc:
+        log(f"github json+sha API fetch failed ({file_path}): {exc}")
+        raise
+
+
+def _compare_and_swap_github_json(
+    file_path: str,
+    payload: object,
+    message: str,
+    expected_sha: str,
+) -> str:
+    if not GITHUB_TOKEN or not GITHUB_REPO or not file_path:
+        raise RuntimeError("GitHub CAS requires GITHUB_TOKEN, GITHUB_REPO and file path")
+
+    gh_headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
+    body: dict = {
+        "message": message,
+        "content": base64.b64encode(
+            json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        ).decode("ascii"),
+        "branch": _github_runtime_ref(),
+    }
+    if expected_sha:
+        body["sha"] = expected_sha
+
+    resp = requests.put(api_url, headers=gh_headers, json=body, timeout=30)
+    if resp.status_code in (200, 201):
+        return "updated"
+    if resp.status_code in (409, 422):
+        return "conflict"
+    raise RuntimeError(f"GitHub CAS failed ({file_path}): HTTP {resp.status_code}: {resp.text[:300]}")
+
+
 def _push_json_to_github_path(file_path: str, payload: object, message: str) -> bool:
     if not GITHUB_TOKEN or not GITHUB_REPO or not file_path:
         log(f"GitHub push skipped ({file_path}): GITHUB_TOKEN or GITHUB_REPO not set")
@@ -5133,23 +5193,39 @@ def _push_json_to_github_path(file_path: str, payload: object, message: str) -> 
     return False
 
 
-def _build_runtime_version_paths(meta: dict) -> tuple[int, str, str]:
-    cycle_version = _to_int_or_none(meta.get("cycleVersion")) or 0
+def _build_runtime_snapshot_paths(snapshot_id: str) -> tuple[str, str]:
+    normalized_id = str(snapshot_id or "").strip()
+    if not normalized_id:
+        raise RuntimeError("runtime snapshot has no snapshotId")
+    cache_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_cache_{normalized_id}.json"
+    meta_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_meta_{normalized_id}.json"
+    return cache_path, meta_path
+
+
+def _build_runtime_current_pointer(
+    rows: list,
+    meta: dict,
+    *,
+    version: int | None = None,
+    cache_path: str | None = None,
+    meta_path: str | None = None,
+) -> dict:
+    cycle_version = version or _to_int_or_none(meta.get("cycleVersion")) or 0
     if cycle_version <= 0:
-        raise RuntimeError("runtime metadata has no valid cycleVersion")
-    suffix = f"v{cycle_version:06d}"
-    cache_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_cache_{suffix}.json"
-    meta_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_meta_{suffix}.json"
-    return cycle_version, cache_path, meta_path
-
-
-def _build_runtime_current_pointer(rows: list, meta: dict) -> dict:
-    cycle_version, cache_path, meta_path = _build_runtime_version_paths(meta)
+        raise RuntimeError("confirmed runtime pointer has no valid version")
+    snapshot_id = str(meta.get("snapshotId") or "").strip()
+    if snapshot_id:
+        default_cache_path, default_meta_path = _build_runtime_snapshot_paths(snapshot_id)
+    else:
+        suffix = f"v{cycle_version:06d}"
+        default_cache_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_cache_{suffix}.json"
+        default_meta_path = f"{GITHUB_RUNTIME_VERSIONS_DIR}/kp_runtime_meta_{suffix}.json"
     return {
         "version": cycle_version,
         "status": "confirmed",
-        "cachePath": cache_path,
-        "metaPath": meta_path,
+        "snapshotId": snapshot_id,
+        "cachePath": cache_path or default_cache_path,
+        "metaPath": meta_path or default_meta_path,
         "generatedAt": str(meta.get("generatedAt") or ""),
         "writeSource": str(meta.get("writeSource") or ""),
         "rowCount": len(rows),
@@ -5221,9 +5297,10 @@ def _runtime_normalize_meta(
     pointer = dict(pointer or {})
 
     row_count = len(list(rows or []))
-    version = _runtime_version_of(normalized, pointer)
-    if version <= 0:
-        version = 1
+    pointer_confirmed = str(pointer.get("status") or "") == "confirmed"
+    version = _to_int_or_none(pointer.get("version")) if pointer_confirmed else None
+    if version is None and str(normalized.get("status") or "") == "confirmed":
+        version = _to_int_or_none(normalized.get("cycleVersion"))
 
     generated = _parse_iso_datetime_utc(normalized.get("generatedAt"))
     pointer_generated = _parse_iso_datetime_utc(pointer.get("generatedAt"))
@@ -5238,7 +5315,7 @@ def _runtime_normalize_meta(
         generated = datetime.now(timezone.utc)
 
     write_source = str(normalized.get("writeSource") or pointer.get("writeSource") or fallback_source)
-    last_1c_version = _to_int_or_none(normalized.get("last1cLoadedVersion")) or version
+    last_1c_version = _to_int_or_none(normalized.get("last1cLoadedVersion")) or version or 0
     last_1c_at = str(normalized.get("last1cLoadedAt") or normalized.get("generatedAt") or generated.isoformat())
     refresh_started_at = str(normalized.get("refreshStartedAt") or generated.isoformat())
 
@@ -5248,15 +5325,25 @@ def _runtime_normalize_meta(
             "refreshStartedAt": refresh_started_at,
             "rowCount": row_count,
             "writeSource": write_source,
-            "cycleVersion": version,
             "last1cLoadedVersion": last_1c_version,
             "last1cLoadedAt": last_1c_at,
         }
     )
+    if version:
+        normalized["status"] = "confirmed"
+        normalized["cycleVersion"] = version
+        normalized["snapshotId"] = str(pointer.get("snapshotId") or normalized.get("snapshotId") or "")
+    else:
+        normalized["status"] = "draft"
+        normalized.pop("cycleVersion", None)
     return normalized
 
 
 def _runtime_pointer_matches(rows: list, meta: dict, pointer: dict) -> bool:
+    if str((pointer or {}).get("status") or "") != "confirmed":
+        return False
+    if str(meta.get("status") or "") != "confirmed":
+        return False
     version = _runtime_version_of(meta, pointer)
     if version <= 0:
         return False
@@ -5271,6 +5358,10 @@ def _runtime_pointer_matches(rows: list, meta: dict, pointer: dict) -> bool:
         return False
     if int((pointer or {}).get("rowCount") or 0) != len(rows):
         return False
+    pointer_snapshot_id = str((pointer or {}).get("snapshotId") or "")
+    meta_snapshot_id = str(meta.get("snapshotId") or "")
+    if pointer_snapshot_id and pointer_snapshot_id != meta_snapshot_id:
+        return False
     return True
 
 
@@ -5281,6 +5372,9 @@ def _runtime_load_local_consistent_state() -> tuple[list, dict, dict]:
 
     if not rows:
         return [], meta if isinstance(meta, dict) else {}, pointer if isinstance(pointer, dict) else {}
+
+    if str((pointer or {}).get("status") or "") != "confirmed":
+        return rows, meta if isinstance(meta, dict) else {}, pointer if isinstance(pointer, dict) else {}
 
     # The plain (non-versioned) RUNTIME_DATA_FILE/RUNTIME_META_FILE on disk are
     # only ever written locally (see _write_local_confirmed_runtime) — they are
@@ -5317,12 +5411,7 @@ def _runtime_load_local_consistent_state() -> tuple[list, dict, dict]:
 
     normalized_pointer = pointer if isinstance(pointer, dict) else {}
     if not _runtime_pointer_matches(rows, normalized_meta, normalized_pointer):
-        normalized_pointer = _build_runtime_current_pointer(rows, normalized_meta)
-        _write_runtime_current_pointer(normalized_pointer)
-        log(
-            "runtime consistency: repaired local runtime pointer "
-            f"(version={normalized_pointer.get('version')}, rows={len(rows)})"
-        )
+        return [], {}, {}
 
     return rows, normalized_meta, normalized_pointer
 
@@ -5348,15 +5437,8 @@ def _runtime_pick_authoritative_state(
     github_ready = bool(github_rows and github_version > 0 and github_generated_at is not None)
 
     if RUNTIME_STRICT_GITHUB_POINTER:
-        # In strict mode prefer GitHub by default, but do not overwrite a
-        # fresher local runtime snapshot (e.g. recent payment status updates)
-        # with an older GitHub confirmed copy.
-        if local_ready and github_ready and local_generated_at and github_generated_at and local_generated_at > github_generated_at:
-            return "local", local_rows, local_meta, local_pointer
         if github_ready:
             return "github", github_rows, github_meta, github_pointer
-        if local_ready:
-            return "local", local_rows, local_meta, local_pointer
         return "none", [], {}, {}
 
     if local_ready and github_ready:
@@ -5382,7 +5464,7 @@ def _runtime_pick_authoritative_state(
 
 def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
     pointer = _load_runtime_current_pointer_from_github()
-    if pointer:
+    if pointer and str(pointer.get("status") or "") == "confirmed":
         cache_path = str(pointer.get("cachePath") or "").strip()
         meta_path = str(pointer.get("metaPath") or "").strip()
         rows = _load_runtime_rows_from_github_path(cache_path) if cache_path else []
@@ -5403,6 +5485,19 @@ def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
                     normalized_pointer = _build_runtime_current_pointer(rows, normalized_meta)
                 return rows, normalized_meta, normalized_pointer
 
+        if rows and meta and expected_version and str(pointer.get("snapshotId") or ""):
+            if expected_fp and rows_fingerprint(rows) == expected_fp:
+                normalized_meta = _runtime_normalize_meta(
+                    meta,
+                    rows,
+                    pointer=pointer,
+                    fallback_source="consistency-recovery:github-pointer",
+                )
+                return rows, normalized_meta, pointer
+
+    if RUNTIME_STRICT_GITHUB_POINTER:
+        return [], {}, {}
+
     rows = _load_runtime_rows_from_github()
     meta = _load_runtime_meta_from_github()
     if rows and meta:
@@ -5422,29 +5517,22 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     if not rows:
         raise RuntimeError("runtime snapshot is empty after 1C refresh")
 
-    local_rows, local_meta, local_pointer = _runtime_load_local_consistent_state()
-    base_pointer = local_pointer if local_rows else _read_runtime_current_pointer()
     meta = _runtime_normalize_meta(
         dict(candidate_meta or _read_runtime_meta()),
         rows,
-        pointer=base_pointer,
+        pointer={},
         fallback_source="consistency-recovery:publish",
     )
-
-    # Never publish a regressed version.
-    current_local_version = _runtime_version_of(local_meta, local_pointer)
-    publish_version = _runtime_version_of(meta, base_pointer)
-    if publish_version <= current_local_version:
-        meta["cycleVersion"] = current_local_version + 1
-        meta["last1cLoadedVersion"] = current_local_version + 1
-        if not str(meta.get("generatedAt") or "").strip():
-            meta["generatedAt"] = datetime.now(timezone.utc).isoformat()
-
-    pointer = _build_runtime_current_pointer(rows, meta)
-    version = pointer.get("version")
-    cache_path = str(pointer.get("cachePath") or "")
-    meta_path = str(pointer.get("metaPath") or "")
-    message_prefix = f"Runtime snapshot v{version}"
+    fingerprint = rows_fingerprint(rows)
+    snapshot_id = str(meta.get("snapshotId") or "").strip()
+    if not snapshot_id or str(meta.get("rowsFingerprint") or "") not in {"", fingerprint}:
+        snapshot_id = str(uuid.uuid4())
+    meta["status"] = "draft"
+    meta["snapshotId"] = snapshot_id
+    meta["rowsFingerprint"] = fingerprint
+    meta.pop("cycleVersion", None)
+    cache_path, meta_path = _build_runtime_snapshot_paths(snapshot_id)
+    message_prefix = f"Runtime snapshot {snapshot_id}"
 
     # Push cache and meta in parallel to save time
     _push_cache_ok: list[bool] = [False]
@@ -5489,25 +5577,66 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
     # Skip readback of versioned cache/meta files (trust 200/201 push response).
     # Use in-memory rows and meta — they are exactly what was pushed.
     # Local fingerprint sanity check (no network call needed):
-    if rows_fingerprint(rows) != str(pointer.get("rowsFingerprint") or ""):
+    if rows_fingerprint(rows) != str(meta.get("rowsFingerprint") or ""):
         raise RuntimeError("publish: in-memory fingerprint mismatch (should never happen)")
 
-    log(f"publish: versioned snapshot v{version} pushed ({len(rows)} rows), promoting pointer")
+    log(f"publish: draft snapshot {snapshot_id} pushed ({len(rows)} rows), promoting pointer with CAS")
 
-    if not _push_json_to_github_path(
-        GITHUB_RUNTIME_CURRENT_PATH,
-        pointer,
-        f"Promote runtime current v{version} [skip ci]",
+    confirmed_pointer: dict = {}
+    for attempt in range(1, 5):
+        current_payload, current_sha = _load_json_with_sha_from_github_path(GITHUB_RUNTIME_CURRENT_PATH)
+        current_pointer = current_payload if isinstance(current_payload, dict) else {}
+        current_version = _to_int_or_none(current_pointer.get("version")) or 0
+
+        if (
+            str(current_pointer.get("status") or "") == "confirmed"
+            and str(current_pointer.get("snapshotId") or "") == snapshot_id
+            and str(current_pointer.get("rowsFingerprint") or "") == fingerprint
+        ):
+            confirmed_pointer = current_pointer
+            break
+
+        version = current_version + 1
+        pointer_meta = dict(meta)
+        pointer_meta["cycleVersion"] = version
+        pointer_meta["status"] = "confirmed"
+        pointer = _build_runtime_current_pointer(
+            rows,
+            pointer_meta,
+            version=version,
+            cache_path=cache_path,
+            meta_path=meta_path,
+        )
+        cas_result = _compare_and_swap_github_json(
+            GITHUB_RUNTIME_CURRENT_PATH,
+            pointer,
+            f"Promote runtime current v{version} [skip ci]",
+            current_sha,
+        )
+        if cas_result == "updated":
+            confirmed_pointer = pointer
+            break
+        log(f"publish: pointer CAS conflict on attempt {attempt}; retrying with fresh GitHub pointer")
+
+    if not confirmed_pointer:
+        raise RuntimeError("GitHub current pointer CAS failed after 4 conflicts")
+
+    readback_pointer = _load_runtime_current_pointer_from_github()
+    if (
+        str(readback_pointer.get("status") or "") != "confirmed"
+        or str(readback_pointer.get("snapshotId") or "") != snapshot_id
+        or str(readback_pointer.get("rowsFingerprint") or "") != fingerprint
+        or (_to_int_or_none(readback_pointer.get("version")) or 0)
+        != (_to_int_or_none(confirmed_pointer.get("version")) or 0)
     ):
-        raise RuntimeError("GitHub current pointer update failed")
+        raise RuntimeError("GitHub current pointer CAS readback mismatch")
 
-    confirmed_pointer = _load_runtime_current_pointer_from_github()
-    confirmed_version = _to_int_or_none(confirmed_pointer.get("version")) or 0
-    if confirmed_version != (_to_int_or_none(pointer.get("version")) or 0):
-        raise RuntimeError("GitHub current pointer readback mismatch")
-
-    _write_local_confirmed_runtime(rows, meta, confirmed_pointer)
-    return rows, meta, confirmed_pointer
+    confirmed_meta = dict(meta)
+    confirmed_meta["status"] = "confirmed"
+    confirmed_meta["cycleVersion"] = int(readback_pointer["version"])
+    confirmed_meta["last1cLoadedVersion"] = int(readback_pointer["version"])
+    _write_local_confirmed_runtime(rows, confirmed_meta, readback_pointer)
+    return rows, confirmed_meta, readback_pointer
 
 
 def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
@@ -5667,23 +5796,20 @@ def save_rows(
         if not prev_meta.get("last1cLoadedAt"):
             prev_meta["last1cLoadedAt"] = prev_meta.get("generatedAt") or ""
         
-        prev_pointer = _read_runtime_current_pointer()
-        prev_cycle = max(
-            int(prev_meta.get("cycleVersion") or 0),
-            int(_to_int_or_none(prev_pointer.get("version")) or 0),
-        )
         prev_last_1c = int(prev_meta.get("last1cLoadedVersion") or 0)
         prev_last_1c_at = str(prev_meta.get("last1cLoadedAt") or prev_meta.get("generatedAt") or "")
 
-        cycle_version = prev_cycle + 1
         is_live_1c_write = not str(write_source or "").startswith("github-recovery:")
+        snapshot_id = str(uuid.uuid4())
         meta_payload = {
+            "status": "draft",
+            "snapshotId": snapshot_id,
             "generatedAt": generated_at.isoformat(),
             "refreshStartedAt": started_at.isoformat(),
             "rowCount": len(rows),
+            "rowsFingerprint": rows_fingerprint(rows),
             "writeSource": write_source,
-            "cycleVersion": cycle_version,
-            "last1cLoadedVersion": cycle_version if is_live_1c_write else prev_last_1c,
+            "last1cLoadedVersion": prev_last_1c,
             "last1cLoadedAt": generated_at.isoformat() if is_live_1c_write else prev_last_1c_at,
         }
 
@@ -5691,6 +5817,16 @@ def save_rows(
             json.dump(rows, f, ensure_ascii=False, indent=2)
         with runtime_meta_path.open("w", encoding="utf-8") as f:
             json.dump(meta_payload, f, ensure_ascii=False, indent=2)
+        _write_runtime_current_pointer(
+            {
+                "status": "draft",
+                "snapshotId": snapshot_id,
+                "rowCount": len(rows),
+                "rowsFingerprint": meta_payload["rowsFingerprint"],
+                "generatedAt": meta_payload["generatedAt"],
+                "writeSource": write_source,
+            }
+        )
 
         if push_to_github:
             threading.Thread(
@@ -7211,11 +7347,15 @@ async def on_startup() -> None:
     if USER_SESSION_SECRET_IS_EPHEMERAL:
         log("WARNING: USER_SESSION_SECRET is not configured; using ephemeral runtime secret")
 
-    # Load runtime state through consistency layer first (cache/meta/pointer).
-    local_rows, _, _ = _runtime_load_local_consistent_state()
-    _cached_rows = list(local_rows)
-    if not _cached_rows:
-        _cached_rows = load_seed_rows()
+    # In strict mode a restarted process may only serve the snapshot selected
+    # by the confirmed GitHub pointer. Local files are replicas, never authority.
+    if RUNTIME_STRICT_GITHUB_POINTER:
+        _cached_rows = []
+    else:
+        local_rows, _, _ = _runtime_load_local_consistent_state()
+        _cached_rows = list(local_rows)
+        if not _cached_rows:
+            _cached_rows = load_seed_rows()
     _cached_fp = rows_fingerprint(_cached_rows)
     _last_refresh = None
 
@@ -7951,6 +8091,15 @@ async def manual_refresh_stage1_4(request: Request):
             if _last_refresh_error:
                 raise RuntimeError(f"stage1/4 refresh cycle did not produce a fresh snapshot: {_last_refresh_error}")
 
+            try:
+                refreshed_comment_rows = refresh_comment_first_line_only(f"manual-refresh-1of4:{username}")
+                log(
+                    "stage1/4 refresh: comment-first-line refresh completed: "
+                    f"ok={refreshed_comment_rows.get('ok')}, touched={refreshed_comment_rows.get('touched')}"
+                )
+            except Exception as comment_exc:
+                log(f"stage1/4 refresh: comment-first-line refresh failed: {type(comment_exc).__name__}: {comment_exc}")
+
             candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()
@@ -8003,15 +8152,6 @@ async def manual_refresh_stage1_4(request: Request):
             _last_confirmed_runtime_sync_check = time.time()
             _last_refresh_error = None
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
-
-            try:
-                refreshed_comment_rows = refresh_comment_first_line_only(f"manual-refresh-1of4:{username}")
-                log(
-                    "stage1/4 refresh: comment-first-line refresh completed: "
-                    f"ok={refreshed_comment_rows.get('ok')}, touched={refreshed_comment_rows.get('touched')}"
-                )
-            except Exception as comment_exc:
-                log(f"stage1/4 refresh: comment-first-line refresh failed: {type(comment_exc).__name__}: {comment_exc}")
 
             confirmed_version = github_pointer.get("version") if github_pointer else None
             _set_stage1_4_refresh_state(confirmedVersion=confirmed_version, lastOk=True, lastError=None)

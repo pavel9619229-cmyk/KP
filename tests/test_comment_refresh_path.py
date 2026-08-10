@@ -31,6 +31,110 @@ def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
     assert module._should_skip_runtime_save(started_at, current_generated_at) is True
 
 
+def test_runtime_pointer_cas_uses_exact_expected_sha(monkeypatch):
+    captured = {}
+
+    class Response:
+        status_code = 200
+        text = ""
+
+    def fake_put(url, headers, json, timeout):
+        captured["body"] = json
+        return Response()
+
+    monkeypatch.setattr(module, "GITHUB_TOKEN", "token")
+    monkeypatch.setattr(module, "GITHUB_REPO", "owner/repo")
+    monkeypatch.setattr(module.requests, "put", fake_put)
+
+    result = module._compare_and_swap_github_json("current.json", {"version": 8}, "promote", "sha-7")
+
+    assert result == "updated"
+    assert captured["body"]["sha"] == "sha-7"
+
+
+def test_strict_runtime_never_selects_newer_local_draft(monkeypatch):
+    monkeypatch.setattr(module, "RUNTIME_STRICT_GITHUB_POINTER", True)
+    local_rows = [{"number": "local"}]
+    github_rows = [{"number": "github"}]
+
+    source, rows, _, _ = module._runtime_pick_authoritative_state(
+        local_rows,
+        {"status": "draft", "generatedAt": "2026-08-10T13:00:00+00:00"},
+        {"status": "draft"},
+        github_rows,
+        {"status": "confirmed", "cycleVersion": 7, "generatedAt": "2026-08-10T12:00:00+00:00"},
+        {"status": "confirmed", "version": 7},
+    )
+
+    assert source == "github"
+    assert rows == github_rows
+
+
+def test_save_rows_creates_unversioned_local_draft(monkeypatch, tmp_path):
+    runtime_path = tmp_path / "runtime.json"
+    meta_path = tmp_path / "meta.json"
+    pointer_path = tmp_path / "current.json"
+    monkeypatch.setattr(module, "RUNTIME_DATA_FILE", str(runtime_path))
+    monkeypatch.setattr(module, "RUNTIME_META_FILE", str(meta_path))
+    monkeypatch.setattr(module, "RUNTIME_CURRENT_FILE", str(pointer_path))
+    monkeypatch.setattr(module, "_stage1_4_blocks_runtime_writer", lambda source: False)
+
+    assert module.save_rows([{"number": "1"}], push_to_github=False) is True
+
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    assert meta["status"] == "draft"
+    assert "cycleVersion" not in meta
+    assert pointer["status"] == "draft"
+    assert "version" not in pointer
+    assert pointer["snapshotId"] == meta["snapshotId"]
+    assert pointer["rowsFingerprint"] == meta["rowsFingerprint"]
+
+
+def test_publish_reallocates_version_after_pointer_cas_conflict(monkeypatch, tmp_path):
+    rows = [{"number": "1"}]
+    fingerprint = module.rows_fingerprint(rows)
+    state = {
+        "pointer": {"status": "confirmed", "version": 10, "rowsFingerprint": "old"},
+        "sha": "sha-10",
+    }
+    attempts = []
+
+    def fake_load_with_sha(path):
+        return dict(state["pointer"]), state["sha"]
+
+    def fake_cas(path, payload, message, expected_sha):
+        attempts.append((payload["version"], expected_sha))
+        if len(attempts) == 1:
+            state["pointer"] = {"status": "confirmed", "version": 11, "rowsFingerprint": "competitor"}
+            state["sha"] = "sha-11"
+            return "conflict"
+        state["pointer"] = dict(payload)
+        state["sha"] = "sha-12"
+        return "updated"
+
+    monkeypatch.setattr(module, "_push_json_to_github_path", lambda *args, **kwargs: True)
+    monkeypatch.setattr(module, "_load_json_with_sha_from_github_path", fake_load_with_sha)
+    monkeypatch.setattr(module, "_compare_and_swap_github_json", fake_cas)
+    monkeypatch.setattr(module, "_load_runtime_current_pointer_from_github", lambda: dict(state["pointer"]))
+    monkeypatch.setattr(module, "_write_local_confirmed_runtime", lambda *args: None)
+
+    _, confirmed_meta, confirmed_pointer = module._publish_confirmed_runtime_snapshot_or_raise(
+        rows,
+        {
+            "status": "draft",
+            "snapshotId": "snapshot-a",
+            "rowsFingerprint": fingerprint,
+            "generatedAt": "2026-08-10T10:00:00+00:00",
+        },
+    )
+
+    assert attempts == [(11, "sha-10"), (12, "sha-11")]
+    assert confirmed_pointer["version"] == 12
+    assert confirmed_meta["cycleVersion"] == 12
+    assert confirmed_meta["snapshotId"] == "snapshot-a"
+
+
 def test_stage1_4_blocks_other_runtime_writers():
     previous = dict(module._stage1_4_refresh_state)
     try:
