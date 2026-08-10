@@ -388,6 +388,7 @@ _comment_automation_rules_lock = threading.Lock()
 _runtime_write_guard_lock = threading.Lock()
 _confirmed_runtime_sync_lock = threading.Lock()
 _refresh_pause_lock = threading.Lock()
+_refresh_coordination_lock = threading.Lock()
 _enrich_cursor = 0
 _partial_refresh_cursor = 0
 _manual_refresh_state_lock = threading.Lock()
@@ -519,6 +520,13 @@ def _stage1_4_refresh_snapshot() -> dict:
 def _set_stage1_4_refresh_state(**updates: object) -> None:
     with _stage1_4_refresh_state_lock:
         _stage1_4_refresh_state.update(updates)
+
+
+def _stage1_4_blocks_runtime_writer(owner: str) -> bool:
+    with _stage1_4_refresh_state_lock:
+        running = bool(_stage1_4_refresh_state.get("running"))
+    normalized_owner = str(owner or "")
+    return running and not normalized_owner.startswith(("manual-refresh-1of4:", "stage1-4-"))
 
 
 def _payments_only_snapshot() -> dict:
@@ -4513,7 +4521,6 @@ def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
 
     if not _cached_rows:
         return {"applied": False, "reason": "empty-cache"}
-
     matched_kp_numbers: set[str] = set()
     for item in table_rows or []:
         if not isinstance(item, dict) or str(item.get("match") or "") != "СОВПАДЕНИЕ":
@@ -4525,10 +4532,14 @@ def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
     if not matched_kp_numbers:
         return {"applied": True, "promoted": 0, "matchedKpCount": 0}
 
-    if not _refresh_run_lock.acquire(blocking=False):
-        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
-        log(f"block3 persist skipped: main refresh cycle is running (owner={owner})")
-        return {"applied": False, "reason": "another-refresh-running"}
+    with _refresh_coordination_lock:
+        if _stage1_4_blocks_runtime_writer("block3-match-view"):
+            log("block3 persist skipped: stage1/4 owns exclusive runtime cycle")
+            return {"applied": False, "reason": "stage1-4-exclusive"}
+        if not _refresh_run_lock.acquire(blocking=False):
+            owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+            log(f"block3 persist skipped: main refresh cycle is running (owner={owner})")
+            return {"applied": False, "reason": "another-refresh-running"}
     if not _partial_refresh_lock.acquire(blocking=False):
         _refresh_run_lock.release()
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
@@ -5502,6 +5513,10 @@ def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = N
 def _sync_confirmed_runtime_cache_from_github_if_needed(reason: str, force: bool = False) -> bool:
     global _cached_rows, _cached_fp, _last_refresh_error, _last_confirmed_runtime_sync_check
 
+    if _stage1_4_blocks_runtime_writer(f"github-sync:{reason}"):
+        log(f"runtime consistency sync skipped: stage1/4 owns exclusive runtime cycle (reason={reason})")
+        return False
+
     now = time.time()
     if not force and _cached_rows and (now - _last_confirmed_runtime_sync_check) < CONFIRMED_RUNTIME_SYNC_TTL_SECONDS:
         return True
@@ -5608,6 +5623,10 @@ def save_rows(
 ) -> bool:
     for row in rows:
         apply_storage_defaults(row)
+
+    if _stage1_4_blocks_runtime_writer(write_source):
+        log(f"save_rows skipped: stage1/4 owns exclusive runtime cycle (source={write_source})")
+        return False
 
     started_at = refresh_started_at or datetime.now(timezone.utc)
     if started_at.tzinfo is None:
@@ -6481,10 +6500,14 @@ def refresh_cache_and_file(
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
     refresh_started_at = datetime.now(timezone.utc)
 
-    if not _refresh_run_lock.acquire(blocking=False):
-        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
-        log(f"refresh skipped: another refresh cycle is running (owner={owner})")
-        return False
+    with _refresh_coordination_lock:
+        if _stage1_4_blocks_runtime_writer(cycle_owner):
+            log(f"refresh skipped: stage1/4 owns exclusive runtime cycle (owner={cycle_owner})")
+            return False
+        if not _refresh_run_lock.acquire(blocking=False):
+            owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+            log(f"refresh skipped: another refresh cycle is running (owner={owner})")
+            return False
     if not _refresh_lock.acquire(blocking=False):
         _clear_lock_owner(_refresh_run_lock_state)
         _refresh_run_lock.release()
@@ -6498,10 +6521,11 @@ def refresh_cache_and_file(
             fetched = _fetch_rows_from_odata_subprocess(include_stage6=include_stage6, page_size=page_size)
             if fetched:
                 _apply_seed_payment_promotions_for_all_rows(fetched)
+                write_source = "stage1-4-full-refresh" if cycle_owner.startswith("manual-refresh-1of4:") else "full-refresh"
                 saved = save_rows(
                     fetched,
                     refresh_started_at=refresh_started_at,
-                    write_source="full-refresh",
+                    write_source=write_source,
                     push_to_github=push_to_github,
                 )
                 if not saved:
@@ -6551,10 +6575,15 @@ def refresh_cache_and_file(
                     partial_rows, touched, _ = _partial_refresh_from_cached_rows(valid_cached, headers, 0)
                     if touched > 0:
                         _apply_seed_payment_promotions_for_all_rows(partial_rows)
+                        write_source = (
+                            "stage1-4-partial-fallback"
+                            if cycle_owner.startswith("manual-refresh-1of4:")
+                            else "full-refresh-partial-fallback"
+                        )
                         saved = save_rows(
                             partial_rows,
                             refresh_started_at=refresh_started_at,
-                            write_source="full-refresh-partial-fallback",
+                            write_source=write_source,
                             push_to_github=push_to_github,
                         )
                         if not saved:
@@ -6603,10 +6632,13 @@ def refresh_cached_rows_only() -> dict:
 
     if not _cached_rows:
         return {"ok": False, "skipped": "empty-cache"}
-    if not _refresh_run_lock.acquire(blocking=False):
-        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
-        log(f"fast partial refresh skipped: another refresh cycle is running (owner={owner})")
-        return {"ok": False, "skipped": "another-refresh-running"}
+    with _refresh_coordination_lock:
+        if _stage1_4_blocks_runtime_writer("fast-partial-refresh"):
+            return {"ok": False, "skipped": "stage1-4-exclusive"}
+        if not _refresh_run_lock.acquire(blocking=False):
+            owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+            log(f"fast partial refresh skipped: another refresh cycle is running (owner={owner})")
+            return {"ok": False, "skipped": "another-refresh-running"}
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
         _refresh_run_lock.release()
@@ -6677,11 +6709,13 @@ def refresh_cached_rows_only() -> dict:
         _refresh_run_lock.release()
 
 
-def refresh_comment_first_line_only() -> dict:
+def refresh_comment_first_line_only(cycle_owner: str = "comment-first-line-refresh") -> dict:
     global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error
 
     if not _cached_rows:
         return {"ok": False, "error": "empty-cache"}
+    if _stage1_4_blocks_runtime_writer(cycle_owner):
+        return {"ok": False, "skipped": "stage1-4-exclusive", "owner": "stage1/4"}
     refresh_started_at = datetime.now(timezone.utc)
 
     headers = _build_headers()
@@ -6717,7 +6751,11 @@ def refresh_comment_first_line_only() -> dict:
     saved = save_rows(
         refreshed,
         refresh_started_at=refresh_started_at,
-        write_source="comment-first-line-refresh",
+        write_source=(
+            "stage1-4-comment-first-line-refresh"
+            if cycle_owner.startswith("manual-refresh-1of4:")
+            else "comment-first-line-refresh"
+        ),
     )
     if not saved:
         latest_rows = load_fresh_runtime_rows()
@@ -6749,15 +6787,16 @@ def refresh_payments_only_for_cached_rows(
     acquired_run_lock = False
     forced_mode = False
 
-    if _refresh_run_lock.acquire(blocking=False):
-        acquired_run_lock = True
-    else:
-        owner = str(_refresh_run_lock_state.get("owner") or "unknown")
-        if not allow_when_refresh_busy:
+    with _refresh_coordination_lock:
+        if _stage1_4_blocks_runtime_writer(cycle_owner):
+            log(f"payments-only refresh skipped: stage1/4 owns exclusive runtime cycle (owner={cycle_owner})")
+            return {"ok": False, "skipped": "stage1-4-exclusive", "owner": "stage1/4"}
+        if _refresh_run_lock.acquire(blocking=False):
+            acquired_run_lock = True
+        else:
+            owner = str(_refresh_run_lock_state.get("owner") or "unknown")
             log(f"payments-only refresh skipped: another refresh cycle is running (owner={owner})")
             return {"ok": False, "skipped": "another-refresh-running", "owner": owner}
-        forced_mode = True
-        log(f"payments-only refresh: proceeding in isolated mode while refresh lock is busy (owner={owner})")
 
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
@@ -6914,8 +6953,16 @@ def refresh_payments_for_single_kp_from_seed(
             "message": "queued for running payments-only refresh",
         }
 
+    with _refresh_coordination_lock:
+        if _stage1_4_blocks_runtime_writer(cycle_owner):
+            return {"ok": False, "skipped": "stage1-4-exclusive", "owner": "stage1/4"}
+        if not _refresh_run_lock.acquire(blocking=False):
+            owner = str(_refresh_run_lock_state.get("owner") or "unknown")
+            return {"ok": False, "skipped": "another-refresh-running", "owner": owner}
+
     if not _partial_refresh_lock.acquire(blocking=False):
         owner = str(_partial_refresh_lock_state.get("owner") or "unknown")
+        _refresh_run_lock.release()
         if owner == "payments-only-refresh":
             _queue_single_kp_seed_promotion(normalized_target)
             return {
@@ -6996,6 +7043,7 @@ def refresh_payments_for_single_kp_from_seed(
     finally:
         _clear_lock_owner(_partial_refresh_lock_state)
         _partial_refresh_lock.release()
+        _refresh_run_lock.release()
 
 
 def _apply_seed_payment_promotions(rows: list[dict], normalized_targets: set[str]) -> dict:
@@ -7522,7 +7570,16 @@ async def manual_refresh(request: Request):
 
     client_host = request.client.host if request.client else "unknown"
 
-    with _manual_refresh_state_lock:
+    with _refresh_coordination_lock, _manual_refresh_state_lock:
+        if _stage1_4_blocks_runtime_writer(f"manual-refresh:{username}"):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error": "stage1/4 owns exclusive runtime cycle",
+                    "blockers": ["stage1/4"],
+                },
+            )
         if _manual_refresh_state.get("running"):
             state = dict(_manual_refresh_state)
             return JSONResponse(
@@ -7763,34 +7820,67 @@ async def manual_refresh_stage1_4(request: Request):
 
     client_host = request.client.host if request.client else "unknown"
 
-    with _stage1_4_refresh_state_lock:
-        if _stage1_4_refresh_state.get("running"):
-            state = dict(_stage1_4_refresh_state)
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "ok": True,
-                    "message": "stage1/4 refresh is already running",
-                    **state,
-                    "rows": len(_cached_rows),
-                    "lastRefresh": _last_refresh,
-                    "lastRefreshError": _last_refresh_error,
-                },
-            )
+    with _refresh_coordination_lock:
+        with _stage1_4_refresh_state_lock:
+            if _stage1_4_refresh_state.get("running"):
+                state = dict(_stage1_4_refresh_state)
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "ok": True,
+                        "message": "stage1/4 refresh is already running",
+                        **state,
+                        "rows": len(_cached_rows),
+                        "lastRefresh": _last_refresh,
+                        "lastRefreshError": _last_refresh_error,
+                    },
+                )
 
-        _stage1_4_refresh_state.update(
-            {
-                "running": True,
-                "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
-                "requestedBy": username,
-                "requestedFrom": client_host,
-                "startedAt": None,
-                "finishedAt": None,
-                "lastOk": None,
-                "lastError": None,
-                "confirmedVersion": None,
-            }
-        )
+            with _manual_refresh_state_lock:
+                manual_running = bool(_manual_refresh_state.get("running"))
+            with _payments_only_state_lock:
+                payments_running = bool(_payments_only_state.get("running"))
+            with _stage4_4_refresh_state_lock:
+                stage4_running = bool(_stage4_4_refresh_state.get("running"))
+            with _stage4_4_local_queue_lock:
+                local_stage4_running = bool(_stage4_4_local_queue_state.get("running"))
+            refresh_owner = str(_refresh_run_lock_state.get("owner") or "")
+            partial_owner = str(_partial_refresh_lock_state.get("owner") or "")
+            blockers = [
+                name
+                for name, active in (
+                    ("manual-refresh", manual_running),
+                    ("payments-only", payments_running),
+                    ("stage4/4", stage4_running),
+                    ("local-stage4/4", local_stage4_running),
+                    (refresh_owner or "refresh-lock", bool(refresh_owner) or _refresh_run_lock.locked()),
+                    (partial_owner or "partial-refresh-lock", bool(partial_owner) or _partial_refresh_lock.locked()),
+                )
+                if active
+            ]
+            if blockers:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "ok": False,
+                        "error": "another runtime process is active",
+                        "blockers": blockers,
+                    },
+                )
+
+            _stage1_4_refresh_state.update(
+                {
+                    "running": True,
+                    "requestedAt": datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S"),
+                    "requestedBy": username,
+                    "requestedFrom": client_host,
+                    "startedAt": None,
+                    "finishedAt": None,
+                    "lastOk": None,
+                    "lastError": None,
+                    "confirmedVersion": None,
+                }
+            )
 
     async def _run_stage1_4_refresh() -> None:
         global _cached_rows, _cached_fp, _last_refresh, _last_refresh_error, _last_confirmed_runtime_sync_check
@@ -7915,7 +8005,7 @@ async def manual_refresh_stage1_4(request: Request):
             _last_refresh = datetime.now(_TZ_MSK).strftime("%Y-%m-%d %H:%M:%S")
 
             try:
-                refreshed_comment_rows = refresh_comment_first_line_only()
+                refreshed_comment_rows = refresh_comment_first_line_only(f"manual-refresh-1of4:{username}")
                 log(
                     "stage1/4 refresh: comment-first-line refresh completed: "
                     f"ok={refreshed_comment_rows.get('ok')}, touched={refreshed_comment_rows.get('touched')}"
@@ -7986,7 +8076,16 @@ async def payments_only_refresh(request: Request):
         # Allow endpoint usage from automations without auth cookie.
         pass
 
-    with _payments_only_state_lock:
+    with _refresh_coordination_lock, _payments_only_state_lock:
+        if _stage1_4_blocks_runtime_writer(f"payments-only-refresh:{username}"):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error": "stage1/4 owns exclusive runtime cycle",
+                    "blockers": ["stage1/4"],
+                },
+            )
         if _payments_only_state.get("running"):
             running_state = dict(_payments_only_state)
             running_state["rows"] = len(_cached_rows)
@@ -8144,7 +8243,16 @@ async def enqueue_local_stage4_4_refresh(request: Request):
     username = str(user.get("username") or "anonymous")
     client_host = request.client.host if request.client else "unknown"
 
-    with _stage4_4_local_queue_lock:
+    with _refresh_coordination_lock, _stage4_4_local_queue_lock:
+        if _stage1_4_blocks_runtime_writer(f"local-stage4-queue:{username}"):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error": "stage1/4 owns exclusive runtime cycle",
+                    "blockers": ["stage1/4"],
+                },
+            )
         if _stage4_4_local_queue_state.get("running"):
             state = dict(_stage4_4_local_queue_state)
             state["rows"] = len(_cached_rows)
@@ -8214,7 +8322,18 @@ async def local_stage4_4_state(request: Request):
 async def local_stage4_4_claim(request: Request):
     runner_id = _require_local_stage4_agent_auth(request)
 
-    with _stage4_4_local_queue_lock:
+    with _refresh_coordination_lock, _stage4_4_local_queue_lock:
+        if _stage1_4_blocks_runtime_writer(f"local-stage4-agent:{runner_id}"):
+            state = dict(_stage4_4_local_queue_state)
+            state["rows"] = len(_cached_rows)
+            state["lastRefresh"] = _last_refresh
+            state["lastRefreshError"] = _last_refresh_error
+            return {
+                "ok": True,
+                "claimed": False,
+                "blockedBy": "stage1/4",
+                "state": state,
+            }
         running = bool(_stage4_4_local_queue_state.get("running"))
         phase = str(_stage4_4_local_queue_state.get("phase") or "")
         task_id = str(_stage4_4_local_queue_state.get("taskId") or "")
@@ -8314,7 +8433,16 @@ async def manual_refresh_stage4_4(request: Request):
 
     client_host = request.client.host if request.client else "unknown"
 
-    with _stage4_4_refresh_state_lock:
+    with _refresh_coordination_lock, _stage4_4_refresh_state_lock:
+        if _stage1_4_blocks_runtime_writer(f"manual-refresh-4of4:{username}"):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error": "stage1/4 owns exclusive runtime cycle",
+                    "blockers": ["stage1/4"],
+                },
+            )
         if _stage4_4_refresh_state.get("running"):
             state = dict(_stage4_4_refresh_state)
             return JSONResponse(

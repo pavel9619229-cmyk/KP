@@ -137,7 +137,7 @@ def _run_local_stage4(task_id: str) -> dict:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] task {task_id}: refresh start")
         refresh_result = api_proxy.refresh_payments_only_for_cached_rows(
             f"local-stage4-agent:{AGENT_ID}",
-            True,
+            False,
             True,
         )
 
