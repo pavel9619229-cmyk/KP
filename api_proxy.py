@@ -8091,15 +8091,6 @@ async def manual_refresh_stage1_4(request: Request):
             if _last_refresh_error:
                 raise RuntimeError(f"stage1/4 refresh cycle did not produce a fresh snapshot: {_last_refresh_error}")
 
-            try:
-                refreshed_comment_rows = refresh_comment_first_line_only(f"manual-refresh-1of4:{username}")
-                log(
-                    "stage1/4 refresh: comment-first-line refresh completed: "
-                    f"ok={refreshed_comment_rows.get('ok')}, touched={refreshed_comment_rows.get('touched')}"
-                )
-            except Exception as comment_exc:
-                log(f"stage1/4 refresh: comment-first-line refresh failed: {type(comment_exc).__name__}: {comment_exc}")
-
             candidate_rows = load_rows_from_path(Path(RUNTIME_DATA_FILE))
             candidate_meta = _read_runtime_meta()
             _publish_t0 = time.time()

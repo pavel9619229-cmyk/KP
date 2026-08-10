@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import inspect
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,12 @@ def test_first_line_refresh_uses_comment_from_doc():
     raw_comment = str(doc.get('Комментарий') or '')
     row['additionalInfoFirstLine'] = module.first_line(raw_comment) or row.get('additionalInfoFirstLine') or ''
     assert row['additionalInfoFirstLine'] == 'new first line'
+
+
+def test_stage1_4_does_not_run_a_second_comment_fetch_pass():
+    endpoint_source = inspect.getsource(module.manual_refresh_stage1_4)
+
+    assert "refresh_comment_first_line_only(" not in endpoint_source
 
 
 def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
