@@ -31,6 +31,82 @@ def test_stage1_4_does_not_run_a_second_comment_fetch_pass():
     assert "refresh_comment_first_line_only(" not in endpoint_source
 
 
+def test_payment_number_fallback_requires_same_year():
+    payment_2025 = {
+        "orderRefs": [],
+        "purposeNums": ["768"],
+        "year": 2025,
+    }
+
+    assert module._payment_matches_order_identity("order-2026", "768", 2026, payment_2025) is False
+    assert module._payment_matches_order_identity("order-2025", "768", 2025, payment_2025) is True
+
+
+def test_exact_payment_order_reference_ignores_number_reuse():
+    payment = {
+        "orderRefs": ["order-2026"],
+        "purposeNums": ["768"],
+        "year": 2025,
+    }
+
+    assert module._payment_matches_order_identity("order-2026", "768", 2026, payment) is True
+
+
+def test_block3_does_not_match_same_order_number_from_another_year(monkeypatch):
+    kp_ref = "kp-2026"
+    order = {
+        "Ref_Key": "order-2026",
+        "Date": "2026-08-07T14:07:11",
+        "Number": "ПСУТ-000768",
+        "ДокументОснование": kp_ref,
+        "ДокументОснование_Type": "StandardODATA.Document_КоммерческоеПредложениеКлиенту",
+    }
+    payment = {
+        "Ref_Key": "payment-2025",
+        "Date": "2025-09-17T23:59:59",
+        "Number": "ПСУТ-000511",
+        "НазначениеПлатежа": "Оплата по счету № 768",
+    }
+
+    monkeypatch.setattr(module, "_load_order_cache", lambda: None)
+    monkeypatch.setattr(module, "_order_to_kp_cache", {})
+    monkeypatch.setattr(module, "_load_payment_seed", lambda: None)
+    monkeypatch.setattr(module, "_payment_seed", [])
+    monkeypatch.setattr(module, "_collect_tail_pages", lambda *args, **kwargs: ([[order]], True))
+    monkeypatch.setattr(
+        module,
+        "_collect_tail_pages_with_field_fallback",
+        lambda *args, **kwargs: ([[payment]], True, module.PAYMENT_MATCH_SELECT_FIELD_CANDIDATES[0]),
+    )
+
+    result = module._build_payment_match_table(
+        {},
+        target_rows=[{"refKey": kp_ref, "number": "ПСУТ-000751"}],
+    )
+
+    assert not any(row.get("match") == "СОВПАДЕНИЕ" for row in result["rows"])
+
+
+def test_authoritative_block3_result_clears_stale_payment_flag(monkeypatch):
+    previous_rows = list(module._cached_rows)
+    previous_stage1 = dict(module._stage1_4_refresh_state)
+    try:
+        module._cached_rows = [
+            {"refKey": "kp-2026", "number": "ПСУТ-000751", "paymentReceived": True},
+        ]
+        module._stage1_4_refresh_state["running"] = False
+        monkeypatch.setattr(module, "save_rows", lambda *args, **kwargs: True)
+
+        result = module._persist_payment_match_result_to_cache([], authoritative=True)
+
+        assert result["demoted"] == 1
+        assert module._cached_rows[0]["paymentReceived"] is False
+    finally:
+        module._cached_rows = previous_rows
+        module._stage1_4_refresh_state.clear()
+        module._stage1_4_refresh_state.update(previous_stage1)
+
+
 def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
     started_at = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
     current_generated_at = datetime(2026, 8, 10, 12, 5, tzinfo=timezone.utc)

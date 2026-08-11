@@ -3803,6 +3803,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     order_to_kp: dict[str, str] = {}
     order_short_numbers: dict[str, str] = {}
     order_compact_numbers: dict[str, str] = {}
+    order_years: dict[str, int] = {}
 
     order_pages, orders_complete = _collect_tail_pages(
         "Document_ЗаказКлиента",
@@ -3833,6 +3834,9 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
                 compact_number = "".join(ch for ch in order_number.lower() if ch.isalnum())
                 if compact_number:
                     order_compact_numbers[order_ref] = compact_number
+                order_year = _odata_document_year(item.get("Date"))
+                if order_year is not None:
+                    order_years[order_ref] = order_year
 
     # When orders scan is complete, update the persistent cache for all found entries.
     if orders_complete and order_to_kp:
@@ -3936,7 +3940,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     # is present in purpose numbers extracted from payment purpose text.
     block3_ui_kp_hits: set[str] = set()
     payment_order_hits: set[str] = set()
-    purpose_num_set: set[str] = set()
+    purpose_number_years: set[tuple[int, str]] = set()
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
@@ -3963,6 +3967,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     unresolved_payment_order_refs: set[str] = set()
     for batch in payment_pages:
         for item in batch:
+            payment_year = _odata_document_year(item.get("Date"))
             candidate_order_refs = _extract_payment_candidate_order_refs(item)
             for order_ref in candidate_order_refs:
                 if order_ref in target_order_refs:
@@ -3977,8 +3982,8 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
             # Matches: "УТ-226", "ПСУТ-226" and also "№ 226", "№226" (e.g. "СЧЕТ НА ОПЛАТУ № 226").
             for m in re.finditer(r"(?:[а-яa-z]*ут[\s\-_/]*|№\s*)0*(\d+)", purpose):
                 purpose_num = (m.group(1) or "").lstrip("0")
-                if purpose_num:
-                    purpose_num_set.add(purpose_num)
+                if purpose_num and payment_year is not None:
+                    purpose_number_years.add((payment_year, purpose_num))
 
     if unresolved_payment_order_refs:
         resolved_orders = _resolve_order_refs_to_target_kps(unresolved_payment_order_refs, headers, kp_ref_set)
@@ -4004,13 +4009,6 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
                         if order_ref in target_order_refs:
                             payment_order_hits.add(order_ref)
 
-    # Merge payment seed: covers payments missed by tail-page scan (e.g. early-numbered docs).
-    _load_payment_seed()
-    for seed_entry in _payment_seed:
-        for num in seed_entry.get("purposeNums", []):
-            if num:
-                purpose_num_set.add(num)
-
     kp_invoice_map = {kp: False for kp in kp_ref_set}
     kp_payment_map = {kp: False for kp in kp_ref_set}
 
@@ -4024,11 +4022,11 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
         if kp_ref:
             kp_payment_map[kp_ref] = True
 
-    # Apply block3 UI logic: KP is in block3 when any of its order numbers
-    # appears in purposeNum set extracted from payment purposes.
-    # Keep this strict even on incomplete scans to match block3 behavior exactly.
+    # Text fallback is valid only within the same calendar year. Short order
+    # numbers are reused annually and are not globally unique identities.
     for order_ref, order_num in order_short_numbers.items():
-        if not order_num or order_num not in purpose_num_set:
+        order_year = order_years.get(order_ref)
+        if not order_num or order_year is None or (order_year, order_num) not in purpose_number_years:
             continue
         kp_ref = order_to_kp.get(order_ref)
         if kp_ref and kp_ref in kp_ref_set:
@@ -4045,7 +4043,10 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
             elif kp_invoice_map.get(kp_ref, False):
                 # Partial orders/invoices scan: only upgrade to True; do not force False.
                 row["invoiceCreated"] = True
-            row["paymentReceived"] = kp_payment_map.get(kp_ref, False) or bool(row.get("paymentReceived"))
+            if orders_complete and payments_complete:
+                row["paymentReceived"] = kp_payment_map.get(kp_ref, False)
+            elif kp_payment_map.get(kp_ref, False):
+                row["paymentReceived"] = True
 
     return {
         "ordersScanComplete": bool(orders_complete),
@@ -4334,7 +4335,12 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
             ):
                 raw_num = str(item.get("Number") or "")
                 short = "".join(ch for ch in raw_num if ch.isdigit()).lstrip("0") or ""
-                order_info[order_ref] = {"kp_ref": base_ref, "raw": raw_num, "short": short}
+                order_info[order_ref] = {
+                    "kp_ref": base_ref,
+                    "raw": raw_num,
+                    "short": short,
+                    "year": _odata_document_year(item.get("Date")),
+                }
                 kp_to_orders.setdefault(base_ref, []).append(order_ref)
 
     # Always merge persistent order cache for entries not seen in live scan.
@@ -4346,7 +4352,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
                 kp_ref = entry.get("kp", "")
                 if kp_ref and (not target_kp_refs or kp_ref in target_kp_refs):
                     short = entry.get("num", "")
-                    order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short}
+                    order_info[order_ref] = {"kp_ref": kp_ref, "raw": short, "short": short, "year": None}
                     kp_to_orders.setdefault(kp_ref, []).append(order_ref)
 
     # Map kp_ref → КП display number
@@ -4404,6 +4410,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
             pay_rows.append({
                 "payRef": pay_ref,
                 "payShort": pay_short,
+                "year": _odata_document_year(item.get("Date")),
                 "purpose": purpose,
                 "purposeNums": purpose_nums,
                 "orderRefs": sorted(_extract_payment_candidate_order_refs(item)),
@@ -4423,7 +4430,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
                 continue
             raw = str(payload.get("raw") or payload.get("num") or "")
             short = str(payload.get("num") or "")
-            order_info[order_ref] = {"kp_ref": kp_ref, "raw": raw, "short": short}
+            order_info[order_ref] = {"kp_ref": kp_ref, "raw": raw, "short": short, "year": None}
             kp_to_orders.setdefault(kp_ref, []).append(order_ref)
 
     # Merge payment seed: add seeded entries whose payShort is not already in live scan.
@@ -4435,6 +4442,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
             pay_rows.append({
                 "payRef": f"seed-{short}",
                 "payShort": short,
+                "year": _to_int_or_none(seed_entry.get("year")),
                 "purpose": seed_entry.get("purpose", ""),
                 "purposeNums": seed_entry.get("purposeNums", []),
             })
@@ -4457,11 +4465,13 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
         kp_num = kp_number_map.get(kp_ref, "")
         order_short = info["short"]
         order_raw = info["raw"]
+        order_year = info.get("year")
 
-        # Find payments that reference this order's number in their purpose
+        # Prefer exact UUID references. Text-number fallback is restricted to
+        # the same year because 1C reuses short order numbers each year.
         matched_payments = [
             p for p in pay_rows
-            if oref in p.get("orderRefs", []) or (order_short and order_short in p["purposeNums"])
+            if _payment_matches_order_identity(oref, order_short, order_year, p)
         ]
 
         if matched_payments:
@@ -4513,7 +4523,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
     }
 
 
-def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
+def _persist_payment_match_result_to_cache(table_rows: list[dict], authoritative: bool = False) -> dict:
     """Write block3 match results (already scanned, no extra 1C call here) into
     the runtime cache so /admin/dashboard's "Оплата получена" reflects exactly
     what block3 shows, instead of only relying on separate 1/4-4/4 runs."""
@@ -4529,7 +4539,7 @@ def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
         if kp_num:
             matched_kp_numbers.add(kp_num)
 
-    if not matched_kp_numbers:
+    if not matched_kp_numbers and not authoritative:
         return {"applied": True, "promoted": 0, "matchedKpCount": 0}
 
     with _refresh_coordination_lock:
@@ -4549,21 +4559,36 @@ def _persist_payment_match_result_to_cache(table_rows: list[dict]) -> dict:
     try:
         refreshed = [dict(r) for r in _cached_rows]
         promoted = 0
+        demoted = 0
         for row in refreshed:
             kp_num = _normalize_kp_number(str(row.get("number") or ""))
-            if kp_num and kp_num in matched_kp_numbers and not bool(row.get("paymentReceived")):
+            if not kp_num:
+                continue
+            should_be_paid = kp_num in matched_kp_numbers
+            if should_be_paid and not bool(row.get("paymentReceived")):
                 row["paymentReceived"] = True
                 promoted += 1
+            elif authoritative and not should_be_paid and bool(row.get("paymentReceived")):
+                row["paymentReceived"] = False
+                demoted += 1
 
-        if promoted == 0:
-            return {"applied": True, "promoted": 0, "matchedKpCount": len(matched_kp_numbers)}
+        if promoted == 0 and demoted == 0:
+            return {"applied": True, "promoted": 0, "demoted": 0, "matchedKpCount": len(matched_kp_numbers)}
 
         saved = save_rows(refreshed, write_source="block3-match-view")
         if saved:
             _cached_rows = refreshed
             _cached_fp = rows_fingerprint(refreshed)
-            log(f"block3 persist: promoted paymentReceived for {promoted} KP(s) from block3 match view")
-        return {"applied": bool(saved), "promoted": promoted, "matchedKpCount": len(matched_kp_numbers)}
+            log(
+                "block3 persist: synchronized paymentReceived from block3 match view "
+                f"(promoted={promoted}, demoted={demoted}, authoritative={authoritative})"
+            )
+        return {
+            "applied": bool(saved),
+            "promoted": promoted,
+            "demoted": demoted,
+            "matchedKpCount": len(matched_kp_numbers),
+        }
     finally:
         _partial_refresh_lock.release()
         _refresh_run_lock.release()
@@ -4597,17 +4622,24 @@ def _promote_payment_received_from_match_table(rows: list[dict], headers: dict) 
         if kp_num:
             matched_kp_numbers.add(kp_num)
 
+    authoritative = bool(table.get("ordersScanComplete") and table.get("paymentsScanComplete"))
     promoted = 0
+    demoted = 0
     for row in rows:
         kp_num = _normalize_kp_number(str(row.get("number") or ""))
-        if not kp_num or kp_num not in matched_kp_numbers:
+        if not kp_num:
             continue
-        if not bool(row.get("paymentReceived")):
+        should_be_paid = kp_num in matched_kp_numbers
+        if should_be_paid and not bool(row.get("paymentReceived")):
             row["paymentReceived"] = True
             promoted += 1
+        elif authoritative and not should_be_paid and bool(row.get("paymentReceived")):
+            row["paymentReceived"] = False
+            demoted += 1
 
     return {
         "promoted": promoted,
+        "demoted": demoted,
         "matchedKpCount": len(matched_kp_numbers),
         "ordersScanComplete": bool(table.get("ordersScanComplete")) if isinstance(table, dict) else False,
         "paymentsScanComplete": bool(table.get("paymentsScanComplete")) if isinstance(table, dict) else False,
@@ -4992,6 +5024,24 @@ def _parse_iso_datetime_utc(value: object) -> Optional[datetime]:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def _odata_document_year(value: object) -> int | None:
+    parsed = _parse_odata_datetime(str(value or ""))
+    return parsed.year if parsed else None
+
+
+def _payment_matches_order_identity(order_ref: str, order_number: str, order_year: int | None, payment: dict) -> bool:
+    if order_ref and order_ref in payment.get("orderRefs", []):
+        return True
+    payment_year = payment.get("year")
+    return bool(
+        order_number
+        and order_year is not None
+        and payment_year is not None
+        and order_year == payment_year
+        and order_number in payment.get("purposeNums", [])
+    )
 
 
 def _read_runtime_generated_at(meta_path: Path) -> Optional[datetime]:
@@ -9307,7 +9357,9 @@ async def admin_payment_match_table(request: Request):
     result = await asyncio.to_thread(_build_payment_match_table, headers)
     try:
         persist_outcome = await asyncio.to_thread(
-            _persist_payment_match_result_to_cache, result.get("rows") or []
+            _persist_payment_match_result_to_cache,
+            result.get("rows") or [],
+            bool(result.get("ordersScanComplete") and result.get("paymentsScanComplete")),
         )
         if persist_outcome.get("promoted"):
             log(f"block3 view persisted paymentReceived promotions: {persist_outcome}")
