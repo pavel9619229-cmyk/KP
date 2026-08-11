@@ -156,7 +156,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Диск (обод) 3.00D-8 ET0 PCD5/140 HUB110  сборный (в компл. с болтами), 2 шт.",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -225,7 +225,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Шина заднего колеса 5.00-8 NHS – 2 шт.(проверить наличие в И-1)",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -340,7 +340,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "16*6-8 цельнолитая 4 шт., 6.00-9 цельнолитая 2 шт",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": false
   },
@@ -432,7 +432,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(диски похоже только есть в ЕМГ - предложить от ЕМГ)",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -662,7 +662,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "ПРОБЛЕМА (в ЭДО нужно загрузить ЕЩЕ 2 марки в Счет-фактура № УТ-157 от 28 июля 2026 г - ЛАГСТЕР",
     "invoiceCreated": true,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -708,7 +708,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяне) отправлен емайл с напоминанием записать текущую ситуацию",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -869,7 +869,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елена, прошу связаться с клиентом и записать в КП результат и статус) литые 65010 28915",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -1283,7 +1283,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Интересуют диски 3.00D-8 /(100/125/6). Поможете? 24 шт надо.",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -1513,7 +1513,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "павел - 10-08-2026 - счет клиенту отправлен по его просьбе с ндс на юрлицо рф",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -2364,7 +2364,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "камеры 8.25-15  — 4шт.",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -2410,7 +2410,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елена, клиент увидел КП? ) шины цельнолитые 300-15 (315/70-15) без бурта — 2 шт",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -2433,7 +2433,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Елена, напишите пож в КП, почему клиент отказался) шинокомплект TRAYAL 23х5 пок+кам+об.лен -30 шт",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -2732,7 +2732,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(начальство решило пока не покупать) Камера 6.50-10   JS2  - 2 шт.",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -2985,7 +2985,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "8,25-15 пневма, 20 сл- 2 шт.или 4 шт. - , дешевле 17 700 за штуку предложить сможете ?",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -3054,7 +3054,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "Пневм. шина 10-16.5 PR12 ADVANCE L4A STEELBELT TL",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -3077,7 +3077,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "(Татьяна, чторешил клиент?)   Автошина (с камерами) 6.00-13 – 40 шт. - НА ТЕЛЕЖКУ (звонила), хорошего качества",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -3215,7 +3215,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "14.00-24 24PR,  диски",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -3767,7 +3767,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "14.00-24 16PR BKT TRAC GRADER + 153A8 G-2 TL  46 980   через недельку ждем поступление.",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
@@ -4434,7 +4434,7 @@
     "statusKp": "",
     "additionalInfoFirstLine": "пнев + камеры 65010  28915",
     "invoiceCreated": false,
-    "paymentReceived": true,
+    "paymentReceived": false,
     "statusHash": "",
     "clientFilled": true
   },
