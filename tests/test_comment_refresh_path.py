@@ -52,6 +52,71 @@ def test_exact_payment_order_reference_ignores_number_reuse():
     assert module._payment_matches_order_identity("order-2026", "768", 2026, payment) is True
 
 
+def test_group_flags_reuse_one_payment_scan_for_hints_and_status(monkeypatch):
+    kp_ref = "kp-741"
+    order_ref = "order-741"
+    order = {
+        "Ref_Key": order_ref,
+        "Date": "2026-08-03T15:31:38",
+        "Number": "ПСУТ-000741",
+        "ДокументОснование": kp_ref,
+        "ДокументОснование_Type": "StandardODATA.Document_КоммерческоеПредложениеКлиенту",
+    }
+    payment = {
+        "Ref_Key": "payment-741",
+        "Date": "2026-08-04T10:00:00",
+        "Number": "ПСУТ-000100",
+        "НазначениеПлатежа": "Оплата по счету УТ-741",
+    }
+    payment_scan_calls = 0
+
+    def collect_tail_pages(entity_name, *args, **kwargs):
+        if entity_name == "Document_ЗаказКлиента":
+            return [[order]], True
+        raise AssertionError(f"unexpected scan: {entity_name}")
+
+    def collect_payment_pages(*args, **kwargs):
+        nonlocal payment_scan_calls
+        payment_scan_calls += 1
+        if payment_scan_calls > 1:
+            raise AssertionError("payment registry scanned more than once")
+        return [[payment]], True, module.PAYMENT_MATCH_SELECT_FIELD_CANDIDATES[0]
+
+    monkeypatch.setattr(module, "_load_order_cache", lambda: None)
+    monkeypatch.setattr(module, "_order_to_kp_cache", {})
+    monkeypatch.setattr(module, "_collect_tail_pages", collect_tail_pages)
+    monkeypatch.setattr(module, "_collect_tail_pages_with_field_fallback", collect_payment_pages)
+
+    rows = [{"refKey": kp_ref, "number": "ПСУТ-000741", "paymentReceived": False}]
+    result = module._enrich_group_flags_bulk(rows, {}, skip_invoice_scan=True)
+
+    assert payment_scan_calls == 1
+    assert result["paymentsScanComplete"] is True
+    assert rows[0]["paymentReceived"] is True
+
+
+def test_payment_field_fallback_does_not_repeat_nonempty_incomplete_scan(monkeypatch):
+    scan_calls = 0
+
+    def collect_tail_pages(*args, **kwargs):
+        nonlocal scan_calls
+        scan_calls += 1
+        return [[{"Ref_Key": "payment-1"}]], False
+
+    monkeypatch.setattr(module, "_collect_tail_pages", collect_tail_pages)
+
+    pages, complete, fields = module._collect_tail_pages_with_field_fallback(
+        "Document_ПоступлениеБезналичныхДенежныхСредств",
+        {},
+        [["Ref_Key", "Date"], ["Ref_Key"]],
+    )
+
+    assert scan_calls == 1
+    assert pages == [[{"Ref_Key": "payment-1"}]]
+    assert complete is False
+    assert fields == ["Ref_Key", "Date"]
+
+
 def test_block3_does_not_match_same_order_number_from_another_year(monkeypatch):
     kp_ref = "kp-2026"
     order = {

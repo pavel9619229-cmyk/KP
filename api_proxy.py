@@ -3558,6 +3558,11 @@ def _collect_tail_pages_with_field_fallback(
         )
         if complete:
             return pages, True, fields
+        if pages:
+            # The field set was accepted and returned data. Falling back to
+            # other field sets would repeat the same scan without making an
+            # interrupted or page-limited snapshot authoritative.
+            return pages, False, fields
         if len(pages) > len(best_pages):
             best_pages = pages
             best_fields = fields
@@ -3872,6 +3877,26 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     if target_order_refs:
         log(f"[orders-cache] merged cache: {len(target_order_refs)} total order→KP entries for {len(kp_ref_set)} KPs")
 
+    # Collect payments once per cycle. The same snapshot must drive both
+    # unresolved-order hinting and the final payment status calculation.
+    payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
+        "Document_ПоступлениеБезналичныхДенежныхСредств",
+        headers,
+        PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
+        timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
+    )
+    if not payments_complete and not payment_pages:
+        # One extra probe before declaring scan unavailable.
+        payment_pages_probe, payments_complete_probe, _ = _collect_tail_pages_with_field_fallback(
+            "Document_ПоступлениеБезналичныхДенежныхСредств",
+            headers,
+            PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
+            timeout=max(180.0, GROUP_CHECK_TIMEOUT_SECONDS),
+        )
+        if payment_pages_probe:
+            payment_pages = payment_pages_probe
+        payments_complete = bool(payments_complete or payments_complete_probe)
+
     unresolved_kp_refs = {kp_ref for kp_ref in kp_ref_set if not kp_to_orders.get(kp_ref)}
     if unresolved_kp_refs:
         # Last-resort for unresolved KPs: use the same number hints as block3
@@ -3880,22 +3905,15 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
             f"[orders-lazy] unresolved KPs before hint backfill: "
             f"{len(unresolved_kp_refs)} of {len(kp_ref_set)}"
         )
-        purpose_pages, _, _ = _collect_tail_pages_with_field_fallback(
-            "Document_ПоступлениеБезналичныхДенежныхСредств",
-            headers,
-            [["Ref_Key", "НазначениеПлатежа"]],
-            page_size=20,
-            timeout=max(GROUP_CHECK_TIMEOUT_SECONDS, 12.0),
-        )
         purpose_number_hints: set[str] = set()
-        for batch in purpose_pages:
+        for batch in payment_pages:
             for item in batch:
                 purpose = str(item.get("НазначениеПлатежа") or "").lower()
                 for m in re.finditer(r"\bут[\s\-_/]*0*(\d+)\b", purpose):
                     digits = m.group(1).lstrip("0") or "0"
                     if digits and digits != "0":
                         purpose_number_hints.add(digits)
-        log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in purpose_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
+        log(f"[orders-lazy] extracted {len(purpose_number_hints)} number hints from {len([i for b in payment_pages for i in b])} payments: {sorted(purpose_number_hints)[:10]}")
         if purpose_number_hints:
             lazy_orders = _fetch_orders_by_number_hints(purpose_number_hints, headers, unresolved_kp_refs)
             log(f"[orders-lazy] tail-page scan found {len(lazy_orders)} order→KP matches")
@@ -3945,23 +3963,6 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     payment_order_hits: set[str] = set()
     purpose_number_years: set[tuple[int, str]] = set()
     payment_match_rows: list[dict] = []
-    payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
-        "Document_ПоступлениеБезналичныхДенежныхСредств",
-        headers,
-        PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
-        timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
-    )
-    if not payments_complete and not payment_pages:
-        # One extra probe before declaring scan unavailable.
-        payment_pages_probe, payments_complete_probe, _ = _collect_tail_pages_with_field_fallback(
-            "Document_ПоступлениеБезналичныхДенежныхСредств",
-            headers,
-            PAYMENT_MATCH_SELECT_FIELD_CANDIDATES,
-            timeout=max(180.0, GROUP_CHECK_TIMEOUT_SECONDS),
-        )
-        if payment_pages_probe:
-            payment_pages = payment_pages_probe
-        payments_complete = bool(payments_complete or payments_complete_probe)
     if not payments_complete and not payment_pages:
         # Payment scan completely failed — no data to confirm any payment.
         # Continue to row update loop so stale cached True values are reset to False,
