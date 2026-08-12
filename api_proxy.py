@@ -3809,7 +3809,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
         "Document_ЗаказКлиента",
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
-        page_size=50,
+        page_size=200,
         timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
     log(f"[orders] scan: complete={orders_complete}, pages={len(order_pages)}, rows={sum(len(p) for p in order_pages)}")
@@ -4312,7 +4312,7 @@ def _build_payment_match_table(headers: dict, target_rows: list[dict] | None = N
         "Document_ЗаказКлиента",
         headers,
         ["Ref_Key", "Date", "Number", "ДокументОснование", "ДокументОснование_Type"],
-        page_size=20,
+        page_size=200,
         timeout=max(120.0, GROUP_CHECK_TIMEOUT_SECONDS),
     )
 

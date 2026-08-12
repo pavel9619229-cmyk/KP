@@ -107,6 +107,32 @@ def test_authoritative_block3_result_clears_stale_payment_flag(monkeypatch):
         module._stage1_4_refresh_state.update(previous_stage1)
 
 
+def test_complete_group_scan_clears_stale_payment_flag(monkeypatch):
+    order_page_sizes = []
+
+    def fake_collect(entity_name, *args, page_size=200, **kwargs):
+        if entity_name == "Document_ЗаказКлиента":
+            order_page_sizes.append(page_size)
+        return [], True
+
+    monkeypatch.setattr(module, "_collect_tail_pages", fake_collect)
+    monkeypatch.setattr(
+        module,
+        "_collect_tail_pages_with_field_fallback",
+        lambda *args, **kwargs: ([], True, module.PAYMENT_MATCH_SELECT_FIELD_CANDIDATES[0]),
+    )
+    monkeypatch.setattr(module, "_load_order_cache", lambda: None)
+    monkeypatch.setattr(module, "_order_to_kp_cache", {})
+
+    rows = [{"refKey": "kp-741", "number": "ПСУТ-000741", "paymentReceived": True}]
+    result = module._enrich_group_flags_bulk(rows, {}, skip_invoice_scan=True)
+
+    assert result["ordersScanComplete"] is True
+    assert result["paymentsScanComplete"] is True
+    assert order_page_sizes == [200]
+    assert rows[0]["paymentReceived"] is False
+
+
 def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
     started_at = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
     current_generated_at = datetime(2026, 8, 10, 12, 5, tzinfo=timezone.utc)
