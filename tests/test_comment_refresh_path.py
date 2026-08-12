@@ -133,6 +133,52 @@ def test_complete_group_scan_clears_stale_payment_flag(monkeypatch):
     assert rows[0]["paymentReceived"] is False
 
 
+def test_group_scan_returns_ready_block3_match_table(monkeypatch):
+    order = {
+        "Ref_Key": "order-741",
+        "Date": "2026-08-01T12:00:00",
+        "Number": "ПСУТ-000741",
+        "ДокументОснование": "kp-741",
+        "ДокументОснование_Type": "StandardODATA.Document_КоммерческоеПредложениеКлиенту",
+    }
+    payment = {
+        "Ref_Key": "payment-1",
+        "Date": "2026-08-02T12:00:00",
+        "Number": "ПСУТ-000123",
+        "НазначениеПлатежа": "Оплата по счету № 741",
+    }
+
+    monkeypatch.setattr(module, "_collect_tail_pages", lambda *args, **kwargs: ([[order]], True))
+    monkeypatch.setattr(
+        module,
+        "_collect_tail_pages_with_field_fallback",
+        lambda *args, **kwargs: ([[payment]], True, module.PAYMENT_MATCH_SELECT_FIELD_CANDIDATES[0]),
+    )
+    monkeypatch.setattr(module, "_load_order_cache", lambda: None)
+    monkeypatch.setattr(module, "_order_to_kp_cache", {})
+    monkeypatch.setattr(module, "_save_order_cache", lambda: None)
+
+    rows = [{"refKey": "kp-741", "number": "ПСУТ-000741", "paymentReceived": False}]
+    result = module._enrich_group_flags_bulk(rows, {}, skip_invoice_scan=True)
+
+    assert result["matchTable"] == [{
+        "kpNum": "741",
+        "orderNum": "741",
+        "payNum": "123",
+        "purposeNum": "741",
+        "match": "СОВПАДЕНИЕ",
+    }]
+    assert rows[0]["paymentReceived"] is True
+
+
+def test_block3_page_uses_stage4_4_without_payment_match_rescan():
+    page = (ROOT / "admin_block3_match.html").read_text(encoding="utf-8")
+
+    assert "fetch('/api/kp/refresh/stage4_4'" in page
+    assert "fetch('/api/kp/refresh/stage4_4/status'" in page
+    assert "/api/admin/payment-match-table" not in page
+
+
 def test_runtime_write_guard_skips_when_existing_snapshot_is_newer():
     started_at = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
     current_generated_at = datetime(2026, 8, 10, 12, 5, tzinfo=timezone.utc)

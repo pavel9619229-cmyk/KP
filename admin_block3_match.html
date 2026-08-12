@@ -51,45 +51,14 @@
 
     function render(data) {
       blockBody.innerHTML = '';
-      const rows = data.rows || [];
-
-      // Block 1: unique (kp, order) pairs.
-      const block1Map = new Map();
-      rows.forEach((r) => {
-        const kp = String(r.kpNum || '').trim();
-        const order = String(r.orderNum || '').trim();
-        if (!kp && !order) return;
-        const key = `${kp}|${order}`;
-        if (!block1Map.has(key)) block1Map.set(key, { kp, order });
-      });
-
-      // Block 2: unique (pay, purpose) pairs, used to build purposeNum set.
-      const block2Map = new Map();
-      rows.forEach((r) => {
-        const pay = String(r.payNum || '').trim();
-        const purpose = String(r.purposeNum || '').trim();
-        if (!pay && !purpose) return;
-        const key = `${pay}|${purpose}`;
-        if (!block2Map.has(key)) block2Map.set(key, { pay, purpose });
-      });
-
-      const purposeNumSet = new Set();
-      block2Map.forEach((r) => {
-        if (r.purpose) r.purpose.split(',').forEach((s) => { const t = s.trim(); if (t) purposeNumSet.add(t); });
-      });
-
-      // Block 3: KP ↔ order ↔ payment/purpose — full match chain, not just KP number.
-      const list = [];
-      block1Map.forEach(({ kp, order }) => {
-        if (!kp || !order || !purposeNumSet.has(order)) return;
-        block2Map.forEach(({ pay, purpose }) => {
-          if (!purpose) return;
-          const purposeParts = purpose.split(',').map((s) => s.trim()).filter(Boolean);
-          if (purposeParts.includes(order)) {
-            list.push({ kp, order, pay, purpose });
-          }
-        });
-      });
+      const list = (data.matchTable || [])
+        .filter((row) => row.match === 'СОВПАДЕНИЕ')
+        .map((row) => ({
+          kp: String(row.kpNum || '').trim(),
+          order: String(row.orderNum || '').trim(),
+          pay: String(row.payNum || '').trim(),
+          purpose: String(row.purposeNum || '').trim(),
+        }));
       list.sort((a, b) => toNumDesc(b.kp) - toNumDesc(a.kp));
 
       if (list.length) {
@@ -123,16 +92,33 @@
         `Платежи: ${data.paymentsScanComplete ? 'полный скан' : 'неполный скан'}`;
     }
 
+    const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+    async function waitForRefresh() {
+      while (true) {
+        const resp = await fetch('/api/kp/refresh/stage4_4/status', { credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const state = await resp.json();
+        if (!state.running) return state;
+        statusLabel.textContent = 'Проверка оплат выполняется...';
+        await delay(2000);
+      }
+    }
+
     async function load() {
       loadBtn.disabled = true;
-      loadBtn.textContent = 'Загружаю...';
-      statusLabel.textContent = 'Сканирование 1С — подождите 1–2 минуты...';
+      loadBtn.textContent = 'Обновляю...';
+      statusLabel.textContent = 'Запускаю проверку оплат...';
       blockBody.innerHTML = '';
       try {
-        const resp = await fetch('/api/admin/payment-match-table', { credentials: 'include' });
+        const resp = await fetch('/api/kp/refresh/stage4_4', {
+          method: 'POST',
+          credentials: 'include',
+        });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        render(data);
+        const state = await waitForRefresh();
+        if (!state.lastOk) throw new Error(state.lastError || 'Проверка оплат завершилась с ошибкой');
+        render(state);
       } catch (err) {
         statusLabel.textContent = `Ошибка: ${err.message}`;
       } finally {

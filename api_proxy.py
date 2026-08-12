@@ -452,6 +452,9 @@ _stage4_4_refresh_state: dict = {
     "paymentReceivedCount": None,
     "invoiceCreatedCount": None,
     "confirmedVersion": None,
+    "ordersScanComplete": None,
+    "paymentsScanComplete": None,
+    "matchTable": [],
 }
 # Queue state for local 4/4 bridge (Render UI -> local watchdog -> GitHub publish).
 _stage4_4_local_queue_lock = threading.Lock()
@@ -3941,6 +3944,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     block3_ui_kp_hits: set[str] = set()
     payment_order_hits: set[str] = set()
     purpose_number_years: set[tuple[int, str]] = set()
+    payment_match_rows: list[dict] = []
     payment_pages, payments_complete, _ = _collect_tail_pages_with_field_fallback(
         "Document_ПоступлениеБезналичныхДенежныхСредств",
         headers,
@@ -3984,6 +3988,17 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
                 purpose_num = (m.group(1) or "").lstrip("0")
                 if purpose_num and payment_year is not None:
                     purpose_number_years.add((payment_year, purpose_num))
+            payment_number = str(item.get("Number") or "")
+            payment_match_rows.append({
+                "payNum": "".join(ch for ch in payment_number if ch.isdigit()).lstrip("0") or payment_number,
+                "year": payment_year,
+                "purposeNums": [
+                    (match.group(1) or "").lstrip("0")
+                    for match in re.finditer(r"(?:[а-яa-z]*ут[\s\-_/]*|№\s*)0*(\d+)", purpose)
+                    if (match.group(1) or "").lstrip("0")
+                ],
+                "orderRefs": candidate_order_refs,
+            })
 
     if unresolved_payment_order_refs:
         resolved_orders = _resolve_order_refs_to_target_kps(unresolved_payment_order_refs, headers, kp_ref_set)
@@ -4035,6 +4050,34 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
     for kp_ref in block3_ui_kp_hits:
         kp_payment_map[kp_ref] = True
 
+    kp_number_map = {
+        str(row.get("refKey") or ""): _normalize_kp_number(str(row.get("number") or ""))
+        for row in rows
+    }
+    match_table: list[dict] = []
+    seen_matches: set[tuple[str, str, str]] = set()
+    for order_ref, kp_ref in order_to_kp.items():
+        order_num = order_short_numbers.get(order_ref, "")
+        order_year = order_years.get(order_ref)
+        if not order_num:
+            continue
+        for payment in payment_match_rows:
+            if not _payment_matches_order_identity(order_ref, order_num, order_year, payment):
+                continue
+            match_key = (kp_ref, order_ref, str(payment.get("payNum") or ""))
+            if match_key in seen_matches:
+                continue
+            seen_matches.add(match_key)
+            match_table.append({
+                "kpNum": kp_number_map.get(kp_ref, ""),
+                "orderNum": order_num,
+                "payNum": str(payment.get("payNum") or ""),
+                "purposeNum": ", ".join(payment.get("purposeNums") or []),
+                "match": "СОВПАДЕНИЕ",
+            })
+
+    match_table.sort(key=lambda item: int(item.get("kpNum") or 0), reverse=True)
+
     for row in rows:
         kp_ref = row.get("refKey")
         if kp_ref in kp_ref_set:
@@ -4053,6 +4096,7 @@ def _enrich_group_flags_bulk(rows: list[dict], headers: dict, skip_invoice_scan:
         "paymentsScanComplete": bool(payments_complete),
         "paymentsRows": sum(len(batch) for batch in payment_pages),
         "matchedKpCount": len(block3_ui_kp_hits),
+        "matchTable": match_table,
     }
 
 
@@ -7081,6 +7125,9 @@ def refresh_payments_only_for_cached_rows(
             "rows": len(refreshed),
             "paymentReceivedCount": payment_received_count,
             "invoiceCreatedCount": invoice_created_count,
+            "ordersScanComplete": bool(stage6_diag.get("ordersScanComplete")),
+            "paymentsScanComplete": bool(stage6_diag.get("paymentsScanComplete")),
+            "matchTable": list(stage6_diag.get("matchTable") or []),
             "forcedMode": forced_mode,
             "queuedSeedTargets": sorted(queued_targets),
             "queuedSeedPromoted": queued_promotions.get("promotedTargets", []),
@@ -8651,6 +8698,9 @@ async def manual_refresh_stage4_4(request: Request):
                 "waitedSeconds": None,
                 "paymentReceivedCount": None,
                 "invoiceCreatedCount": None,
+                "ordersScanComplete": None,
+                "paymentsScanComplete": None,
+                "matchTable": [],
             }
         )
 
@@ -8773,6 +8823,9 @@ async def manual_refresh_stage4_4(request: Request):
                 paymentReceivedCount=result.get("paymentReceivedCount"),
                 invoiceCreatedCount=result.get("invoiceCreatedCount"),
                 confirmedVersion=confirmed_version,
+                ordersScanComplete=result.get("ordersScanComplete"),
+                paymentsScanComplete=result.get("paymentsScanComplete"),
+                matchTable=list(result.get("matchTable") or []),
             )
             log(
                 "stage4/4 refresh finished: "
