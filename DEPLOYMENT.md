@@ -13,6 +13,8 @@
 - start command: `python -m uvicorn api_proxy:app --host 0.0.0.0 --port $PORT`
 - health check: `/healthz`
 
+Повторный deploy используется для остановки зависших background worker-ов и очистки их in-memory lock-ов.
+
 Рекомендуемые переменные для стабильности на free-плане:
 - `STARTUP_ENRICH_ENABLED=false` — не выполнять тяжелое обогащение группы на старте.
 - `MANUAL_REFRESH_INCLUDE_STAGE6=false` — ручной refresh без тяжелой stage6 (снижает риск рестартов).
