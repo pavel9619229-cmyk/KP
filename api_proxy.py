@@ -260,6 +260,20 @@ STATUS_KP_PROPERTY_KEY = os.getenv(
 RENDER_API_KEY = os.getenv("RENDER_API_KEY", "")
 RENDER_SERVICE_NAME = os.getenv("RENDER_SERVICE_NAME", "onec-kp-realtime")
 LOCAL_STAGE4_AGENT_TOKEN = os.getenv("LOCAL_STAGE4_AGENT_TOKEN", "").strip()
+MAX_WEBHOOK_SECRET_SHA256 = os.getenv(
+    "MAX_WEBHOOK_SECRET_SHA256",
+    "5fa10487847b941217266b6390e1f46815ae5764adabab7400240d7c9c4ed81d",
+).strip().lower()
+MAX_ALLOWED_GROUP_CHAT_ID = os.getenv("MAX_ALLOWED_GROUP_CHAT_ID", "-78150286053392").strip()
+MAX_RENDER_RELAY_URL = os.getenv(
+    "MAX_RENDER_RELAY_URL",
+    "https://shina-moskva.ru/max-webhook.php?render_bridge=relay",
+).strip()
+MAX_RENDER_FORWARD_URL = os.getenv(
+    "MAX_RENDER_FORWARD_URL",
+    "https://shina-moskva.ru/max-webhook.php?render_bridge=forward",
+).strip()
+MAX_RELAY_TIMEOUT_SECONDS = float(os.getenv("MAX_RELAY_TIMEOUT_SECONDS", "25"))
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
@@ -9297,9 +9311,8 @@ async def get_all_kp(request: Request):
     return build_rows_with_computed_status(_filter_rows_for_user(_cached_rows, user))
 
 
-@app.get("/api/max/test/kp-588")
-async def max_test_kp_588():
-    """Read-only MAX bridge test. Exposes only KP 588 from the current Render cache."""
+def _build_max_test_kp_588_payload() -> dict:
+    """Build a read-only MAX response for KP 588 from the current Render cache."""
     _sync_confirmed_runtime_cache_from_github_if_needed("max-test-kp-588")
 
     target_row = next(
@@ -9314,20 +9327,20 @@ async def max_test_kp_588():
         raise HTTPException(status_code=404, detail="KP 588 not found in Render cache")
 
     row = format_row_for_client(target_row)
-    yes_no = lambda value: "\u0434\u0430" if bool(value) else "\u043d\u0435\u0442"
+    yes_no = lambda value: "да" if bool(value) else "нет"
     lines = [
-        f"\u041a\u041f \u2116{row.get('number') or '588'}",
-        f"\u0414\u0430\u0442\u0430: {row.get('createdAt') or '\u2014'}",
-        f"\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c: {row.get('customerName') or '\u2014'}",
-        f"\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440: {row.get('managerName') or '\u2014'}",
-        f"\u0421\u0442\u0430\u0442\u0443\u0441 1\u0421: {row.get('status') or '\u2014'}",
-        f"\u0422\u043e\u0432\u0430\u0440 \u0443\u043a\u0430\u0437\u0430\u043d: {yes_no(row.get('productSpecified'))}",
-        f"\u0426\u0435\u043d\u0430 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u0430: {yes_no(row.get('priceFilled'))}",
-        f"\u041a\u043b\u0438\u0435\u043d\u0442 \u0443\u0432\u0438\u0434\u0435\u043b \u041a\u041f: {yes_no(row.get('receiptConfirmed'))}",
+        f"КП №{row.get('number') or '588'}",
+        f"Дата: {row.get('createdAt') or '—'}",
+        f"Покупатель: {row.get('customerName') or '—'}",
+        f"Менеджер: {row.get('managerName') or '—'}",
+        f"Статус 1С: {row.get('status') or '—'}",
+        f"Товар указан: {yes_no(row.get('productSpecified'))}",
+        f"Цена заполнена: {yes_no(row.get('priceFilled'))}",
+        f"Клиент увидел КП: {yes_no(row.get('receiptConfirmed'))}",
     ]
     comment = str(row.get("additionalInfoFirstLine") or "").strip()
     if comment:
-        lines.append(f"\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439: {comment}")
+        lines.append(f"Комментарий: {comment}")
 
     return {
         "ok": True,
@@ -9344,6 +9357,143 @@ async def max_test_kp_588():
             "additionalInfoFirstLine": comment,
         },
     }
+
+
+@app.get("/api/max/test/kp-588")
+async def max_test_kp_588():
+    return _build_max_test_kp_588_payload()
+
+
+def _max_webhook_authorized(provided_secret: str) -> bool:
+    if not provided_secret or not MAX_WEBHOOK_SECRET_SHA256:
+        return False
+    provided_hash = hashlib.sha256(provided_secret.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(provided_hash, MAX_WEBHOOK_SECRET_SHA256)
+
+
+def _max_message_context(payload: dict) -> tuple[str, str, bool]:
+    message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+    body = message.get("body") if isinstance(message.get("body"), dict) else {}
+    recipient = message.get("recipient") if isinstance(message.get("recipient"), dict) else {}
+    sender = message.get("sender") if isinstance(message.get("sender"), dict) else {}
+
+    text = str(body.get("text") or message.get("text") or "").strip()
+    chat_id = str(
+        recipient.get("chat_id")
+        or message.get("chat_id")
+        or payload.get("chat_id")
+        or ""
+    ).strip()
+    return text, chat_id, bool(sender.get("is_bot"))
+
+
+def _is_max_kp_588_command(text: str) -> bool:
+    return re.fullmatch(r"(?:КП|KP)\s*(?:№\s*)?0*588", str(text or "").strip(), flags=re.IGNORECASE) is not None
+
+
+def _post_to_spaceweb_max_bridge(url: str, payload: dict) -> dict:
+    if not LOCAL_STAGE4_AGENT_TOKEN:
+        raise RuntimeError("LOCAL_STAGE4_AGENT_TOKEN is not configured")
+    response = requests.post(
+        url,
+        headers={
+            "X-Local-Agent-Token": LOCAL_STAGE4_AGENT_TOKEN,
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "onec-kp-realtime/MAX-bridge-1.0",
+        },
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        timeout=MAX_RELAY_TIMEOUT_SECONDS,
+    )
+    content_type = str(response.headers.get("content-type") or "").lower()
+    parsed: object
+    if "application/json" in content_type:
+        try:
+            parsed = response.json()
+        except Exception:
+            parsed = {"raw": response.text[:500]}
+    else:
+        parsed = {"raw": response.text[:500]}
+    if response.status_code != 200:
+        raise RuntimeError(f"SpaceWeb bridge HTTP {response.status_code}: {str(parsed)[:500]}")
+    return {"status": response.status_code, "response": parsed}
+
+
+@app.get("/api/max/status")
+async def max_bridge_status():
+    return {
+        "ok": bool(MAX_WEBHOOK_SECRET_SHA256 and MAX_ALLOWED_GROUP_CHAT_ID and LOCAL_STAGE4_AGENT_TOKEN),
+        "webhookSecretHashConfigured": bool(MAX_WEBHOOK_SECRET_SHA256),
+        "allowedGroupChatId": MAX_ALLOWED_GROUP_CHAT_ID,
+        "localAgentTokenConfigured": bool(LOCAL_STAGE4_AGENT_TOKEN),
+        "relayUrl": MAX_RENDER_RELAY_URL,
+        "forwardUrl": MAX_RENDER_FORWARD_URL,
+    }
+
+
+@app.get("/api/max/spaceweb-status")
+async def max_spaceweb_status():
+    result: dict = {"relay": None, "forward": None}
+    try:
+        result["relay"] = await asyncio.to_thread(
+            _post_to_spaceweb_max_bridge,
+            MAX_RENDER_RELAY_URL,
+            {"action": "ping"},
+        )
+    except Exception as exc:
+        result["relay"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    try:
+        result["forward"] = await asyncio.to_thread(
+            _post_to_spaceweb_max_bridge,
+            MAX_RENDER_FORWARD_URL,
+            {"action": "ping"},
+        )
+    except Exception as exc:
+        result["forward"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    result["ok"] = not any(isinstance(value, dict) and value.get("ok") is False for value in (result["relay"], result["forward"]))
+    return result
+
+
+@app.post("/api/max/webhook")
+async def max_render_webhook(request: Request):
+    provided_secret = str(request.headers.get("X-Max-Bot-Api-Secret") or "")
+    if not _max_webhook_authorized(provided_secret):
+        raise HTTPException(status_code=401, detail="Invalid MAX webhook secret")
+
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid MAX update payload")
+    if str(payload.get("update_type") or "") != "message_created":
+        return {"ok": True, "ignored": "update_type"}
+
+    text, chat_id, sender_is_bot = _max_message_context(payload)
+    if sender_is_bot:
+        return {"ok": True, "ignored": "bot_message"}
+
+    if chat_id == MAX_ALLOWED_GROUP_CHAT_ID and _is_max_kp_588_command(text):
+        kp_payload = _build_max_test_kp_588_payload()
+        try:
+            relay_result = await asyncio.to_thread(
+                _post_to_spaceweb_max_bridge,
+                MAX_RENDER_RELAY_URL,
+                {"chat_id": chat_id, "text": kp_payload["text"]},
+            )
+            log(f"MAX direct KP588 relayed: chat={chat_id}, result={relay_result}")
+            return {"ok": True, "handled": "kp-588", "relay": relay_result}
+        except Exception as exc:
+            log(f"MAX direct KP588 relay failed: {type(exc).__name__}: {exc}")
+            return {"ok": False, "handled": "kp-588", "error": str(exc)}
+
+    try:
+        forward_result = await asyncio.to_thread(
+            _post_to_spaceweb_max_bridge,
+            MAX_RENDER_FORWARD_URL,
+            payload,
+        )
+        return {"ok": True, "forwarded": True, "bridge": forward_result}
+    except Exception as exc:
+        log(f"MAX legacy forward failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=502, detail="MAX legacy bridge is unavailable") from exc
 
 
 @app.get("/api/debug/kp/{kp_number}/payment-chain")
