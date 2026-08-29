@@ -9297,6 +9297,55 @@ async def get_all_kp(request: Request):
     return build_rows_with_computed_status(_filter_rows_for_user(_cached_rows, user))
 
 
+@app.get("/api/max/test/kp-588")
+async def max_test_kp_588():
+    """Read-only MAX bridge test. Exposes only KP 588 from the current Render cache."""
+    _sync_confirmed_runtime_cache_from_github_if_needed("max-test-kp-588")
+
+    target_row = next(
+        (
+            row
+            for row in _cached_rows
+            if _normalize_kp_number(row.get("number") or "") == "588"
+        ),
+        None,
+    )
+    if not target_row:
+        raise HTTPException(status_code=404, detail="KP 588 not found in Render cache")
+
+    row = format_row_for_client(target_row)
+    yes_no = lambda value: "\u0434\u0430" if bool(value) else "\u043d\u0435\u0442"
+    lines = [
+        f"\u041a\u041f \u2116{row.get('number') or '588'}",
+        f"\u0414\u0430\u0442\u0430: {row.get('createdAt') or '\u2014'}",
+        f"\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c: {row.get('customerName') or '\u2014'}",
+        f"\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440: {row.get('managerName') or '\u2014'}",
+        f"\u0421\u0442\u0430\u0442\u0443\u0441 1\u0421: {row.get('status') or '\u2014'}",
+        f"\u0422\u043e\u0432\u0430\u0440 \u0443\u043a\u0430\u0437\u0430\u043d: {yes_no(row.get('productSpecified'))}",
+        f"\u0426\u0435\u043d\u0430 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u0430: {yes_no(row.get('priceFilled'))}",
+        f"\u041a\u043b\u0438\u0435\u043d\u0442 \u0443\u0432\u0438\u0434\u0435\u043b \u041a\u041f: {yes_no(row.get('receiptConfirmed'))}",
+    ]
+    comment = str(row.get("additionalInfoFirstLine") or "").strip()
+    if comment:
+        lines.append(f"\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439: {comment}")
+
+    return {
+        "ok": True,
+        "number": row.get("number") or "588",
+        "text": "\n".join(lines),
+        "data": {
+            "createdAt": row.get("createdAt"),
+            "customerName": row.get("customerName"),
+            "managerName": row.get("managerName"),
+            "status": row.get("status"),
+            "productSpecified": bool(row.get("productSpecified")),
+            "priceFilled": bool(row.get("priceFilled")),
+            "receiptConfirmed": bool(row.get("receiptConfirmed")),
+            "additionalInfoFirstLine": comment,
+        },
+    }
+
+
 @app.get("/api/debug/kp/{kp_number}/payment-chain")
 async def debug_kp_payment_chain(kp_number: str):
     normalized_input = _normalize_kp_number(kp_number)
