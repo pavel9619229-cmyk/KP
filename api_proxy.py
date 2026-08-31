@@ -9525,39 +9525,10 @@ async def kp_max_bot_status():
     return {
         "ok": bool(KP_MAX_BOT_TOKEN),
         "tokenConfigured": bool(KP_MAX_BOT_TOKEN),
-        "webhook": "/api/max/kp-bot/webhook",
+        "webhook": None,
+        "webhookRemoved": True,
         "testCommand": "?? 588",
     }
-
-
-@app.post("/api/max/kp-bot/webhook")
-async def kp_max_bot_webhook(request: Request):
-    payload = await request.json()
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Invalid MAX update payload")
-    if str(payload.get("update_type") or "") != "message_created":
-        return {"ok": True, "ignored": "update_type"}
-
-    text, chat_id, sender_is_bot = _max_message_context(payload)
-    if sender_is_bot:
-        return {"ok": True, "ignored": "bot_message"}
-    if not chat_id:
-        return {"ok": True, "ignored": "chat_id"}
-    if not _is_max_kp_588_command(text):
-        return {"ok": True, "ignored": "command"}
-
-    kp_payload = _build_max_test_kp_588_payload()
-    try:
-        result = await asyncio.to_thread(
-            _send_kp_max_bot_message,
-            chat_id,
-            kp_payload["text"],
-        )
-        log(f"KP MAX bot: KP588 sent to chat={chat_id}, status={result.get('status')}")
-        return {"ok": True, "handled": "kp-588"}
-    except Exception as exc:
-        log(f"KP MAX bot send failed: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=502, detail="MAX reply failed") from exc
 
 
 @app.get("/api/debug/kp/{kp_number}/payment-chain")
