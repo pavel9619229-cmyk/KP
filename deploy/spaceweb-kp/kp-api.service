@@ -1,0 +1,22 @@
+[Unit]
+Description=KP 1C API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kpapi
+Group=kpapi
+WorkingDirectory=/opt/kp-api
+EnvironmentFile=/etc/kp-api/kp-api.env
+ExecStart=/opt/kp-api/.venv/bin/python -m uvicorn api_proxy:app --host 127.0.0.1 --port 8088
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/kp-api/data
+
+[Install]
+WantedBy=multi-user.target

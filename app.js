@@ -54,7 +54,7 @@ const REFRESH_INTERVAL_MS = 15000;
 const ENABLE_AUTO_REFRESH = false;
 const WS_RECONNECT_MS = 5000;
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
-const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
+const STATUS_RULES_SOURCES = ['/api/status-rules'];
 const RULES_STATUS_REPO_FILE_URL = 'https://github.com/pavel9619229-cmyk/KP/blob/main/data/status_rules.json';
 const ENRICHMENT_FLAG_KEYS = [
   'managerFilled',
@@ -384,7 +384,6 @@ function renderRulesStorageLocations() {
     '',
     '2) API-адрес чтения/проверки актуальной версии после сохранения:',
     `   ${origin}/api/status-rules`,
-    '   (резервный источник: https://onec-kp-realtime.onrender.com/api/status-rules).',
     '',
     '3) Адрес файла в GitHub (становится актуальным после commit + push):',
     `   ${RULES_STATUS_REPO_FILE_URL}`,
@@ -453,7 +452,7 @@ function renderSnapshotVersion(info = {}) {
 }
 
 async function loadVersionInfo() {
-  const sources = ['/api/kp/version-info', 'https://onec-kp-realtime.onrender.com/api/kp/version-info'];
+  const sources = ['/api/kp/version-info'];
 
   let response = null;
   let lastError = null;
@@ -909,7 +908,7 @@ function fillStatuses(data) {
 }
 
 async function loadRows() {
-  const sources = ['/api/kp/all', 'https://onec-kp-realtime.onrender.com/api/kp/all'];
+  const sources = ['/api/kp/all'];
 
   let response = null;
   let lastError = null;
@@ -973,10 +972,7 @@ async function refreshData(initial = false) {
 function connectWebSocket() {
   if (!window.location.origin.startsWith('http')) return;
 
-  const isLocalStatic = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const url = isLocalStatic
-    ? 'wss://onec-kp-realtime.onrender.com/ws/kp'
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/kp`;
+  const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/kp`;
 
   ws = new WebSocket(url);
 
@@ -1010,7 +1006,7 @@ function connectWebSocket() {
 }
 
 async function pollLastRefresh() {
-  const urls = ['/healthz', 'https://onec-kp-realtime.onrender.com/healthz'];
+  const urls = ['/healthz'];
   for (const url of urls) {
     try {
       const r = await fetch(url, { cache: 'no-store' });

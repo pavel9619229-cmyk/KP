@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 _metadata.xml
 data/kp_seed_meta.json
+private/

@@ -273,7 +273,7 @@ const EMBEDDED_SCALE_MAX_WIDTH = 420;
 const EMBEDDED_FIXED_SCALE = 0.7;
 const ALL_TAB_KEY = '__all__';
 const DEFAULT_FALLBACK_STATUS = 'ОБРАБОТАТЬ';
-const STATUS_RULES_SOURCES = ['/api/status-rules', 'https://onec-kp-realtime.onrender.com/api/status-rules'];
+const STATUS_RULES_SOURCES = ['/api/status-rules'];
 const RULE_FIELDS = new Set([
   'problem',
   'rejected',
@@ -1473,10 +1473,7 @@ function fillManagers(data) {
 }
 
 async function loadRows() {
-  const sources = [
-    '/api/kp/all',
-    'https://onec-kp-realtime.onrender.com/api/kp/all',
-  ];
+  const sources = ['/api/kp/all'];
 
   let response = null;
   let lastError = null;
@@ -1550,10 +1547,7 @@ function connectWebSocket() {
     return;
   }
 
-  const isLocalStatic = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const url = isLocalStatic
-    ? 'wss://onec-kp-realtime.onrender.com/ws/kp'
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/kp`;
+  const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/kp`;
 
   ws = new WebSocket(url);
 

@@ -38,7 +38,6 @@ if _cors_origins_raw:
     CORS_ALLOWED_ORIGINS = [x.strip() for x in _cors_origins_raw.split(",") if x.strip()]
 else:
     CORS_ALLOWED_ORIGINS = [
-        "https://onec-kp-realtime.onrender.com",
         "http://127.0.0.1:4173",
         "http://localhost:4173",
     ]
@@ -51,12 +50,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE = os.getenv(
-    "ODATA_BASE_URL",
-    "https://aclient.1c-hosting.com/1R88669/1R88669_UT11_bfimz0bdj3/odata/standard.odata",
-)
-USERNAME = os.getenv("ODATA_USERNAME", "павел")
-PASSWORD = os.getenv("ODATA_PASSWORD", "1")
+BASE = os.getenv("ODATA_BASE_URL", "").strip()
+USERNAME = os.getenv("ODATA_USERNAME", "").strip()
+PASSWORD = os.getenv("ODATA_PASSWORD", "")
 CREATE_ODATA_USERNAME = os.getenv("CREATE_ODATA_USERNAME", "").strip() or USERNAME
 CREATE_ODATA_PASSWORD = os.getenv("CREATE_ODATA_PASSWORD", "").strip() or PASSWORD
 CREATE_MANAGER_NAME = os.getenv("CREATE_MANAGER_NAME", "").strip() or CREATE_ODATA_USERNAME
@@ -277,6 +273,9 @@ MAX_RELAY_TIMEOUT_SECONDS = float(os.getenv("MAX_RELAY_TIMEOUT_SECONDS", "25"))
 RENDER_STATUS_TTL = int(os.getenv("RENDER_STATUS_TTL", "30"))
 STATUS_RULES_TEXT_ENV = os.getenv("STATUS_RULES_TEXT", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+RUNTIME_REMOTE_BACKUP_ENABLED = os.getenv("RUNTIME_REMOTE_BACKUP_ENABLED", "true").strip().lower() in {
+    "1", "true", "yes", "on",
+}
 GITHUB_REPO = os.getenv("GITHUB_REPO", "pavel9619229-cmyk/KP").strip()
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main").strip()
 GITHUB_RUNTIME_BRANCH = os.getenv("GITHUB_RUNTIME_BRANCH", GITHUB_BRANCH).strip() or GITHUB_BRANCH
@@ -5572,6 +5571,8 @@ def _runtime_pick_authoritative_state(
 
 
 def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
+    if not RUNTIME_REMOTE_BACKUP_ENABLED:
+        return [], {}, {}
     pointer = _load_runtime_current_pointer_from_github()
     if pointer and str(pointer.get("status") or "") == "confirmed":
         cache_path = str(pointer.get("cachePath") or "").strip()
@@ -5622,6 +5623,19 @@ def _load_confirmed_runtime_from_github() -> tuple[list, dict, dict]:
 
 
 def _publish_confirmed_runtime_snapshot_or_raise(candidate_rows: list | None = None, candidate_meta: dict | None = None) -> tuple[list, dict, dict]:
+    if not RUNTIME_REMOTE_BACKUP_ENABLED:
+        rows = list(candidate_rows or load_rows_from_path(Path(RUNTIME_DATA_FILE)))
+        if not rows:
+            raise RuntimeError("runtime snapshot is empty after 1C refresh")
+        meta = _runtime_normalize_meta(dict(candidate_meta or _read_runtime_meta()), rows, pointer={}, fallback_source="local-publish")
+        previous_version = _runtime_version_of(_read_runtime_meta(), _read_runtime_current_pointer())
+        version = max(previous_version + 1, 1)
+        meta.update({"status": "confirmed", "cycleVersion": version, "last1cLoadedVersion": version, "rowsFingerprint": rows_fingerprint(rows)})
+        meta["snapshotId"] = str(meta.get("snapshotId") or uuid.uuid4())
+        pointer = _build_runtime_current_pointer(rows, meta, version=version)
+        _write_local_confirmed_runtime(rows, meta, pointer)
+        return rows, meta, pointer
+
     rows = list(candidate_rows or load_rows_from_path(Path(RUNTIME_DATA_FILE)))
     if not rows:
         raise RuntimeError("runtime snapshot is empty after 1C refresh")
