@@ -96,7 +96,8 @@ def kp_button_text(row: dict) -> str:
     date = _date_label(row.get("createdAt") or "")
     client = _compact(row.get("customerName") or "—", 32)
     comment = _compact(row.get("additionalInfoFirstLine") or "—", 52)
-    return _compact(f"{number}  {date}  {client} {comment}", 118)
+    label = f"{number}\u00a0\u00a0{date}\u00a0\u00a0{client} {comment}"
+    return label if len(label) <= 118 else label[:117].rstrip() + "…"
 
 
 def root_menu(role: str) -> dict:
