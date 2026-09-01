@@ -1,0 +1,179 @@
+import math
+from datetime import datetime
+
+import api_proxy as core
+
+PAGE_SIZE = 10
+MAX_ROWS = 300
+STATUS_LABELS = [
+    "ВСЕ",
+    "ОБРАБОТАТЬ И ОТПРАВИТЬ",
+    "ПОЛУЧИТЬ ОБРАТНУЮ СВЯЗЬ",
+    "ОПЛАТА ПРИШЛА",
+    "ОТГРУЗИТЬ",
+    "ПРОВЕСТИ В ЭДО",
+    "ПРОБЛЕМА",
+    "ОТГРУЖЕНО ОПЛАЧЕНО И КОРРЕКТНО ОФОРМЛЕНО",
+    "ОТКАЗ",
+]
+
+
+def _cb(text: str, payload: str) -> dict:
+    return {"type": "callback", "text": text, "payload": payload}
+
+
+def _keyboard(rows: list[list[dict]]) -> list[dict]:
+    return [{"type": "inline_keyboard", "payload": {"buttons": rows}}]
+
+
+def _sort_key(row: dict) -> str:
+    return str(row.get("createdAt") or "")
+
+
+def recent_rows() -> list[dict]:
+    rows = sorted((dict(r) for r in core._cached_rows), key=_sort_key, reverse=True)[:MAX_ROWS]
+    return core.build_rows_with_computed_status(rows)
+
+
+def status_key(index: int) -> str:
+    if index < 0 or index >= len(STATUS_LABELS):
+        raise ValueError("invalid status index")
+    return str(index)
+
+
+def status_index(key: str) -> int:
+    value = int(str(key))
+    if value < 0 or value >= len(STATUS_LABELS):
+        raise ValueError("invalid status key")
+    return value
+
+
+def workflow_status(row: dict) -> str:
+    first = str(row.get("additionalInfoFirstLine") or "").strip().upper()
+    if bool(row.get("problem")) or first.startswith("ПРОБЛЕМА"):
+        return "ПРОБЛЕМА"
+    if bool(row.get("rejected")) or first.startswith("ОТКАЗ"):
+        return "ОТКАЗ"
+    payment = bool(row.get("paymentReceived"))
+    invoice = bool(row.get("invoiceCreated"))
+    edo = bool(row.get("edoSent"))
+    if payment and invoice and edo:
+        return "ОТГРУЖЕНО ОПЛАЧЕНО И КОРРЕКТНО ОФОРМЛЕНО"
+    if invoice and not edo:
+        return "ПРОВЕСТИ В ЭДО"
+    if bool(row.get("shipmentPending")) or first.startswith("ОТГРУЗИТЬ"):
+        return "ОТГРУЗИТЬ"
+    if payment or first.startswith("ОПЛАТА ПРИШЛА"):
+        return "ОПЛАТА ПРИШЛА"
+    if bool(row.get("kpSent")) or bool(row.get("receiptConfirmed")):
+        return "ПОЛУЧИТЬ ОБРАТНУЮ СВЯЗЬ"
+    return "ОБРАБОТАТЬ И ОТПРАВИТЬ"
+
+
+def rows_for_status(index: int) -> list[dict]:
+    rows = recent_rows()
+    if index == 0:
+        return rows
+    wanted = STATUS_LABELS[index]
+    return [row for row in rows if workflow_status(row) == wanted]
+
+
+def _date_label(value: str) -> str:
+    raw = str(value or "").split(" ", 1)[0]
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").strftime("%d.%m.%y")
+    except Exception:
+        return raw or "—"
+
+
+def _compact(value: str, limit: int) -> str:
+    text = " ".join(str(value or "").split()) or "—"
+    return text if len(text) <= limit else text[: max(1, limit - 1)].rstrip() + "…"
+
+
+def kp_button_text(row: dict) -> str:
+    number = str(row.get("number") or "—")
+    date = _date_label(row.get("createdAt") or "")
+    client = _compact(row.get("customerName") or "—", 32)
+    comment = _compact(row.get("additionalInfoFirstLine") or "—", 52)
+    return _compact(f"№{number} | {date} | {client} | {comment}", 118)
+
+
+def root_menu(role: str) -> dict:
+    rows = [[_cb("СПИСОК КП ПО СТАТУСАМ", "nav:statuses")]]
+    rows.append([_cb("ПРОВЕРИТЬ ДОСТУП", "nav:access")])
+    if role == "admin":
+        rows.append([_cb("ВЫДАТЬ КОД СОТРУДНИКУ", "nav:invite")])
+    return {
+        "text": "Главное меню КП",
+        "attachments": _keyboard(rows),
+    }
+
+
+def statuses_menu() -> dict:
+    rows = [[_cb("⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")]]
+    for index, label in enumerate(STATUS_LABELS):
+        rows.append([_cb(label, f"nav:s:{status_key(index)}:0")])
+    return {
+        "text": "Уровень 1 — выбери статус КП.\nПоказаны статусы для последних 300 КП.",
+        "attachments": _keyboard(rows),
+    }
+
+
+def status_page(index: int, page: int) -> dict:
+    items = rows_for_status(index)
+    total_pages = max(1, math.ceil(len(items) / PAGE_SIZE))
+    page = max(0, min(int(page), total_pages - 1))
+    start = page * PAGE_SIZE
+    current = items[start : start + PAGE_SIZE]
+    rows = [[_cb("⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")]]
+    for row in current:
+        number = str(row.get("number") or "")
+        rows.append([_cb(kp_button_text(row), f"nav:k:{number}:{status_key(index)}:{page}")])
+    pager = []
+    if page > 0:
+        pager.append(_cb("◀ ПРЕДЫДУЩИЕ", f"nav:s:{status_key(index)}:{page - 1}"))
+    if page + 1 < total_pages:
+        pager.append(_cb("СЛЕДУЮЩИЕ ▶", f"nav:s:{status_key(index)}:{page + 1}"))
+    if pager:
+        rows.append(pager)
+    label = STATUS_LABELS[index]
+    shown_from = start + 1 if current else 0
+    shown_to = start + len(current)
+    text = (
+        f"Уровень 2 — {label}\n"
+        f"КП: {len(items)} из последних {MAX_ROWS}. "
+        f"Показаны {shown_from}–{shown_to}. Страница {page + 1}/{total_pages}."
+    )
+    if not current:
+        text += "\nПо этому статусу КП нет."
+    return {"text": text, "attachments": _keyboard(rows)}
+
+
+def find_row(number: str) -> dict | None:
+    normalized = str(number).lstrip("0") or "0"
+    for row in recent_rows():
+        row_number = str(row.get("number") or "").lstrip("0") or "0"
+        if row_number == normalized:
+            return row
+    return None
+
+
+def kp_level3(number: str, status_idx: int, page: int) -> dict:
+    row = find_row(number)
+    if not row:
+        return status_page(status_idx, page)
+    status = workflow_status(row)
+    text = (
+        f"Уровень 3 — КП №{row.get('number') or number}\n"
+        f"Дата: {_date_label(row.get('createdAt') or '')}\n"
+        f"Клиент: {row.get('customerName') or '—'}\n"
+        f"Статус: {status}\n"
+        f"Комментарий: {row.get('additionalInfoFirstLine') or '—'}\n\n"
+        "Кнопки полей этого уровня будут добавлены следующим этапом."
+    )
+    rows = [[_cb(
+        "⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
+        f"nav:s:{status_key(status_idx)}:{max(0, int(page))}",
+    )]]
+    return {"text": text, "attachments": _keyboard(rows)}

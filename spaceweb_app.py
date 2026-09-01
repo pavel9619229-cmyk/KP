@@ -13,6 +13,7 @@ import requests
 from fastapi import HTTPException, Request
 
 import api_proxy as core
+import kp_max_navigation as nav
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -263,6 +264,34 @@ def _send_message(chat_id: str, text: str) -> dict:
     return {"status": response.status_code, "response": data}
 
 
+def _send_menu_message(chat_id: str, menu: dict) -> dict:
+    response = requests.post(
+        "https://platform-api2.max.ru/messages",
+        params={"chat_id": str(chat_id)},
+        headers={"Authorization": KP_MAX_BOT_TOKEN, "Content-Type": "application/json", "Accept": "application/json"},
+        json={"text": str(menu.get("text") or ""), "attachments": list(menu.get("attachments") or [])},
+        timeout=20, verify=_max_verify(),
+    )
+    data = response.json() if response.content else {}
+    if not 200 <= response.status_code < 300:
+        raise RuntimeError(f"MAX menu HTTP {response.status_code}: {str(data)[:500]}")
+    return {"status": response.status_code, "response": data}
+
+
+def _answer_callback(callback_id: str, menu: dict) -> dict:
+    response = requests.post(
+        "https://platform-api2.max.ru/answers",
+        params={"callback_id": str(callback_id)},
+        headers={"Authorization": KP_MAX_BOT_TOKEN, "Content-Type": "application/json", "Accept": "application/json"},
+        json={"message": {"text": str(menu.get("text") or ""), "attachments": list(menu.get("attachments") or [])}},
+        timeout=20, verify=_max_verify(),
+    )
+    data = response.json() if response.content else {}
+    if response.status_code != 200 or (isinstance(data, dict) and data.get("success") is False):
+        raise RuntimeError(f"MAX callback HTTP {response.status_code}: {str(data)[:500]}")
+    return data
+
+
 def _get_chat_type(chat_id: str) -> str:
     if not KP_MAX_BOT_TOKEN or not chat_id:
         return ""
@@ -427,6 +456,25 @@ async def _reply(chat_id: str, text: str) -> dict:
     return await asyncio.to_thread(_send_message, chat_id, text)
 
 
+async def _reply_menu(chat_id: str, menu: dict) -> dict:
+    return await asyncio.to_thread(_send_menu_message, chat_id, menu)
+
+
+def _callback_context(payload: dict) -> tuple[str, str, str, str, str]:
+    callback = payload.get("callback") if isinstance(payload.get("callback"), dict) else {}
+    message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+    recipient = message.get("recipient") if isinstance(message.get("recipient"), dict) else {}
+    user = callback.get("user") if isinstance(callback.get("user"), dict) else {}
+    if not user and isinstance(payload.get("user"), dict):
+        user = payload.get("user")
+    callback_id = str(callback.get("callback_id") or "").strip()
+    action = str(callback.get("payload") or "").strip()
+    chat_id = str(recipient.get("chat_id") or message.get("chat_id") or payload.get("chat_id") or "").strip()
+    sender_id = str(user.get("user_id") or user.get("id") or "").strip()
+    chat_type = str(recipient.get("chat_type") or recipient.get("type") or "").strip().lower()
+    return callback_id, action, chat_id, sender_id, chat_type
+
+
 async def _reply_long(chat_id: str, text: str, chunk_size: int = 3500) -> None:
     remaining = str(text or "")
     while remaining:
@@ -440,6 +488,67 @@ async def _reply_long(chat_id: str, text: str, chunk_size: int = 3500) -> None:
         await _reply(chat_id, chunk)
 
 
+async def _handle_navigation_callback(payload: dict) -> dict:
+    callback_id, action, chat_id, sender_id, chat_type = _callback_context(payload)
+    if not callback_id or not action or not chat_id or not sender_id:
+        return {"ok": True, "ignored": "callback-identity"}
+    role = _role_for_user(sender_id)
+    if not role:
+        denied = {"text": "Нет доступа. Введи одноразовый код активации в личном чате с ботом.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, denied)
+        return {"ok": True, "denied": "access"}
+    if not chat_type:
+        chat_type = await asyncio.to_thread(_get_chat_type, chat_id)
+    if chat_type != "dialog":
+        denied = {"text": "Данные КП доступны только в личном диалоге с ботом.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, denied)
+        return {"ok": True, "denied": "not-dialog"}
+    if _edit_session_get(sender_id):
+        blocked = {"text": "Сначала заверши редактирование комментария: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "edit-session"}
+    try:
+        if action == "nav:root":
+            menu = nav.root_menu(role)
+        elif action == "nav:statuses":
+            menu = nav.statuses_menu()
+        elif action == "nav:access":
+            admins, users, invites = _access_counts()
+            menu = nav.root_menu(role)
+            menu["text"] = (
+                f"Доступ активен. Роль: {'администратор' if role == 'admin' else 'сотрудник'}.\n"
+                f"Твой MAX user_id: {sender_id}\n"
+                f"Администраторов: {admins}; сотрудников: {users}; кодов: {invites}."
+            )
+        elif action == "nav:invite":
+            if role != "admin":
+                menu = nav.root_menu(role)
+                menu["text"] = "Выдавать коды может только администратор."
+            else:
+                code = _create_invite(sender_id)
+                menu = nav.root_menu(role)
+                menu["text"] = f"Одноразовый код сотрудника: {code}\nДействует 24 часа и сгорает после использования."
+        elif action.startswith("nav:s:"):
+            _, _, key, page = action.split(":", 3)
+            menu = nav.status_page(nav.status_index(key), int(page))
+        elif action.startswith("nav:k:"):
+            _, _, number, key, page = action.split(":", 4)
+            menu = nav.kp_level3(number, nav.status_index(key), int(page))
+        else:
+            menu = nav.root_menu(role)
+        await asyncio.to_thread(_answer_callback, callback_id, menu)
+        return {"ok": True, "handled": action}
+    except Exception as exc:
+        core.log(f"KP MAX navigation callback failed: {type(exc).__name__}: {exc}")
+        fallback = nav.root_menu(role)
+        fallback["text"] = "Не удалось открыть этот раздел. Вернулся в главное меню."
+        try:
+            await asyncio.to_thread(_answer_callback, callback_id, fallback)
+        except Exception:
+            pass
+        return {"ok": True, "error": "navigation-callback"}
+
+
 @app.post("/api/max/kp-bot/webhook")
 async def kp_max_bot_webhook(request: Request):
     provided_secret = str(request.headers.get("X-Max-Bot-Api-Secret") or "")
@@ -448,7 +557,10 @@ async def kp_max_bot_webhook(request: Request):
     payload = await request.json()
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid MAX update payload")
-    if str(payload.get("update_type") or "") != "message_created":
+    update_type = str(payload.get("update_type") or "")
+    if update_type == "message_callback":
+        return await _handle_navigation_callback(payload)
+    if update_type != "message_created":
         return {"ok": True, "ignored": "update_type"}
 
     text, chat_id, sender_id, sender_is_bot, chat_type = _message_context(payload)
@@ -528,6 +640,10 @@ async def kp_max_bot_webhook(request: Request):
             await _reply(chat_id, "Изменение подготовлено. Отправь СОХРАНИТЬ или ОТМЕНА. Чтобы заменить текст заново, отправь РЕДКОМ <номер>.")
             return {"ok": True, "handled": "comment-edit-confirm"}
 
+    if upper in {"МЕНЮ", "MENU", "НАВИГАЦИЯ", "СПИСОК", "СПИСОК КП"}:
+        await _reply_menu(chat_id, nav.root_menu(role))
+        return {"ok": True, "handled": "navigation-root"}
+
     if upper in {"ДОСТУП", "ACCESS"}:
         admins, users, invites = _access_counts()
         await _reply(
@@ -574,12 +690,8 @@ async def kp_max_bot_webhook(request: Request):
 
     number = _kp_number(text)
     if not number:
-        await _reply(
-            chat_id,
-            "Команды:\nКП 588 — показать КП\nКОММЕНТАРИЙ 588 или КОМ 588 — полный комментарий\nРЕДКОМ 588 — изменить комментарий\nДОСТУП — проверить доступ"
-            + ("\nКОД — выдать одноразовый код сотруднику\nОТКЛЮЧИТЬ <user_id> — отключить сотрудника" if role == "admin" else ""),
-        )
-        return {"ok": True, "handled": "help"}
+        await _reply_menu(chat_id, nav.root_menu(role))
+        return {"ok": True, "handled": "navigation-root"}
 
     kp_text = _build_kp_text(number)
     try:
