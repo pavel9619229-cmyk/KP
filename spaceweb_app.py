@@ -45,6 +45,41 @@ def _kp_number(text: str) -> str:
     return match.group(1) if match else ""
 
 
+def _comment_number(text: str) -> str:
+    match = re.fullmatch(
+        r"(?:КОММЕНТАРИЙ|КОМ|COMMENT)\s*(?:КП\s*)?(?:№\s*)?0*(\d{1,12})",
+        str(text or "").strip(), flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else ""
+
+
+def _build_full_comment_text(number: str) -> str:
+    target = next(
+        (row for row in core._cached_rows if core._normalize_kp_number(row.get("number") or "") == number),
+        None,
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail=f"КП {number} не найдено")
+    ref_key = str(target.get("refKey") or target.get("Ref_Key") or "").strip()
+    if not ref_key:
+        raise RuntimeError(f"KP {number} has no refKey")
+    base = str(core.BASE).strip().strip('\"').strip("'").rstrip("/")
+    response = requests.get(
+        f"{base}/{core.ENTITY}(guid'{ref_key}')",
+        headers=core._build_headers(),
+        params={"$select": "Number,Комментарий"},
+        timeout=30,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"1C OData HTTP {response.status_code}")
+    doc = response.json()
+    raw = str(doc.get("Комментарий") or "")
+    comment = core.strip_html(raw).replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not comment:
+        comment = "Комментарий не заполнен."
+    return f"Полный комментарий КП №{number}:\n{comment}"
+
+
 def _build_kp_text(number: str) -> str:
     target = next(
         (row for row in core._cached_rows if core._normalize_kp_number(row.get("number") or "") == number),
@@ -258,6 +293,19 @@ async def _reply(chat_id: str, text: str) -> dict:
     return await asyncio.to_thread(_send_message, chat_id, text)
 
 
+async def _reply_long(chat_id: str, text: str, chunk_size: int = 3500) -> None:
+    remaining = str(text or "")
+    while remaining:
+        if len(remaining) <= chunk_size:
+            chunk, remaining = remaining, ""
+        else:
+            cut = remaining.rfind("\n", 0, chunk_size)
+            if cut < chunk_size // 2:
+                cut = chunk_size
+            chunk, remaining = remaining[:cut], remaining[cut:].lstrip("\n")
+        await _reply(chat_id, chunk)
+
+
 @app.post("/api/max/kp-bot/webhook")
 async def kp_max_bot_webhook(request: Request):
     provided_secret = str(request.headers.get("X-Max-Bot-Api-Secret") or "")
@@ -329,11 +377,23 @@ async def kp_max_bot_webhook(request: Request):
         await _reply(chat_id, "Доступ сотрудника отключён." if removed else "Сотрудник с таким user_id не найден.")
         return {"ok": True, "handled": "user-revoked"}
 
+    comment_number = _comment_number(text)
+    if comment_number:
+        try:
+            comment_text = await asyncio.to_thread(_build_full_comment_text, comment_number)
+            await _reply_long(chat_id, comment_text)
+            core.log(f"KP MAX bot: full comment KP {comment_number} sent to user={sender_id}")
+            return {"ok": True, "handled": f"comment-{comment_number}"}
+        except Exception as exc:
+            core.log(f"KP MAX full comment failed: {type(exc).__name__}: {exc}")
+            await _reply(chat_id, "Не удалось получить полный комментарий из 1С.")
+            return {"ok": True, "error": "comment-read"}
+
     number = _kp_number(text)
     if not number:
         await _reply(
             chat_id,
-            "Команды:\nКП 588 — показать КП\nДОСТУП — проверить доступ"
+            "Команды:\nКП 588 — показать КП\nКОММЕНТАРИЙ 588 или КОМ 588 — полный комментарий\nДОСТУП — проверить доступ"
             + ("\nКОД — выдать одноразовый код сотруднику\nОТКЛЮЧИТЬ <user_id> — отключить сотрудника" if role == "admin" else ""),
         )
         return {"ok": True, "handled": "help"}
