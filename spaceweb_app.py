@@ -534,6 +534,9 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         elif action.startswith("nav:k:"):
             _, _, number, key, page = action.split(":", 4)
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
+        elif action.startswith("nav:f:"):
+            _, _, field, number, key, page = action.split(":", 5)
+            menu = nav.field_placeholder(field, number, nav.status_index(key), int(page))
         else:
             menu = nav.root_menu(role)
         await asyncio.to_thread(_answer_callback, callback_id, menu)

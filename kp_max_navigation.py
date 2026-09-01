@@ -164,17 +164,26 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
     row = find_row(number)
     if not row:
         return status_page(status_idx, page)
-    status = workflow_status(row)
-    text = (
-        f"Уровень 3 — КП №{row.get('number') or number}\n"
-        f"Дата: {_date_label(row.get('createdAt') or '')}\n"
-        f"Клиент: {row.get('customerName') or '—'}\n"
-        f"Статус: {status}\n"
-        f"Комментарий: {row.get('additionalInfoFirstLine') or '—'}\n\n"
-        "Кнопки полей этого уровня будут добавлены следующим этапом."
-    )
+    number_label = str(row.get("number") or number)
+    date_label = _date_label(row.get("createdAt") or "")
+    text = f"КП {number_label}\nДата: {date_label}"
+    key = status_key(status_idx)
+    page = max(0, int(page))
+    rows = [
+        [_cb("⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:s:{key}:{page}")],
+        [_cb("КЛИЕНТ", f"nav:f:client:{number_label}:{key}:{page}")],
+        [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
+        [_cb("КОММЕНТАРИЙ", f"nav:f:comment:{number_label}:{key}:{page}")],
+    ]
+    return {"text": text, "attachments": _keyboard(rows)}
+
+
+def field_placeholder(field: str, number: str, status_idx: int, page: int) -> dict:
+    labels = {"client": "КЛИЕНТ", "items": "СТРОКИ ТОВАРА", "comment": "КОММЕНТАРИЙ"}
+    label = labels.get(str(field), "РАЗДЕЛ")
+    text = f"{label} — КП {number}\nСодержимое этого раздела настроим следующим этапом."
     rows = [[_cb(
         "⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
-        f"nav:s:{status_key(status_idx)}:{max(0, int(page))}",
+        f"nav:k:{number}:{status_key(status_idx)}:{max(0, int(page))}",
     )]]
     return {"text": text, "attachments": _keyboard(rows)}
