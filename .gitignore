@@ -4,3 +4,4 @@ __pycache__/
 _metadata.xml
 data/kp_seed_meta.json
 private/
+deploy/spaceweb-kp/*.zip

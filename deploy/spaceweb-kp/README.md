@@ -1,23 +1,28 @@
 # SpaceWeb KP deployment
 
-Цель: заменить Render российским VPS SpaceWeb для КП/1С и будущего отдельного MAX-бота.
+Цель: заменить Render российским VPS SpaceWeb для КП/1С и отдельного MAX-бота.
 
-Архитектура:
-- nginx: публичные HTTP/HTTPS 80/443;
-- Uvicorn/FastAPI: только 127.0.0.1:8088;
+Текущий VPS:
+- имя: `KP-MAX`;
+- IPv4: `89.111.131.83`;
+- Ubuntu 24.04 LTS, Москва;
+- nginx: 80/443;
+- Uvicorn/FastAPI: `127.0.0.1:8088`;
 - systemd: `kp-api.service`;
-- рабочие данные: `/opt/kp-api/data` на VPS;
-- секреты: `/etc/kp-api/kp-api.env`, права 600;
-- GitHub runtime backup: отключён через `RUNTIME_REMOTE_BACKUP_ENABLED=false` и пустой `GITHUB_REPO`;
-- HTTPS: публично доверенный сертификат, автоматическое продление Certbot.
+- приложение VPS запускается как `spaceweb_app:app`, Render — как `api_proxy:app`.
 
-Перед запуском нужны отдельный российский VPS SpaceWeb и DNS-имя, направленное на его IPv4.
-MAX требует webhook по HTTPS строго на порту 443; текущий VPS UDU для этого не используется, потому что его 443 занят hbbr.
+Хранение и безопасность:
+- рабочие данные: `/opt/kp-api/data`;
+- секреты: `/etc/kp-api/kp-api.env`, mode 600;
+- GitHub runtime backup отключён;
+- MAX webhook защищён `X-Max-Bot-Api-Secret`;
+- CA Минцифры используется только клиентом MAX и не добавлен системно;
+- TLS: Let's Encrypt IP certificate для `89.111.131.83`;
+- продление TLS: `kp-cert-renew.timer` дважды в сутки.
 
-Порядок:
-1. Загрузить приложение в `/opt/kp-api` без `.git`, `private/` и `checkpoints/`.
-2. Создать `/etc/kp-api/kp-api.env` из шаблона и заполнить секреты локально на VPS.
-3. Указать DNS A-запись на новый VPS.
-4. Запустить `LE_EMAIL=... bash deploy/spaceweb-kp/bootstrap.sh <domain>`.
-5. Проверить `/healthz`, вход в интерфейс, чтение КП и ручной refresh из 1С.
-6. Только после этого включать отдельный MAX webhook на российском VPS.
+Проверено:
+- `https://89.111.131.83/healthz` -> HTTP 200, локальный cache 300 КП;
+- `/api/kp/all` без авторизации -> HTTP 401;
+- webhook без секрета -> HTTP 401;
+- команда `КП 588` доходит до отправки MAX; пока ожидаемо падает без `KP_MAX_BOT_TOKEN`;
+- TLS до `platform-api2.max.ru` с отдельным CA-файлом проходит.
