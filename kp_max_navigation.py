@@ -181,6 +181,7 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
     key = status_key(status_idx)
     page = max(0, int(page))
     rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:s:{key}:{page}")],
         [_cb("КЛИЕНТ", f"nav:f:client:{number_label}:{key}:{page}")],
         [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
