@@ -16,6 +16,7 @@ import api_proxy as core
 import kp_max_navigation as nav
 import kp_max_customer as customer
 import kp_max_search as kp_search
+import kp_max_items as items
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -519,6 +520,11 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         blocked = {"text": "Сначала заверши поиск КП или нажми ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "search-session"}
+    item_session = items.session_get(sender_id)
+    if item_session and not action.startswith("itm:"):
+        blocked = {"text": "Сначала заверши редактирование строки товара: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "item-session"}
     try:
         if action == "find:menu":
             kp_search.clear(sender_id)
@@ -568,6 +574,8 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             page_num = int(page)
             if field == "client":
                 menu = await asyncio.to_thread(customer.start, sender_id, number, status_idx, page_num)
+            elif field == "items":
+                menu = await asyncio.to_thread(items.list_menu, number, status_idx, page_num, 0)
             elif field == "comment":
                 _, ref_key = _find_kp_target(number)
                 raw_comment = await asyncio.to_thread(_fetch_comment_raw_by_ref, ref_key)
@@ -584,6 +592,37 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             _, _, number, key, page = action.split(":", 4)
             await asyncio.to_thread(_start_comment_edit, sender_id, number)
             menu = nav.comment_edit_started_menu(number)
+        elif action.startswith("itm:list:"):
+            _, _, number, key, status_page, item_page = action.split(":", 5)
+            menu = await asyncio.to_thread(items.list_menu, number, nav.status_index(key), int(status_page), int(item_page))
+        elif action.startswith("itm:open:"):
+            _, _, number, line, key, status_page, item_page = action.split(":", 6)
+            menu = await asyncio.to_thread(items.item_menu, number, int(line), nav.status_index(key), int(status_page), int(item_page))
+        elif action.startswith("itm:view:"):
+            _, _, field, number, line, key, status_page, item_page = action.split(":", 7)
+            menu = await asyncio.to_thread(items.field_menu, field, number, int(line), nav.status_index(key), int(status_page), int(item_page))
+        elif action.startswith("itm:edit:"):
+            _, _, field, number, line, key, status_page, item_page = action.split(":", 7)
+            menu = await asyncio.to_thread(items.start_edit, sender_id, field, number, int(line), nav.status_index(key), int(status_page), int(item_page))
+        elif action.startswith("itm:prod:"):
+            product_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(items.pick_product, sender_id, product_key)
+        elif action == "itm:again":
+            menu = items.again(sender_id)
+        elif action == "itm:cancel":
+            menu = await asyncio.to_thread(items.cancel_menu, sender_id)
+        elif action == "itm:save":
+            try:
+                menu, saved = await asyncio.to_thread(items.commit, sender_id, role)
+                core.log(f"KP MAX item saved: KP {saved['number']}, line={saved['line']}, field={saved['field']}, user={sender_id}")
+            except RuntimeError as exc:
+                if "concurrently" in str(exc):
+                    menu = nav.root_menu(role)
+                    menu["text"] = "Строка товара изменилась в 1С после начала редактирования. Запись отменена."
+                else:
+                    core.log(f"KP MAX item save failed: {type(exc).__name__}: {exc}")
+                    menu = items._confirm_menu(sender_id) if items.session_get(sender_id) else nav.root_menu(role)
+                    menu["text"] = "Не удалось сохранить изменение строки в 1С.\n\n" + menu["text"]
         elif action.startswith("cust:x:"):
             counterparty_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(customer.pick_counterparty_direct, sender_id, counterparty_key)
@@ -666,6 +705,45 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "access-activated"}
         await _reply(chat_id, "Нет доступа. Введи одноразовый код активации, выданный администратором.")
         return {"ok": True, "denied": "access"}
+
+    item_session = items.session_get(sender_id)
+    if item_session:
+        if upper in {"ОТМЕНА", "CANCEL"}:
+            await _reply_menu(chat_id, await asyncio.to_thread(items.cancel_menu, sender_id))
+            return {"ok": True, "handled": "item-edit-cancel"}
+        stage = str(item_session.get("stage") or "")
+        if stage == "await_value":
+            try:
+                menu = items.set_value(sender_id, text)
+                await _reply_menu(chat_id, menu)
+                return {"ok": True, "handled": "item-edit-value"}
+            except ValueError as exc:
+                await _reply(chat_id, str(exc))
+                return {"ok": True, "error": "item-value-invalid"}
+        if stage == "await_product_query":
+            try:
+                menu = await asyncio.to_thread(items.product_search_menu, sender_id, text)
+                await _reply_menu(chat_id, menu)
+                return {"ok": True, "handled": "item-product-search"}
+            except Exception as exc:
+                core.log(f"KP MAX product search failed: {type(exc).__name__}: {exc}")
+                await _reply(chat_id, "Не удалось выполнить поиск номенклатуры. Попробуй другой фрагмент или отправь ОТМЕНА.")
+                return {"ok": True, "error": "item-product-search"}
+        if stage == "confirm":
+            if upper in {"СОХРАНИТЬ", "SAVE"}:
+                try:
+                    menu, saved = await asyncio.to_thread(items.commit, sender_id, role)
+                    await _reply_menu(chat_id, menu)
+                    core.log(f"KP MAX item saved: KP {saved['number']}, line={saved['line']}, field={saved['field']}, user={sender_id}")
+                    return {"ok": True, "handled": "item-edit-saved"}
+                except RuntimeError as exc:
+                    core.log(f"KP MAX item text save failed: {type(exc).__name__}: {exc}")
+                    await _reply(chat_id, "Не удалось сохранить изменение строки в 1С.")
+                    return {"ok": True, "error": "item-edit-save"}
+            await _reply_menu(chat_id, items._confirm_menu(sender_id))
+            return {"ok": True, "handled": "item-await-save"}
+        await _reply(chat_id, "Заверши редактирование строки кнопкой или отправь ОТМЕНА.")
+        return {"ok": True, "handled": "item-await-button"}
 
     customer_session = customer.session_get(sender_id)
     if customer_session:
