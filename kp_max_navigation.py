@@ -101,7 +101,8 @@ def kp_button_text(row: dict) -> str:
 
 
 def root_menu(role: str) -> dict:
-    rows = [[_cb("СПИСОК КП ПО СТАТУСАМ", "nav:statuses")]]
+    rows = [[_cb("СОЗДАТЬ НОВОЕ КП", "nav:create")]]
+    rows.append([_cb("СПИСОК КП ПО СТАТУСАМ", "nav:statuses")])
     rows.append([_cb("🔎 ПОИСК КП", "find:menu")])
     rows.append([_cb("ПРОВЕРИТЬ ДОСТУП", "nav:access")])
     if role == "admin":
@@ -109,6 +110,15 @@ def root_menu(role: str) -> dict:
     return {
         "text": "Главное меню КП",
         "attachments": _keyboard(rows),
+    }
+
+
+def create_kp_menu() -> dict:
+    return {
+        "text": "СОЗДАТЬ НОВОЕ КП\n\nЭкран создания нового КП. Параметры нового документа настроим отдельно; сейчас нажатие ничего в 1С не создаёт.",
+        "attachments": _keyboard([[
+            _cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")
+        ]]),
     }
 
 

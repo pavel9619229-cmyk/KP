@@ -544,6 +544,8 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = kp_search.open_result(sender_id, number)
         elif action == "nav:root":
             menu = nav.root_menu(role)
+        elif action == "nav:create":
+            menu = nav.create_kp_menu()
         elif action == "nav:statuses":
             menu = nav.statuses_menu()
         elif action == "nav:access":
