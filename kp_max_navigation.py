@@ -116,14 +116,18 @@ def root_menu(role: str) -> dict:
 def create_kp_menu() -> dict:
     return {
         "text": "СОЗДАТЬ НОВОЕ КП\n\nЭкран создания нового КП. Параметры нового документа настроим отдельно; сейчас нажатие ничего в 1С не создаёт.",
-        "attachments": _keyboard([[
-            _cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")
-        ]]),
+        "attachments": _keyboard([
+            [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+            [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
+        ]),
     }
 
 
 def statuses_menu() -> dict:
-    rows = [[_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")]]
+    rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
+    ]
     for index, label in enumerate(STATUS_LABELS):
         rows.append([_cb(label, f"nav:s:{status_key(index)}:0")])
     return {
@@ -138,7 +142,10 @@ def status_page(index: int, page: int) -> dict:
     page = max(0, min(int(page), total_pages - 1))
     start = page * PAGE_SIZE
     current = items[start : start + PAGE_SIZE]
-    rows = [[_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")]]
+    rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")],
+    ]
     for row in current:
         number = str(row.get("number") or "")
         rows.append([_cb(kp_button_text(row), f"nav:k:{number}:{status_key(index)}:{page}")])
@@ -199,6 +206,7 @@ def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overf
     else:
         text = f"КОММЕНТАРИЙ — КП {number}\n\n{clean}"
     rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
         [_cb("РЕДАКТИРОВАТЬ", f"nav:ce:{number}:{key}:{page}")],
     ]
@@ -220,8 +228,11 @@ def field_placeholder(field: str, number: str, status_idx: int, page: int) -> di
     labels = {"client": "КЛИЕНТ", "items": "СТРОКИ ТОВАРА"}
     label = labels.get(str(field), "РАЗДЕЛ")
     text = f"{label} — КП {number}\nСодержимое этого раздела настроим следующим этапом."
-    rows = [[_cb(
+    rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb(
         "🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
         f"nav:k:{number}:{status_key(status_idx)}:{max(0, int(page))}",
-    )]]
+        )],
+    ]
     return {"text": text, "attachments": _keyboard(rows)}
