@@ -56,7 +56,7 @@ def search_menu() -> dict:
         "attachments": _keyboard([
             [_cb("ПО НОМЕРУ", "find:number")],
             [_cb("ПО КЛИЕНТУ", "find:client")],
-            [_cb("🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
+            [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
         ]),
     }
 

@@ -113,7 +113,7 @@ def root_menu(role: str) -> dict:
 
 
 def statuses_menu() -> dict:
-    rows = [[_cb("🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")]]
+    rows = [[_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")]]
     for index, label in enumerate(STATUS_LABELS):
         rows.append([_cb(label, f"nav:s:{status_key(index)}:0")])
     return {
@@ -128,7 +128,7 @@ def status_page(index: int, page: int) -> dict:
     page = max(0, min(int(page), total_pages - 1))
     start = page * PAGE_SIZE
     current = items[start : start + PAGE_SIZE]
-    rows = [[_cb("🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")]]
+    rows = [[_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")]]
     for row in current:
         number = str(row.get("number") or "")
         rows.append([_cb(kp_button_text(row), f"nav:k:{number}:{status_key(index)}:{page}")])
@@ -171,7 +171,7 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
     key = status_key(status_idx)
     page = max(0, int(page))
     rows = [
-        [_cb("🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:s:{key}:{page}")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:s:{key}:{page}")],
         [_cb("КЛИЕНТ", f"nav:f:client:{number_label}:{key}:{page}")],
         [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
         [_cb("КОММЕНТАРИЙ", f"nav:f:comment:{number_label}:{key}:{page}")],
@@ -188,7 +188,7 @@ def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overf
     else:
         text = f"КОММЕНТАРИЙ — КП {number}\n\n{clean}"
     rows = [
-        [_cb("🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
         [_cb("РЕДАКТИРОВАТЬ", f"nav:ce:{number}:{key}:{page}")],
     ]
     return {"text": text, "attachments": _keyboard(rows)}
@@ -210,7 +210,7 @@ def field_placeholder(field: str, number: str, status_idx: int, page: int) -> di
     label = labels.get(str(field), "РАЗДЕЛ")
     text = f"{label} — КП {number}\nСодержимое этого раздела настроим следующим этапом."
     rows = [[_cb(
-        "🩷 ⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
+        "🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
         f"nav:k:{number}:{status_key(status_idx)}:{max(0, int(page))}",
     )]]
     return {"text": text, "attachments": _keyboard(rows)}
