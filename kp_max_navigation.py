@@ -178,8 +178,34 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
     return {"text": text, "attachments": _keyboard(rows)}
 
 
+def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overflow: bool = False) -> dict:
+    key = status_key(status_idx)
+    page = max(0, int(page))
+    clean = str(comment or "").strip() or "Комментарий не заполнен."
+    if overflow:
+        text = f"КОММЕНТАРИЙ — КП {number}\nПолный текст отправлен отдельными сообщениями ниже."
+    else:
+        text = f"КОММЕНТАРИЙ — КП {number}\n\n{clean}"
+    rows = [
+        [_cb("⬅ ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
+        [_cb("РЕДАКТИРОВАТЬ", f"nav:ce:{number}:{key}:{page}")],
+    ]
+    return {"text": text, "attachments": _keyboard(rows)}
+
+
+def comment_edit_started_menu(number: str) -> dict:
+    return {
+        "text": (
+            f"Редактирование комментария КП {number}.\n"
+            "Пришли новый текст комментария одним сообщением.\n"
+            "Для очистки поля отправь ОЧИСТИТЬ. Для выхода — ОТМЕНА."
+        ),
+        "attachments": [],
+    }
+
+
 def field_placeholder(field: str, number: str, status_idx: int, page: int) -> dict:
-    labels = {"client": "КЛИЕНТ", "items": "СТРОКИ ТОВАРА", "comment": "КОММЕНТАРИЙ"}
+    labels = {"client": "КЛИЕНТ", "items": "СТРОКИ ТОВАРА"}
     label = labels.get(str(field), "РАЗДЕЛ")
     text = f"{label} — КП {number}\nСодержимое этого раздела настроим следующим этапом."
     rows = [[_cb(

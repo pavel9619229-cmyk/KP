@@ -542,10 +542,26 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
         elif action.startswith("nav:f:"):
             _, _, field, number, key, page = action.split(":", 5)
+            status_idx = nav.status_index(key)
+            page_num = int(page)
             if field == "client":
-                menu = await asyncio.to_thread(customer.start, sender_id, number, nav.status_index(key), int(page))
+                menu = await asyncio.to_thread(customer.start, sender_id, number, status_idx, page_num)
+            elif field == "comment":
+                _, ref_key = _find_kp_target(number)
+                raw_comment = await asyncio.to_thread(_fetch_comment_raw_by_ref, ref_key)
+                comment_text = _comment_display(raw_comment)
+                overflow = len(comment_text) > 3000
+                menu = nav.comment_menu(number, status_idx, page_num, comment_text, overflow=overflow)
+                await asyncio.to_thread(_answer_callback, callback_id, menu)
+                if overflow:
+                    await _reply_long(chat_id, f"Полный комментарий КП {number}:\n{comment_text}")
+                return {"ok": True, "handled": action}
             else:
-                menu = nav.field_placeholder(field, number, nav.status_index(key), int(page))
+                menu = nav.field_placeholder(field, number, status_idx, page_num)
+        elif action.startswith("nav:ce:"):
+            _, _, number, key, page = action.split(":", 4)
+            await asyncio.to_thread(_start_comment_edit, sender_id, number)
+            menu = nav.comment_edit_started_menu(number)
         elif action.startswith("cust:x:"):
             counterparty_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(customer.pick_counterparty_direct, sender_id, counterparty_key)
