@@ -15,6 +15,7 @@ from fastapi import HTTPException, Request
 import api_proxy as core
 import kp_max_navigation as nav
 import kp_max_customer as customer
+import kp_max_search as kp_search
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -513,8 +514,29 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         blocked = {"text": "Сначала заверши выбор клиента: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "customer-session"}
+    search_session = kp_search.session_get(sender_id)
+    if search_session and not action.startswith("find:"):
+        blocked = {"text": "Сначала заверши поиск КП или нажми ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "search-session"}
     try:
-        if action == "nav:root":
+        if action == "find:menu":
+            kp_search.clear(sender_id)
+            menu = kp_search.search_menu()
+        elif action == "find:number":
+            menu = kp_search.start(sender_id, "number")
+        elif action == "find:client":
+            menu = kp_search.start(sender_id, "client")
+        elif action == "find:cancel":
+            kp_search.clear(sender_id)
+            menu = nav.root_menu(role)
+        elif action.startswith("find:page:"):
+            page = int(action.split(":", 2)[2])
+            menu = kp_search.results_menu(sender_id, page)
+        elif action.startswith("find:open:"):
+            number = action.split(":", 2)[2]
+            menu = kp_search.open_result(sender_id, number)
+        elif action == "nav:root":
             menu = nav.root_menu(role)
         elif action == "nav:statuses":
             menu = nav.statuses_menu()
@@ -681,6 +703,16 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "customer-await-save"}
         await _reply(chat_id, "Выбери вариант кнопкой или отправь ОТМЕНА.")
         return {"ok": True, "handled": "customer-await-button"}
+
+    search_session = kp_search.session_get(sender_id)
+    if search_session:
+        if upper in {"ОТМЕНА", "CANCEL"}:
+            kp_search.clear(sender_id)
+            await _reply_menu(chat_id, nav.root_menu(role))
+            return {"ok": True, "handled": "kp-search-cancel"}
+        menu = kp_search.submit(sender_id, text)
+        await _reply_menu(chat_id, menu)
+        return {"ok": True, "handled": "kp-search-query"}
 
     edit_number = _edit_comment_number(text)
     if edit_number:
