@@ -166,7 +166,12 @@ def list_menu(number: str, status_idx: int, status_page: int, item_page: int = 0
     item_page = max(0, min(int(item_page), total_pages - 1))
     start = item_page * LINE_PAGE_SIZE
     current = items[start:start + LINE_PAGE_SIZE]
-    rows = [[_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{nav.status_key(status_idx)}:{status_page}")]]
+    key = nav.status_key(status_idx)
+    rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{status_page}")],
+        [_cb("ДОБАВИТЬ СТРОКУ", f"itm:addrow:{number}:{key}:{status_page}:{item_page}")],
+    ]
     for item in current:
         line = int(item.get("LineNumber") or 0)
         supplier = _compact(_supplier_text(item), 22)
@@ -200,6 +205,7 @@ def item_menu(number: str, line: int, status_idx: int, status_page: int, item_pa
     )
     key = nav.status_key(status_idx)
     rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"itm:list:{number}:{key}:{status_page}:{item_page}")],
         [_cb("ПОСТАВЩИК И ЦЕНА", f"itm:view:internal:{number}:{line}:{key}:{status_page}:{item_page}")],
         [_cb("КОММЕНТАРИЙ", f"itm:view:buyer:{number}:{line}:{key}:{status_page}:{item_page}")],
@@ -230,6 +236,7 @@ def field_menu(field: str, number: str, line: int, status_idx: int, status_page:
     text = f"{label} — КП {number}, строка {line}\n\n{value}"
     key = nav.status_key(status_idx)
     rows = [
+        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"itm:open:{number}:{line}:{key}:{status_page}:{item_page}")],
         [_cb("РЕДАКТИРОВАТЬ", f"itm:edit:{field}:{number}:{line}:{key}:{status_page}:{item_page}")],
     ]
@@ -449,3 +456,162 @@ def commit(user_id: str, role: str) -> tuple[dict, dict]:
     menu = field_menu(field, number, line, status_idx, status_page, item_page)
     menu["text"] = f"{label} сохранено в 1С.\n\n" + menu["text"]
     return menu, {"number": number, "line": line, "field": field}
+
+
+def _items_hash(rows: list[dict]) -> str:
+    raw = json.dumps(rows, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def start_add(user_id: str, number: str, status_idx: int, status_page: int, item_page: int) -> dict:
+    _, ref_key = _find_kp(number)
+    current = _fetch_items(ref_key)
+    _set_session(
+        user_id, mode="add", stage="add_product_query", number=str(number), refKey=ref_key,
+        statusIdx=int(status_idx), statusPage=int(status_page), itemPage=int(item_page),
+        originalItemsHash=_items_hash(current), productKey="", productName="", addQty=None, addPrice=None,
+    )
+    return {
+        "text": f"ДОБАВИТЬ СТРОКУ — КП {number}\n\nВведи часть названия номенклатуры.",
+        "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]]),
+    }
+
+
+def add_product_search_menu(user_id: str, query: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add" or s.get("stage") != "add_product_query":
+        raise RuntimeError("add item product search is not active")
+    if len(str(query or "").strip()) < 2:
+        return {"text": "Введи минимум 2 символа названия товара.", "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]])}
+    results = _search_products(query)
+    if not results:
+        return {"text": f"По запросу «{query}» номенклатура не найдена. Введи другой фрагмент.", "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]])}
+    rows = [[_cb(_compact(x["Description"], 100), f"itm:addprod:{x['Ref_Key']}")] for x in results]
+    rows.append([_cb("ОТМЕНА", "itm:addcancel")])
+    return {"text": f"Найдено вариантов: {len(results)}. Выбери товар:", "attachments": _keyboard(rows)}
+
+
+def pick_add_product(user_id: str, product_key: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add" or s.get("stage") != "add_product_query":
+        raise RuntimeError("add item product selection is not active")
+    name = _nomenclature_name(product_key)
+    if not name or name == "—":
+        raise RuntimeError("Номенклатура не найдена")
+    _set_session(user_id, stage="add_qty", productKey=str(product_key), productName=name)
+    return {
+        "text": f"Новая строка — КП {s['number']}\nТовар: {name}\n\nВведи количество числом.",
+        "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]]),
+    }
+
+
+def _add_confirm_menu(user_id: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add" or s.get("stage") != "add_confirm":
+        raise RuntimeError("add item confirmation is not active")
+    text = (
+        f"ДОБАВИТЬ СТРОКУ — КП {s['number']}\n"
+        f"Товар: {s.get('productName') or '—'}\n"
+        f"Количество: {_fmt_num(s.get('addQty'))}\n"
+        f"Цена: {_fmt_num(s.get('addPrice'))}\n\n"
+        "Нажми СОХРАНИТЬ для добавления строки в 1С."
+    )
+    return {"text": text, "attachments": _keyboard([
+        [_cb("СОХРАНИТЬ", "itm:addsave")],
+        [_cb("ИЗМЕНИТЬ", "itm:addrestart")],
+        [_cb("ОТМЕНА", "itm:addcancel")],
+    ])}
+
+
+def set_add_value(user_id: str, text: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add":
+        raise RuntimeError("add item session is not active")
+    stage = str(s.get("stage") or "")
+    if stage == "add_qty":
+        qty = _parse_number(text)
+        if qty <= 0:
+            raise ValueError("Количество должно быть больше нуля.")
+        _set_session(user_id, stage="add_price", addQty=qty)
+        return {
+            "text": f"Новая строка — КП {s['number']}\nТовар: {s.get('productName') or '—'}\nКоличество: {_fmt_num(qty)}\n\nВведи цену числом.",
+            "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]]),
+        }
+    if stage == "add_price":
+        price = _parse_number(text)
+        _set_session(user_id, stage="add_confirm", addPrice=price)
+        return _add_confirm_menu(user_id)
+    raise RuntimeError("add item value is not expected")
+
+
+def restart_add(user_id: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add":
+        raise RuntimeError("add item session is not active")
+    _set_session(user_id, stage="add_product_query", productKey="", productName="", addQty=None, addPrice=None)
+    return {
+        "text": f"ДОБАВИТЬ СТРОКУ — КП {s['number']}\n\nВведи часть названия номенклатуры.",
+        "attachments": _keyboard([[_cb("ОТМЕНА", "itm:addcancel")]]),
+    }
+
+
+def cancel_add_menu(user_id: str) -> dict:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add":
+        return nav.root_menu("user")
+    number = str(s["number"])
+    status_idx = int(s["statusIdx"]); status_page = int(s["statusPage"]); item_page = int(s["itemPage"])
+    clear(user_id)
+    return list_menu(number, status_idx, status_page, item_page)
+
+
+def commit_add(user_id: str, role: str) -> tuple[dict, dict]:
+    s = session_get(user_id)
+    if not s or s.get("mode") != "add" or s.get("stage") != "add_confirm":
+        raise RuntimeError("add item confirmation is not active")
+    ref_key = str(s.get("refKey") or "")
+    current = _fetch_items(ref_key)
+    if _items_hash(current) != str(s.get("originalItemsHash") or ""):
+        clear(user_id)
+        raise RuntimeError("items changed concurrently")
+    old_lines = {int(x.get("LineNumber") or 0) for x in current}
+    new_line = max(old_lines or {0}) + 1
+    qty = float(s.get("addQty") or 0)
+    price = float(s.get("addPrice") or 0)
+    new_row = {
+        "Ref_Key": ref_key,
+        "LineNumber": new_line,
+        "Номенклатура_Key": str(s.get("productKey") or ""),
+        "Количество": qty,
+        "Цена": price,
+        "Сумма": qty * price,
+        "КомментарийВнутренний": "",
+        "КомментарийДляПокупателя": "",
+    }
+    headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
+    url = f"{_base()}/{core.ENTITY}(guid'{ref_key}')"
+    r = requests.patch(url, headers=headers, json={"Товары": current + [new_row]}, timeout=40)
+    if r.status_code not in (200, 204):
+        raise RuntimeError(f"1C add item PATCH HTTP {r.status_code}: {r.text[:300]}")
+    after = _fetch_items(ref_key)
+    added = [x for x in after if int(x.get("LineNumber") or 0) not in old_lines]
+    if len(added) != 1:
+        raise RuntimeError("1C add item verification failed")
+    created = added[0]
+    created_line = int(created.get("LineNumber") or 0)
+    same_product = str(created.get("Номенклатура_Key") or "") == str(s.get("productKey") or "")
+    try:
+        same_qty = abs(float(created.get("Количество") or 0) - qty) < 1e-9
+        same_price = abs(float(created.get("Цена") or 0) - price) < 1e-9
+    except Exception:
+        same_qty = same_price = False
+    if not (same_product and same_qty and same_price):
+        raise RuntimeError("1C added row values verification failed")
+    audit_s = dict(s); audit_s["line"] = created_line; audit_s["field"] = "add"
+    _audit(user_id, role, audit_s, _items_hash(after))
+    number = str(s["number"]); status_idx = int(s["statusIdx"])
+    status_page = int(s["statusPage"]); item_page = int(s["itemPage"])
+    clear(user_id)
+    menu = item_menu(number, created_line, status_idx, status_page, item_page)
+    menu["text"] = "Строка добавлена в 1С.\n\n" + menu["text"]
+    return menu, {"number": number, "line": created_line, "field": "add"}

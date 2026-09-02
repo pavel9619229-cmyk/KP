@@ -592,6 +592,28 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             _, _, number, key, page = action.split(":", 4)
             await asyncio.to_thread(_start_comment_edit, sender_id, number)
             menu = nav.comment_edit_started_menu(number)
+        elif action.startswith("itm:addrow:"):
+            _, _, number, key, status_page, item_page = action.split(":", 5)
+            menu = await asyncio.to_thread(items.start_add, sender_id, number, nav.status_index(key), int(status_page), int(item_page))
+        elif action.startswith("itm:addprod:"):
+            product_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(items.pick_add_product, sender_id, product_key)
+        elif action == "itm:addrestart":
+            menu = items.restart_add(sender_id)
+        elif action == "itm:addcancel":
+            menu = await asyncio.to_thread(items.cancel_add_menu, sender_id)
+        elif action == "itm:addsave":
+            try:
+                menu, saved = await asyncio.to_thread(items.commit_add, sender_id, role)
+                core.log(f"KP MAX item added: KP {saved['number']}, line={saved['line']}, user={sender_id}")
+            except RuntimeError as exc:
+                if "concurrently" in str(exc):
+                    menu = nav.root_menu(role)
+                    menu["text"] = "Строки товара изменились в 1С после начала добавления. Добавление отменено."
+                else:
+                    core.log(f"KP MAX item add failed: {type(exc).__name__}: {exc}")
+                    menu = items._add_confirm_menu(sender_id) if items.session_get(sender_id) else nav.root_menu(role)
+                    menu["text"] = "Не удалось добавить строку в 1С.\n\n" + menu["text"]
         elif action.startswith("itm:list:"):
             _, _, number, key, status_page, item_page = action.split(":", 5)
             menu = await asyncio.to_thread(items.list_menu, number, nav.status_index(key), int(status_page), int(item_page))
@@ -708,10 +730,46 @@ async def kp_max_bot_webhook(request: Request):
 
     item_session = items.session_get(sender_id)
     if item_session:
+        stage = str(item_session.get("stage") or "")
+        if item_session.get("mode") == "add":
+            if upper in {"ОТМЕНА", "CANCEL"}:
+                await _reply_menu(chat_id, await asyncio.to_thread(items.cancel_add_menu, sender_id))
+                return {"ok": True, "handled": "item-add-cancel"}
+            if stage == "add_product_query":
+                try:
+                    menu = await asyncio.to_thread(items.add_product_search_menu, sender_id, text)
+                    await _reply_menu(chat_id, menu)
+                    return {"ok": True, "handled": "item-add-product-search"}
+                except Exception as exc:
+                    core.log(f"KP MAX add product search failed: {type(exc).__name__}: {exc}")
+                    await _reply(chat_id, "Не удалось выполнить поиск номенклатуры. Попробуй другой фрагмент или отправь ОТМЕНА.")
+                    return {"ok": True, "error": "item-add-product-search"}
+            if stage in {"add_qty", "add_price"}:
+                try:
+                    menu = items.set_add_value(sender_id, text)
+                    await _reply_menu(chat_id, menu)
+                    return {"ok": True, "handled": "item-add-value"}
+                except ValueError as exc:
+                    await _reply(chat_id, str(exc))
+                    return {"ok": True, "error": "item-add-value-invalid"}
+            if stage == "add_confirm":
+                if upper in {"СОХРАНИТЬ", "SAVE"}:
+                    try:
+                        menu, saved = await asyncio.to_thread(items.commit_add, sender_id, role)
+                        await _reply_menu(chat_id, menu)
+                        core.log(f"KP MAX item added: KP {saved['number']}, line={saved['line']}, user={sender_id}")
+                        return {"ok": True, "handled": "item-add-saved"}
+                    except RuntimeError as exc:
+                        core.log(f"KP MAX item add save failed: {type(exc).__name__}: {exc}")
+                        await _reply(chat_id, "Не удалось добавить строку в 1С.")
+                        return {"ok": True, "error": "item-add-save"}
+                await _reply_menu(chat_id, items._add_confirm_menu(sender_id))
+                return {"ok": True, "handled": "item-add-await-save"}
+            await _reply(chat_id, "Заверши добавление строки или отправь ОТМЕНА.")
+            return {"ok": True, "handled": "item-add-await"}
         if upper in {"ОТМЕНА", "CANCEL"}:
             await _reply_menu(chat_id, await asyncio.to_thread(items.cancel_menu, sender_id))
             return {"ok": True, "handled": "item-edit-cancel"}
-        stage = str(item_session.get("stage") or "")
         if stage == "await_value":
             try:
                 menu = items.set_value(sender_id, text)
