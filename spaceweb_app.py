@@ -17,6 +17,7 @@ import kp_max_navigation as nav
 import kp_max_customer as customer
 import kp_max_search as kp_search
 import kp_max_items as items
+import kp_max_create as kp_create
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -545,7 +546,8 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         elif action == "nav:root":
             menu = nav.root_menu(role)
         elif action == "nav:create":
-            menu = nav.create_kp_menu()
+            menu, created = await asyncio.to_thread(kp_create.create_and_menu, sender_id, role)
+            core.log(f"KP MAX created: KP {created['number']}, user={sender_id}, role={role}")
         elif action == "nav:statuses":
             menu = nav.statuses_menu()
         elif action == "nav:access":

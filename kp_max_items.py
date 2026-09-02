@@ -64,16 +64,18 @@ def _compact(value: str, limit: int) -> str:
 
 def _find_kp(number: str) -> tuple[dict, str]:
     wanted = _norm_number(number)
-    candidates = list(core._cached_rows)
+    sources = []
     try:
-        candidates = live_rows.load()
+        sources.append(live_rows.load())
     except Exception:
         pass
-    for row in candidates:
-        if _norm_number(row.get("number") or "") == wanted:
-            ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
-            if ref:
-                return dict(row), ref
+    sources.append(list(core._cached_rows))
+    for candidates in sources:
+        for row in candidates:
+            if _norm_number(row.get("number") or "") == wanted:
+                ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+                if ref:
+                    return dict(row), ref
     raise RuntimeError(f"КП {number} не найдено")
 
 
