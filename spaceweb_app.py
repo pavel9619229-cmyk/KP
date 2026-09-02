@@ -546,6 +546,9 @@ async def _handle_navigation_callback(payload: dict) -> dict:
                 menu = await asyncio.to_thread(customer.start, sender_id, number, nav.status_index(key), int(page))
             else:
                 menu = nav.field_placeholder(field, number, nav.status_index(key), int(page))
+        elif action.startswith("cust:x:"):
+            counterparty_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(customer.pick_counterparty_direct, sender_id, counterparty_key)
         elif action.startswith("cust:p:"):
             partner_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(customer.pick_partner, sender_id, partner_key)

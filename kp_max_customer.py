@@ -18,6 +18,9 @@ _SESSIONS: dict[str, dict] = {}
 _PARTNER_CACHE: list[dict] = []
 _PARTNER_CACHE_AT = 0
 _PARTNER_CACHE_TTL = 10 * 60
+_COUNTERPARTY_CACHE: list[dict] = []
+_COUNTERPARTY_CACHE_AT = 0
+_COUNTERPARTY_CACHE_TTL = 10 * 60
 
 
 def _base() -> str:
@@ -219,6 +222,82 @@ def _search_partners(query: str) -> list[dict]:
     return result[:MAX_RESULTS]
 
 
+def _load_counterparty_cache() -> list[dict]:
+    global _COUNTERPARTY_CACHE, _COUNTERPARTY_CACHE_AT
+    now = int(time.time())
+    if _COUNTERPARTY_CACHE and now - _COUNTERPARTY_CACHE_AT < _COUNTERPARTY_CACHE_TTL:
+        return list(_COUNTERPARTY_CACHE)
+    collected: list[dict] = []
+    for skip in range(0, 30000, 250):
+        rows = _get_rows(
+            "Catalog_Контрагенты",
+            {"$select": "Ref_Key,Description,Партнер_Key,DeletionMark", "$top": "250", "$skip": str(skip)},
+            timeout=30,
+        )
+        if not rows:
+            break
+        collected.extend(row for row in rows if not bool(row.get("DeletionMark")))
+        if len(rows) < 250:
+            break
+    _COUNTERPARTY_CACHE = collected
+    _COUNTERPARTY_CACHE_AT = now
+    return list(collected)
+
+
+def _search_counterparties(query: str) -> list[dict]:
+    query_norm = _norm(query)
+    if len(query_norm) < 2:
+        return []
+    matched: list[dict] = []
+    try:
+        for skip in range(0, 400, 50):
+            rows = _get_rows(
+                "Catalog_Контрагенты",
+                {
+                    "$select": "Ref_Key,Description,Партнер_Key,DeletionMark",
+                    "$filter": f"substringof('{_escape(query)}',Description) eq true",
+                    "$top": "50",
+                    "$skip": str(skip),
+                },
+                timeout=20,
+            )
+            matched.extend(
+                row for row in rows
+                if not bool(row.get("DeletionMark")) and query_norm in _norm(row.get("Description") or "")
+            )
+            if len(rows) < 50:
+                break
+    except Exception:
+        matched = []
+    if not matched:
+        matched = [row for row in _load_counterparty_cache() if query_norm in _norm(row.get("Description") or "")]
+    unique: dict[str, dict] = {}
+    for row in matched:
+        key = str(row.get("Ref_Key") or "").strip()
+        name = str(row.get("Description") or "").strip()
+        partner_key = str(row.get("Партнер_Key") or "").strip()
+        if key and name:
+            unique[key] = {"Ref_Key": key, "Description": name, "Партнер_Key": partner_key}
+    result = list(unique.values())
+    result.sort(key=lambda item: _partner_sort_key(item, query_norm))
+    return result[:MAX_RESULTS]
+
+
+def _counterparty_by_key(counterparty_key: str) -> dict:
+    response = requests.get(
+        f"{_base()}/Catalog_Контрагенты(guid'{counterparty_key}')",
+        headers=core._build_headers(),
+        params={"$select": "Ref_Key,Description,Партнер_Key,DeletionMark"},
+        timeout=20,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"1C counterparty HTTP {response.status_code}")
+    item = response.json()
+    if not isinstance(item, dict) or bool(item.get("DeletionMark")):
+        raise RuntimeError("counterparty is unavailable")
+    return item
+
+
 def search_menu(user_id: str, query: str) -> dict:
     session = session_get(user_id)
     if not session or session.get("stage") != "await_query":
@@ -227,18 +306,39 @@ def search_menu(user_id: str, query: str) -> dict:
         menu = prompt_menu(user_id)
         menu["text"] += "\n\nВведи минимум 2 символа."
         return menu
-    results = _search_partners(query)
+    counterparties = _search_counterparties(query)
+    partners = _search_partners(query)
     _touch(user_id, lastQuery=str(query))
-    if not results:
+    buttons: list[list[dict]] = []
+    seen_names: set[str] = set()
+    for item in counterparties:
+        key = str(item.get("Ref_Key") or "").strip()
+        name = str(item.get("Description") or "").strip()
+        if not key or not name:
+            continue
+        buttons.append([_cb(name[:100], f"cust:x:{key}")])
+        seen_names.add(_norm(name))
+        if len(buttons) >= MAX_RESULTS:
+            break
+    if len(buttons) < MAX_RESULTS:
+        for item in partners:
+            key = str(item.get("Ref_Key") or "").strip()
+            name = str(item.get("Description") or "").strip()
+            if not key or not name or _norm(name) in seen_names:
+                continue
+            buttons.append([_cb(name[:100], f"cust:p:{key}")])
+            seen_names.add(_norm(name))
+            if len(buttons) >= MAX_RESULTS:
+                break
+    if not buttons:
         return {
             "text": f"По запросу «{query}» клиенты не найдены. Введи другой фрагмент названия.",
             "attachments": _keyboard([[_cb("⬅ ОТМЕНА И ВЕРНУТЬСЯ К КП", "cust:cancel")]]),
         }
-    buttons = [[_cb(str(item["Description"])[:100], f"cust:p:{item['Ref_Key']}")] for item in results]
     buttons.append([_cb("🔎 ИСКАТЬ ДРУГОГО", "cust:again")])
     buttons.append([_cb("⬅ ОТМЕНА И ВЕРНУТЬСЯ К КП", "cust:cancel")])
     return {
-        "text": f"Найдено вариантов: {len(results)}. Выбери клиента:",
+        "text": f"Найдено вариантов: {len(buttons) - 2}. Выбери клиента:",
         "attachments": _keyboard(buttons),
     }
 
@@ -303,7 +403,7 @@ def _stage_confirm(user_id: str, partner: dict, counterparty: dict) -> dict:
     text = (
         f"КП {session['number']}\n"
         f"Старый клиент: {old_name}\n"
-        f"Новый клиент: {partner_name}\n\n"
+        f"Новый клиент: {counterparty_name or partner_name}\n\n"
         "Проверь выбор и нажми СОХРАНИТЬ."
     )
     return {"text": text, "attachments": _keyboard([
@@ -354,6 +454,25 @@ def pick_partner(user_id: str, partner_key: str) -> dict:
         ),
         "attachments": _keyboard(buttons),
     }
+
+
+def pick_counterparty_direct(user_id: str, counterparty_key: str) -> dict:
+    session = session_get(user_id)
+    if not session:
+        raise RuntimeError("customer session expired")
+    counterparty = _counterparty_by_key(counterparty_key)
+    partner_key = str(counterparty.get("Партнер_Key") or "").strip()
+    if not partner_key or partner_key == ZERO_GUID:
+        _touch(user_id, stage="await_query")
+        return {
+            "text": "У выбранного контрагента не указан связанный клиент (партнер) в 1С. Выбери другой вариант.",
+            "attachments": _keyboard([
+                [_cb("🔎 ИСКАТЬ ДРУГОГО", "cust:again")],
+                [_cb("ОТМЕНА", "cust:cancel")],
+            ]),
+        }
+    partner = _partner_by_key(partner_key)
+    return _stage_confirm(user_id, partner, counterparty)
 
 
 def pick_counterparty(user_id: str, counterparty_key: str) -> dict:
