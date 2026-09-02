@@ -14,6 +14,7 @@ from fastapi import HTTPException, Request
 
 import api_proxy as core
 import kp_max_navigation as nav
+import kp_max_customer as customer
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -507,6 +508,11 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         blocked = {"text": "Сначала заверши редактирование комментария: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "edit-session"}
+    customer_session = customer.session_get(sender_id)
+    if customer_session and not action.startswith("cust:"):
+        blocked = {"text": "Сначала заверши выбор клиента: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "customer-session"}
     try:
         if action == "nav:root":
             menu = nav.root_menu(role)
@@ -536,7 +542,33 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
         elif action.startswith("nav:f:"):
             _, _, field, number, key, page = action.split(":", 5)
-            menu = nav.field_placeholder(field, number, nav.status_index(key), int(page))
+            if field == "client":
+                menu = await asyncio.to_thread(customer.start, sender_id, number, nav.status_index(key), int(page))
+            else:
+                menu = nav.field_placeholder(field, number, nav.status_index(key), int(page))
+        elif action.startswith("cust:p:"):
+            partner_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(customer.pick_partner, sender_id, partner_key)
+        elif action.startswith("cust:c:"):
+            counterparty_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(customer.pick_counterparty, sender_id, counterparty_key)
+        elif action == "cust:again":
+            menu = customer.again(sender_id)
+        elif action == "cust:cancel":
+            menu = customer.cancel_menu(sender_id)
+        elif action == "cust:save":
+            location = customer.session_get(sender_id)
+            try:
+                menu, saved = await asyncio.to_thread(customer.commit, sender_id, role)
+                core.log(f"KP MAX customer saved: KP {saved['number']}, user={sender_id}, role={role}")
+            except RuntimeError as exc:
+                if "concurrently" in str(exc) and location:
+                    menu = nav.kp_level3(str(location.get("number") or ""), int(location.get("statusIdx") or 0), int(location.get("page") or 0))
+                    menu["text"] = "Клиент в 1С изменился после начала выбора. Запись отменена.\n\n" + menu["text"]
+                else:
+                    core.log(f"KP MAX customer save failed: {type(exc).__name__}: {exc}")
+                    menu = customer.confirm_menu(sender_id) if customer.session_get(sender_id) else nav.root_menu(role)
+                    menu["text"] = "Не удалось сохранить клиента в 1С. Попробуй ещё раз или отмени изменение.\n\n" + menu["text"]
         else:
             menu = nav.root_menu(role)
         await asyncio.to_thread(_answer_callback, callback_id, menu)
@@ -593,6 +625,43 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "access-activated"}
         await _reply(chat_id, "Нет доступа. Введи одноразовый код активации, выданный администратором.")
         return {"ok": True, "denied": "access"}
+
+    customer_session = customer.session_get(sender_id)
+    if customer_session:
+        if upper in {"ОТМЕНА", "CANCEL"}:
+            await _reply_menu(chat_id, customer.cancel_menu(sender_id))
+            return {"ok": True, "handled": "customer-edit-cancel"}
+        stage = str(customer_session.get("stage") or "")
+        if stage == "await_query":
+            try:
+                menu = await asyncio.to_thread(customer.search_menu, sender_id, text)
+                await _reply_menu(chat_id, menu)
+                return {"ok": True, "handled": "customer-search"}
+            except Exception as exc:
+                core.log(f"KP MAX customer search failed: {type(exc).__name__}: {exc}")
+                await _reply(chat_id, "Не удалось выполнить поиск клиентов в 1С. Попробуй другой фрагмент названия или отправь ОТМЕНА.")
+                return {"ok": True, "error": "customer-search"}
+        if stage == "confirm":
+            if upper in {"СОХРАНИТЬ", "SAVE"}:
+                location = customer_session
+                try:
+                    menu, saved = await asyncio.to_thread(customer.commit, sender_id, role)
+                    await _reply_menu(chat_id, menu)
+                    core.log(f"KP MAX customer saved: KP {saved['number']}, user={sender_id}, role={role}")
+                    return {"ok": True, "handled": f"customer-saved-{saved['number']}"}
+                except RuntimeError as exc:
+                    if "concurrently" in str(exc):
+                        menu = nav.kp_level3(str(location.get("number") or ""), int(location.get("statusIdx") or 0), int(location.get("page") or 0))
+                        menu["text"] = "Клиент в 1С изменился после начала выбора. Запись отменена.\n\n" + menu["text"]
+                        await _reply_menu(chat_id, menu)
+                    else:
+                        core.log(f"KP MAX customer save failed: {type(exc).__name__}: {exc}")
+                        await _reply_menu(chat_id, customer.confirm_menu(sender_id))
+                    return {"ok": True, "error": "customer-save"}
+            await _reply_menu(chat_id, customer.confirm_menu(sender_id))
+            return {"ok": True, "handled": "customer-await-save"}
+        await _reply(chat_id, "Выбери вариант кнопкой или отправь ОТМЕНА.")
+        return {"ok": True, "handled": "customer-await-button"}
 
     edit_number = _edit_comment_number(text)
     if edit_number:
