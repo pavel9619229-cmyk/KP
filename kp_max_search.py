@@ -4,6 +4,7 @@ from threading import Lock
 
 import api_proxy as core
 import kp_max_navigation as nav
+import kp_max_live_rows as live_rows
 
 SESSION_TTL_SECONDS = 30 * 60
 PAGE_SIZE = 10
@@ -78,7 +79,12 @@ def start(user_id: str, mode: str) -> dict:
 
 
 def _number_value(row: dict) -> str:
-    return str(row.get("number") or "").strip().lstrip("0") or "0"
+    raw = str(row.get("number") or "").strip()
+    match = re.search(r"(\d+)$", raw)
+    if match:
+        return str(int(match.group(1)))
+    stripped = raw.lstrip("0")
+    return stripped or "0"
 
 
 def _search_number(query: str) -> list[dict]:
@@ -86,7 +92,11 @@ def _search_number(query: str) -> list[dict]:
     q = q.lstrip("0") or ("0" if q else "")
     if not q:
         return []
-    rows = nav.recent_rows()
+    try:
+        rows = live_rows.load()
+    except Exception as exc:
+        core.log(f"KP MAX live number search fallback: {type(exc).__name__}: {exc}")
+        rows = nav.recent_rows()
     matched = [row for row in rows if q in _number_value(row)]
     def rank(row: dict) -> tuple[int, int]:
         number = _number_value(row)
@@ -108,7 +118,12 @@ def _search_client(query: str) -> list[dict]:
     q = _norm(query)
     if len(q) < 2:
         return []
-    rows = [row for row in nav.recent_rows() if q in _norm(row.get("customerName") or "")]
+    try:
+        source_rows = live_rows.load()
+    except Exception as exc:
+        core.log(f"KP MAX live client search fallback: {type(exc).__name__}: {exc}")
+        source_rows = nav.recent_rows()
+    rows = [row for row in source_rows if q in _norm(row.get("customerName") or "")]
     rows.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
     rows.sort(key=lambda row: 0 if _norm(row.get("customerName") or "").startswith(q) else 1)
     return rows
@@ -170,11 +185,15 @@ def submit(user_id: str, query: str) -> dict:
 
 
 def open_result(user_id: str, number: str) -> dict:
-    rows = nav.recent_rows()
     normalized = str(number).lstrip("0") or "0"
+    try:
+        rows = live_rows.load()
+    except Exception:
+        rows = nav.recent_rows()
     row = next((r for r in rows if _number_value(r) == normalized), None)
     if not row:
         return results_menu(user_id)
+    row = live_rows.inject_into_core(row)
     status = nav.workflow_status(row)
     try:
         status_idx = nav.STATUS_LABELS.index(status)
