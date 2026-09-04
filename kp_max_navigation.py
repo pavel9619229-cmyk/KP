@@ -207,7 +207,7 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
         [_cb("КЛИЕНТ", f"nav:f:client:{number_label}:{key}:{page}")],
         [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
         [_cb("КОММЕНТАРИЙ", f"nav:f:comment:{number_label}:{key}:{page}")],
-        [_cb("СДЕЛАТЬ СЧЕТ", f"nav:invoice:{number_label}:{key}:{page}")],
+        [_cb("СДЕЛАТЬ ИЛИ РЕДАКТИРОВАТЬ СЧЕТ", f"nav:invoice:{number_label}:{key}:{page}")],
         [_cb("ГРУППА ДОКУМЕНТОВ", f"nav:docs:{number_label}:{key}:{page}")],
     ]
     return {"text": text, "attachments": _keyboard(rows)}
