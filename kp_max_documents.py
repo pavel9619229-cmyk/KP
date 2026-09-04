@@ -280,8 +280,23 @@ def document_menu(number: str, ref_key: str, status_idx: int, page: int) -> dict
     rows = [
         [nav._cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [nav._cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:docs:{number}:{key}:{page}")],
+        [nav._cb("РЕДАКТИРОВАТЬ ИНФОРМАЦИЮ ДЛЯ ПЕЧАТИ", f"nav:docedit:{number}:{ref_key}:{key}:{page}")],
+        [nav._cb("ЗАГРУЗИТЬ ПЕЧАТНУЮ ФОРМУ СЧЕТА В МАКС", f"nav:docprint:{number}:{ref_key}:{key}:{page}")],
     ]
     return {"text": text, "attachments": nav._keyboard(rows)}
+
+
+def print_info_menu(number: str, ref_key: str, status_idx: int, page: int) -> dict:
+    key=nav.status_key(status_idx); page=max(0,int(page))
+    text=f"РЕДАКТИРОВАТЬ ИНФОРМАЦИЮ ДЛЯ ПЕЧАТИ — КП {number}\n\nРаздел готов. Поля для редактирования настроим следующим шагом."
+    rows=[[nav._cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ","nav:root")],[nav._cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",f"nav:doc:{number}:{ref_key}:{key}:{page}")]]
+    return {"text":text,"attachments":nav._keyboard(rows)}
+
+def print_form_menu(number: str, ref_key: str, status_idx: int, page: int) -> dict:
+    key=nav.status_key(status_idx); page=max(0,int(page))
+    text=f"ЗАГРУЗИТЬ ПЕЧАТНУЮ ФОРМУ СЧЕТА В МАКС — КП {number}\n\nРаздел готов. Генерацию и отправку файла подключим следующим шагом."
+    rows=[[nav._cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ","nav:root")],[nav._cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",f"nav:doc:{number}:{ref_key}:{key}:{page}")]]
+    return {"text":text,"attachments":nav._keyboard(rows)}
 
 
 def _audit(user_id: str, role: str, kp_number: str, kp_ref: str, doc: dict) -> None:
