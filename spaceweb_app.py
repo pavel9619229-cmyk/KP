@@ -10,6 +10,7 @@ from pathlib import Path
 from threading import Lock
 
 import requests
+import certifi
 from fastapi import HTTPException, Request
 
 import api_proxy as core
@@ -19,6 +20,7 @@ import kp_max_search as kp_search
 import kp_max_items as items
 import kp_max_create as kp_create
 import kp_max_documents as documents
+import kp_max_print as print_ops
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -30,12 +32,27 @@ EDIT_TTL_SECONDS = 30 * 60
 MAX_COMMENT_CHARS = 20000
 _ACCESS_LOCK = Lock()
 _EDIT_LOCK = Lock()
+_MAX_VERIFY_LOCK = Lock()
 _EDIT_SESSIONS: dict[str, dict] = {}
 _CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+_MAX_VERIFY_PATH = ""
 
 
 def _max_verify():
-    return KP_MAX_CA_BUNDLE if KP_MAX_CA_BUNDLE and Path(KP_MAX_CA_BUNDLE).is_file() else True
+    global _MAX_VERIFY_PATH
+    custom = Path(KP_MAX_CA_BUNDLE) if KP_MAX_CA_BUNDLE else None
+    if custom is None or not custom.is_file():
+        return True
+    if _MAX_VERIFY_PATH and Path(_MAX_VERIFY_PATH).is_file():
+        return _MAX_VERIFY_PATH
+    with _MAX_VERIFY_LOCK:
+        if _MAX_VERIFY_PATH and Path(_MAX_VERIFY_PATH).is_file():
+            return _MAX_VERIFY_PATH
+        target = Path(f"/tmp/kp-max-ca-{os.getpid()}.pem")
+        target.write_bytes(Path(certifi.where()).read_bytes() + b"\n" + custom.read_bytes() + b"\n")
+        target.chmod(0o600)
+        _MAX_VERIFY_PATH = str(target)
+        return _MAX_VERIFY_PATH
 
 
 def _message_context(payload: dict) -> tuple[str, str, str, bool, str]:
@@ -283,6 +300,45 @@ def _send_menu_message(chat_id: str, menu: dict) -> dict:
     return {"status": response.status_code, "response": data}
 
 
+def _send_file_message(chat_id: str, file_path: str, text: str) -> dict:
+    path = Path(file_path)
+    if not path.is_file():
+        raise RuntimeError("print file not found")
+    init = requests.post(
+        "https://platform-api2.max.ru/uploads", params={"type": "file"},
+        headers={"Authorization": KP_MAX_BOT_TOKEN, "Accept": "application/json"},
+        timeout=25, verify=_max_verify(),
+    )
+    init_data = init.json() if init.content else {}
+    if init.status_code != 200 or not str(init_data.get("url") or ""):
+        raise RuntimeError(f"MAX upload init HTTP {init.status_code}: {str(init_data)[:300]}")
+    with path.open("rb") as handle:
+        up = requests.post(
+            str(init_data["url"]), files={"data": (path.name, handle, "application/pdf")},
+            timeout=90, verify=_max_verify(),
+        )
+    up_data = up.json() if up.content else {}
+    token = str(up_data.get("token") or init_data.get("token") or "")
+    if not 200 <= up.status_code < 300 or not token:
+        raise RuntimeError(f"MAX file upload HTTP {up.status_code}: {str(up_data)[:300]}")
+    body = {"text": str(text), "attachments": [{"type": "file", "payload": {"token": token}}]}
+    last = None
+    for delay in (0, 1, 2, 4):
+        if delay:
+            time.sleep(delay)
+        last = requests.post(
+            "https://platform-api2.max.ru/messages", params={"chat_id": str(chat_id)},
+            headers={"Authorization": KP_MAX_BOT_TOKEN, "Content-Type": "application/json", "Accept": "application/json"},
+            json=body, timeout=25, verify=_max_verify(),
+        )
+        data = last.json() if last.content else {}
+        if 200 <= last.status_code < 300:
+            return {"status": last.status_code, "response": data}
+        if str(data.get("code") or "") != "attachment.not.ready":
+            break
+    raise RuntimeError(f"MAX send file HTTP {last.status_code if last else 0}: {str(data)[:300]}")
+
+
 def _answer_callback(callback_id: str, menu: dict) -> dict:
     response = requests.post(
         "https://platform-api2.max.ru/answers",
@@ -527,6 +583,11 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         blocked = {"text": "Сначала заверши редактирование строки товара: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "item-session"}
+    print_session = print_ops.session_get(sender_id)
+    if print_session and not action.startswith("prn:"):
+        blocked = {"text": "Сначала заверши редактирование информации для печати: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "print-session"}
     try:
         if action == "find:menu":
             kp_search.clear(sender_id)
@@ -582,13 +643,53 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(documents.group_menu, number, nav.status_index(key), int(page))
         elif action.startswith("nav:docedit:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
-            menu = documents.print_info_menu(number, ref_key, nav.status_index(key), int(page))
+            menu = await asyncio.to_thread(print_ops.info_menu, number, ref_key, nav.status_index(key), int(page))
         elif action.startswith("nav:docprint:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
-            menu = documents.print_form_menu(number, ref_key, nav.status_index(key), int(page))
+            processing = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
+            processing["text"] = f"Формирую печатную форму счета по КП {number}…"
+            await asyncio.to_thread(_answer_callback, callback_id, processing)
+            try:
+                pdf_path, order = await asyncio.to_thread(print_ops.generate_pdf, ref_key)
+                invoice_no = documents._short_number(order.get("Number"))
+                await asyncio.to_thread(_send_file_message, chat_id, str(pdf_path), f"Счет {invoice_no} по КП {number}")
+                done = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
+                done["text"] = "Печатная форма счета загружена в MAX.\n\n" + done["text"]
+                await _reply_menu(chat_id, done)
+                return {"ok": True, "handled": "invoice-print-sent"}
+            except Exception as exc:
+                core.log(f"KP MAX invoice print failed: {type(exc).__name__}: {exc}")
+                error = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
+                error["text"] = f"Не удалось сформировать/загрузить счет: {exc}\n\n" + error["text"]
+                await _reply_menu(chat_id, error)
+                return {"ok": True, "error": "invoice-print"}
         elif action.startswith("nav:doc:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
             menu = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
+        elif action.startswith("prn:edit:"):
+            _, _, field, number, ref_key, key, page = action.split(":", 6)
+            menu = await asyncio.to_thread(print_ops.start_edit, sender_id, field, number, ref_key, nav.status_index(key), int(page))
+        elif action.startswith("prn:bank:"):
+            _, _, number, ref_key, key, page = action.split(":", 5)
+            menu = await asyncio.to_thread(print_ops.bank_menu, sender_id, number, ref_key, nav.status_index(key), int(page))
+        elif action.startswith("prn:bankpick:"):
+            bank_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(print_ops.pick_bank, sender_id, bank_key)
+        elif action == "prn:again":
+            menu = await asyncio.to_thread(print_ops.again, sender_id)
+        elif action == "prn:cancel":
+            menu = await asyncio.to_thread(print_ops.cancel_menu, sender_id)
+        elif action == "prn:save":
+            try:
+                menu, saved = await asyncio.to_thread(print_ops.commit, sender_id, role)
+                core.log(f"KP MAX print field saved: KP {saved['number']}, field={saved['field']}, user={sender_id}")
+            except RuntimeError as exc:
+                if "concurrently" in str(exc):
+                    menu = nav.root_menu(role); menu["text"] = "Поле счета изменилось в 1С. Редактирование отменено."
+                else:
+                    core.log(f"KP MAX print field save failed: {type(exc).__name__}: {exc}")
+                    menu = print_ops.confirm_menu(sender_id) if print_ops.session_get(sender_id) else nav.root_menu(role)
+                    menu["text"] = "Не удалось сохранить данные печати в 1С.\n\n" + menu["text"]
         elif action.startswith("nav:f:"):
             _, _, field, number, key, page = action.split(":", 5)
             status_idx = nav.status_index(key)
@@ -748,6 +849,34 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "access-activated"}
         await _reply(chat_id, "Нет доступа. Введи одноразовый код активации, выданный администратором.")
         return {"ok": True, "denied": "access"}
+
+    print_session = print_ops.session_get(sender_id)
+    if print_session:
+        stage = str(print_session.get("stage") or "")
+        if upper in {"ОТМЕНА", "CANCEL"}:
+            await _reply_menu(chat_id, await asyncio.to_thread(print_ops.cancel_menu, sender_id))
+            return {"ok": True, "handled": "print-edit-cancel"}
+        if stage == "await_text":
+            try:
+                menu = print_ops.set_text(sender_id, text)
+                await _reply_menu(chat_id, menu)
+                return {"ok": True, "handled": "print-edit-text"}
+            except ValueError as exc:
+                await _reply(chat_id, str(exc)); return {"ok": True, "error": "print-edit-invalid"}
+        if stage == "confirm":
+            if upper in {"СОХРАНИТЬ", "SAVE"}:
+                try:
+                    menu, saved = await asyncio.to_thread(print_ops.commit, sender_id, role)
+                    await _reply_menu(chat_id, menu)
+                    return {"ok": True, "handled": f"print-saved-{saved['field']}"}
+                except RuntimeError as exc:
+                    core.log(f"KP MAX print save failed: {type(exc).__name__}: {exc}")
+                    await _reply(chat_id, "Не удалось сохранить информацию для печати в 1С.")
+                    return {"ok": True, "error": "print-save"}
+            await _reply_menu(chat_id, print_ops.confirm_menu(sender_id))
+            return {"ok": True, "handled": "print-await-save"}
+        await _reply(chat_id, "Заверши выбор кнопкой или отправь ОТМЕНА.")
+        return {"ok": True, "handled": "print-await-button"}
 
     item_session = items.session_get(sender_id)
     if item_session:
