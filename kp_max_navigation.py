@@ -208,6 +208,7 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
         [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
         [_cb("КОММЕНТАРИЙ", f"nav:f:comment:{number_label}:{key}:{page}")],
         [_cb("СДЕЛАТЬ СЧЕТ", f"nav:invoice:{number_label}:{key}:{page}")],
+        [_cb("ГРУППА ДОКУМЕНТОВ", f"nav:docs:{number_label}:{key}:{page}")],
     ]
     return {"text": text, "attachments": _keyboard(rows)}
 
@@ -225,6 +226,16 @@ def invoice_menu(number: str, status_idx: int, page: int) -> dict:
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
     ]
     return {"text": text, "attachments": _keyboard(rows)}
+
+
+def documents_menu(number: str, status_idx: int, page: int) -> dict:
+    key = status_key(status_idx)
+    page = max(0, int(page))
+    rows = [
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
+    ]
+    return {"text": f"ГРУППА ДОКУМЕНТОВ — КП {number}", "attachments": _keyboard(rows)}
 
 
 def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overflow: bool = False) -> dict:

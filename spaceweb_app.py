@@ -575,6 +575,9 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         elif action.startswith("nav:invoice:"):
             _, _, number, key, page = action.split(":", 4)
             menu = nav.invoice_menu(number, nav.status_index(key), int(page))
+        elif action.startswith("nav:docs:"):
+            _, _, number, key, page = action.split(":", 4)
+            menu = nav.documents_menu(number, nav.status_index(key), int(page))
         elif action.startswith("nav:f:"):
             _, _, field, number, key, page = action.split(":", 5)
             status_idx = nav.status_index(key)
