@@ -41,7 +41,7 @@ def _latest_base_rows() -> list[dict]:
     total = int(count_resp.text.strip())
     start = max(0, total - MAX_ROWS)
     collected: list[dict] = []
-    select = "Ref_Key,Number,Date,Статус,СуммаДокумента,Клиент_Key,Контрагент_Key"
+    select = "Ref_Key,Number,Date,Статус,СуммаДокумента,Клиент_Key,Контрагент_Key,Комментарий"
     for skip in range(start, total, PAGE_SIZE):
         top = min(PAGE_SIZE, total - skip)
         resp = _get(
@@ -121,6 +121,19 @@ def _build_rows() -> list[dict]:
             "Контрагент_Key": str(item.get("Контрагент_Key") or ""),
         })
         core.apply_storage_defaults(row)
+        raw_comment = str(item.get("Комментарий") or "")
+        if raw_comment:
+            comment_clean = core.strip_html(raw_comment).replace("\r\n", "\n").replace("\r", "\n").upper()
+            comment_top = comment_clean.split("\n")[:5]
+            row["additionalInfoFirstLine"] = core.first_line(raw_comment) or ""
+            row["kpSent"] = any("КП ОТПРАВЛЕНО" in line for line in comment_top)
+            row["receiptConfirmed"] = any("КЛИЕНТ КП УВИДЕЛ" in line for line in comment_top)
+            row["edoSent"] = "В ЭДО ОТПРАВЛЕНО" in comment_clean
+            row["rejected"] = "ОТКАЗ" in comment_clean
+            row["problem"] = "ПРОБЛЕМА" in comment_clean
+            row["shipmentPending"] = "ОТГРУЗИТЬ" in comment_clean
+            if any("ОПЛАТА ПРИШЛА" in line for line in comment_top):
+                row["paymentReceived"] = True
         result.append(row)
         if not str(row.get("customerName") or "").strip():
             unresolved.append((len(result) - 1, item, known))

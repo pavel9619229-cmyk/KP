@@ -2,6 +2,7 @@ import math
 from datetime import datetime
 
 import api_proxy as core
+import kp_max_live_rows as live_rows
 
 PAGE_SIZE = 10
 MAX_ROWS = 300
@@ -31,7 +32,11 @@ def _sort_key(row: dict) -> str:
 
 
 def recent_rows() -> list[dict]:
-    rows = sorted((dict(r) for r in core._cached_rows), key=_sort_key, reverse=True)[:MAX_ROWS]
+    try:
+        source = live_rows.load()
+    except Exception:
+        source = list(core._cached_rows)
+    rows = sorted((dict(r) for r in source), key=_sort_key, reverse=True)[:MAX_ROWS]
     return core.build_rows_with_computed_status(rows)
 
 
@@ -124,6 +129,10 @@ def create_kp_menu() -> dict:
 
 
 def statuses_menu() -> dict:
+    try:
+        live_rows.load(force=True)
+    except Exception:
+        pass
     rows = [
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
