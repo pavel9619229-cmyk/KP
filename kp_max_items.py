@@ -284,31 +284,64 @@ def _escape_odata(value: str) -> str:
     return str(value or "").replace("'", "''")
 
 
+def _product_tokens(value: str) -> list[str]:
+    raw = re.findall(r"[0-9A-Za-zА-Яа-яЁё]+(?:[./*+-][0-9A-Za-zА-Яа-яЁё]+)*", str(value or ""))
+    result = []
+    for token in raw:
+        normalized = token.casefold().replace("ё", "е")
+        if len(normalized) >= 2 and normalized not in result:
+            result.append(normalized)
+    return result
+
+
+def _product_anchor(tokens: list[str]) -> str:
+    generic = {"пневм", "шина", "шины", "ttf", "tl", "шинкомплект", "шинокомплект"}
+    def score(token: str):
+        has_alpha = any(ch.isalpha() for ch in token)
+        has_digit = any(ch.isdigit() for ch in token)
+        mixed = has_alpha and has_digit
+        return (0 if token in generic else 1, 1 if mixed else 0, 1 if has_digit else 0, len(token))
+    return max(tokens, key=score) if tokens else ""
+
+
 def _search_products(query: str) -> list[dict]:
     q = str(query or "").strip()
-    qn = q.casefold().replace("ё", "е")
-    if len(qn) < 2:
+    tokens = _product_tokens(q)
+    if not tokens:
         return []
-    params = {
-        "$select": "Ref_Key,Description,DeletionMark",
-        "$filter": f"substringof('{_escape_odata(q)}',Description) eq true",
-        "$top": "50",
-    }
-    r = requests.get(f"{_base()}/Catalog_Номенклатура", headers=core._build_headers(), params=params, timeout=30)
-    rows = []
-    if r.status_code == 200:
+    anchor = _product_anchor(tokens)
+    rows_by_key = {}
+    variants = []
+    for value in (anchor, anchor.upper(), anchor.lower()):
+        if value and value not in variants:
+            variants.append(value)
+    for value in variants:
+        params = {
+            "$select": "Ref_Key,Description,DeletionMark",
+            "$filter": f"substringof('{_escape_odata(value)}',Description) eq true",
+            "$top": "200",
+        }
+        r = requests.get(f"{_base()}/Catalog_Номенклатура", headers=core._build_headers(), params=params, timeout=30)
+        if r.status_code != 200:
+            continue
         payload = r.json() if r.content else {}
-        rows = payload.get("value", []) if isinstance(payload, dict) else []
+        for x in payload.get("value", []) if isinstance(payload, dict) else []:
+            if isinstance(x, dict):
+                key = str(x.get("Ref_Key") or "").strip()
+                if key:
+                    rows_by_key[key] = x
     valid = []
-    for x in rows:
-        if not isinstance(x, dict) or bool(x.get("DeletionMark")):
+    for x in rows_by_key.values():
+        if bool(x.get("DeletionMark")):
             continue
         name = str(x.get("Description") or "").strip()
         key = str(x.get("Ref_Key") or "").strip()
-        if key and name and qn in name.casefold().replace("ё", "е"):
-            valid.append({"Ref_Key": key, "Description": name})
-    valid.sort(key=lambda x: (0 if str(x["Description"]).casefold().startswith(qn) else 1, len(str(x["Description"]))))
-    return valid[:MAX_PRODUCT_RESULTS]
+        name_tokens = set(_product_tokens(name))
+        if key and name and all(token in name_tokens for token in tokens):
+            deprecated = name.casefold().replace("ё", "е").startswith("не использовать")
+            valid.append({"Ref_Key": key, "Description": name, "_deprecated": deprecated})
+    valid.sort(key=lambda x: (1 if x["_deprecated"] else 0, abs(len(x["Description"]) - len(q)), len(x["Description"])))
+    return [{"Ref_Key": x["Ref_Key"], "Description": x["Description"]} for x in valid[:MAX_PRODUCT_RESULTS]]
 
 
 def product_search_menu(user_id: str, query: str) -> dict:
