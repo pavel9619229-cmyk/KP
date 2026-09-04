@@ -41,7 +41,7 @@ def _latest_base_rows() -> list[dict]:
     total = int(count_resp.text.strip())
     start = max(0, total - MAX_ROWS)
     collected: list[dict] = []
-    select = "Ref_Key,Number,Date,Статус,СуммаДокумента,Клиент_Key,Контрагент_Key,Комментарий"
+    select = "Ref_Key,Number,Date,Статус,СуммаДокумента,Клиент_Key,Контрагент_Key,Менеджер_Key,Комментарий"
     for skip in range(start, total, PAGE_SIZE):
         top = min(PAGE_SIZE, total - skip)
         resp = _get(
@@ -105,6 +105,7 @@ def _build_rows() -> list[dict]:
     known_by_ref, known_by_number = _known_maps()
     result: list[dict] = []
     unresolved: list[tuple[int, dict, dict | None]] = []
+    unresolved_managers: list[tuple[int, str]] = []
     for item in base_rows:
         ref_key = str(item.get("Ref_Key") or "").strip()
         number_raw = str(item.get("Number") or "").strip()
@@ -119,6 +120,7 @@ def _build_rows() -> list[dict]:
             "status": str(item.get("Статус") or row.get("status") or ""),
             "Клиент_Key": str(item.get("Клиент_Key") or ""),
             "Контрагент_Key": str(item.get("Контрагент_Key") or ""),
+            "Менеджер_Key": str(item.get("Менеджер_Key") or ""),
         })
         core.apply_storage_defaults(row)
         raw_comment = str(item.get("Комментарий") or "")
@@ -137,6 +139,10 @@ def _build_rows() -> list[dict]:
         result.append(row)
         if not str(row.get("customerName") or "").strip():
             unresolved.append((len(result) - 1, item, known))
+        manager_key = str(item.get("Менеджер_Key") or "").strip()
+        manager_name = str(row.get("managerName") or "").strip()
+        if manager_key and manager_key != "00000000-0000-0000-0000-000000000000" and (not manager_name or manager_name == core.UNKNOWN_MANAGER_NAME):
+            unresolved_managers.append((len(result) - 1, manager_key))
 
     if unresolved:
         with ThreadPoolExecutor(max_workers=12) as pool:
@@ -152,6 +158,20 @@ def _build_rows() -> list[dict]:
                     name = ""
                 if name:
                     result[idx]["customerName"] = name
+    if unresolved_managers:
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            futures = {
+                pool.submit(_lookup_name, "Catalog_Пользователи", manager_key): idx
+                for idx, manager_key in unresolved_managers
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    name = str(future.result() or "").strip()
+                except Exception:
+                    name = ""
+                if name:
+                    result[idx]["managerName"] = name
     result.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
     return result[:MAX_ROWS]
 
