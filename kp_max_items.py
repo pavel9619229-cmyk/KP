@@ -20,6 +20,7 @@ MAX_PRODUCT_RESULTS = 12
 _LOCK = Lock()
 _SESSIONS: dict[str, dict] = {}
 _NOM_CACHE: dict[str, str] = {}
+_VAT22_KEY: str = ""
 
 FIELD_MAP = {
     "internal": ("ПОСТАВЩИК И ЦЕНА", "КомментарийВнутренний"),
@@ -32,6 +33,35 @@ FIELD_MAP = {
 
 def _base() -> str:
     return str(core.BASE).strip().strip('"').strip("'").rstrip("/")
+
+
+def _vat22_key() -> str:
+    global _VAT22_KEY
+    if _VAT22_KEY:
+        return _VAT22_KEY
+    r = requests.get(
+        f"{_base()}/Catalog_СтавкиНДС", headers=core._build_headers(),
+        params={"$select": "Ref_Key,Description,Ставка,DeletionMark", "$top": "100"}, timeout=30,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"1C VAT catalog HTTP {r.status_code}")
+    payload = r.json() if r.content else {}
+    rows = payload.get("value", []) if isinstance(payload, dict) else []
+    for row in rows:
+        if not isinstance(row, dict) or bool(row.get("DeletionMark")):
+            continue
+        if str(row.get("Description") or "").strip() != "22%":
+            continue
+        try:
+            if abs(float(row.get("Ставка")) - 22.0) > 1e-9:
+                continue
+        except Exception:
+            continue
+        key = str(row.get("Ref_Key") or "").strip()
+        if key:
+            _VAT22_KEY = key
+            return key
+    raise RuntimeError("Ставка НДС 22% не найдена в 1С")
 
 
 def _cb(text: str, payload: str) -> dict:
@@ -613,6 +643,7 @@ def commit_add(user_id: str, role: str) -> tuple[dict, dict]:
     new_line = max(old_lines or {0}) + 1
     qty = float(s.get("addQty") or 0)
     price = float(s.get("addPrice") or 0)
+    vat22_key = _vat22_key()
     new_row = {
         "Ref_Key": ref_key,
         "LineNumber": new_line,
@@ -620,6 +651,8 @@ def commit_add(user_id: str, role: str) -> tuple[dict, dict]:
         "Количество": qty,
         "Цена": price,
         "Сумма": qty * price,
+        "СтавкаНДС": vat22_key,
+        "СтавкаНДС_Type": "StandardODATA.Catalog_СтавкиНДС",
         "КомментарийВнутренний": "",
         "КомментарийДляПокупателя": "",
     }
@@ -640,7 +673,8 @@ def commit_add(user_id: str, role: str) -> tuple[dict, dict]:
         same_price = abs(float(created.get("Цена") or 0) - price) < 1e-9
     except Exception:
         same_qty = same_price = False
-    if not (same_product and same_qty and same_price):
+    same_vat = str(created.get("СтавкаНДС") or "") == vat22_key
+    if not (same_product and same_qty and same_price and same_vat):
         raise RuntimeError("1C added row values verification failed")
     audit_s = dict(s); audit_s["line"] = created_line; audit_s["field"] = "add"
     _audit(user_id, role, audit_s, _items_hash(after))
