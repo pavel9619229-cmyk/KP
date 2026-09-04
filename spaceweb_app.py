@@ -643,7 +643,7 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(documents.group_menu, number, nav.status_index(key), int(page))
         elif action.startswith("nav:docedit:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
-            menu = await asyncio.to_thread(print_ops.info_menu, number, ref_key, nav.status_index(key), int(page))
+            menu = await asyncio.to_thread(print_ops.start_edit, sender_id, "extra", number, ref_key, nav.status_index(key), int(page))
         elif action.startswith("nav:docprint:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
             processing = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))

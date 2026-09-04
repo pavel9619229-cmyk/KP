@@ -240,7 +240,7 @@ def cancel_menu(user_id: str) -> dict:
     number, ref_key = str(s["number"]), str(s["refKey"])
     status_idx, page = int(s["statusIdx"]), int(s["page"])
     clear(user_id)
-    return info_menu(number, ref_key, status_idx, page)
+    return documents.document_menu(number, ref_key, status_idx, page)
 
 
 def _audit(user_id: str, role: str, s: dict, odata_field: str, new_value) -> None:
@@ -284,7 +284,7 @@ def commit(user_id: str, role: str) -> tuple[dict, dict]:
     number, ref_key = str(s["number"]), str(s["refKey"])
     status_idx, page = int(s["statusIdx"]), int(s["page"])
     clear(user_id)
-    menu = info_menu(number, ref_key, status_idx, page)
+    menu = documents.document_menu(number, ref_key, status_idx, page)
     menu["text"] = "Изменение сохранено в 1С.\n\n" + menu["text"]
     return menu, {"number": number, "field": odata_field}
 
