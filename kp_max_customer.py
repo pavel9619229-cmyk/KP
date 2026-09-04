@@ -8,6 +8,7 @@ from threading import Lock
 import requests
 
 import api_proxy as core
+import kp_max_live_rows as live_rows
 import kp_max_navigation as nav
 
 SESSION_TTL_SECONDS = 30 * 60
@@ -44,15 +45,21 @@ def _keyboard(rows: list[list[dict]]) -> list[dict]:
 
 
 def _find_kp(number: str) -> tuple[dict, str]:
-    normalized = str(number).lstrip("0") or "0"
-    for row in core._cached_rows:
-        row_number = core._normalize_kp_number(row.get("number") or "")
-        if row_number == normalized:
-            ref_key = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
-            if not ref_key:
-                raise RuntimeError("KP has no refKey")
-            return row, ref_key
-    raise RuntimeError(f"KP {number} not found")
+    normalized = core._normalize_kp_number(number)
+    sources = []
+    try:
+        sources.append(live_rows.load(force=True))
+    except Exception:
+        pass
+    sources.append(list(core._cached_rows))
+    for rows in sources:
+        for row in rows:
+            row_number = core._normalize_kp_number(row.get("number") or "")
+            if row_number == normalized:
+                ref_key = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+                if ref_key:
+                    return dict(row), ref_key
+    raise RuntimeError(f"КП {number} не найдено")
 
 
 def _fetch_kp_keys(ref_key: str) -> dict:
