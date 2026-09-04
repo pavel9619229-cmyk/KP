@@ -392,10 +392,10 @@ def generate_pdf(ref_key: str) -> tuple[Path, dict]:
     bank_rows = [
         [Paragraph("Получатель", bold_style), Paragraph(_safe(seller_name), body)],
         [Paragraph("ИНН / КПП", bold_style), Paragraph(_safe(seller_tax), body)],
-        [Paragraph("Счет получателя", bold_style), Paragraph(_safe(bank_account), body)],
+        [Paragraph("Р-с.:", bold_style), Paragraph("40702810038000233778", body)],
         [Paragraph("Банк", bold_style), Paragraph(_safe(bank_name), body)],
         [Paragraph("БИК", bold_style), Paragraph(_safe(bank_bik), body)],
-        [Paragraph("Корр. счет", bold_style), Paragraph(_safe(bank_corr), body)],
+        [Paragraph("К-с.:", bold_style), Paragraph("30101810400000000225", body)],
     ]
     bank_table = Table(bank_rows, colWidths=[38*mm, 140*mm])
     bank_table.setStyle(TableStyle([
