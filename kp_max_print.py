@@ -152,7 +152,6 @@ def start_edit(user_id: str, field: str, number: str, ref_key: str, status_idx: 
         originalHash=_hash(original), proposed="",
     )
     text = (
-        f"{label} — СЧЕТ ПО КП {number}\n"
         f"Текущее значение:\n{_compact(original, 2500)}\n\n"
         "Пришли новый текст одним сообщением. Для очистки отправь ОЧИСТИТЬ."
     )
