@@ -193,7 +193,9 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
         return status_page(status_idx, page)
     number_label = str(row.get("number") or number)
     date_label = _date_label(row.get("createdAt") or "")
-    text = f"КП {number_label}\nДата: {date_label}"
+    client_label = str(row.get("customerName") or "").strip() or "—"
+    status_label = workflow_status(row)
+    text = f"КП {number_label}\nДата: {date_label}\nКлиент: {client_label}\nСтатус: {status_label}"
     key = status_key(status_idx)
     page = max(0, int(page))
     rows = [
