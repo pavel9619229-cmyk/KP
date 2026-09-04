@@ -136,9 +136,6 @@ def info_menu(number: str, ref_key: str, status_idx: int, page: int) -> dict:
         [nav._cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [nav._cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:doc:{number}:{ref_key}:{key}:{page}")],
         [nav._cb("ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ", f"prn:edit:extra:{number}:{ref_key}:{key}:{page}")],
-        [nav._cb("НАЗНАЧЕНИЕ ПЛАТЕЖА", f"prn:edit:purpose:{number}:{ref_key}:{key}:{page}")],
-        [nav._cb("КОММЕНТАРИЙ", f"prn:edit:comment:{number}:{ref_key}:{key}:{page}")],
-        [nav._cb("БАНКОВСКИЙ СЧЕТ", f"prn:bank:{number}:{ref_key}:{key}:{page}")],
     ]
     return {"text": text, "attachments": nav._keyboard(rows)}
 
