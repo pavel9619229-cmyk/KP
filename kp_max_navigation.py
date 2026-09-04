@@ -117,7 +117,7 @@ def create_kp_menu() -> dict:
     return {
         "text": "СОЗДАТЬ НОВОЕ КП\n\nЭкран создания нового КП. Параметры нового документа настроим отдельно; сейчас нажатие ничего в 1С не создаёт.",
         "attachments": _keyboard([
-            [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+            [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
             [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
         ]),
     }
@@ -125,7 +125,7 @@ def create_kp_menu() -> dict:
 
 def statuses_menu() -> dict:
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
     ]
     for index, label in enumerate(STATUS_LABELS):
@@ -143,7 +143,7 @@ def status_page(index: int, page: int) -> dict:
     start = page * PAGE_SIZE
     current = items[start : start + PAGE_SIZE]
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")],
     ]
     for row in current:
@@ -188,7 +188,7 @@ def kp_level3(number: str, status_idx: int, page: int) -> dict:
     key = status_key(status_idx)
     page = max(0, int(page))
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:s:{key}:{page}")],
         [_cb("КЛИЕНТ", f"nav:f:client:{number_label}:{key}:{page}")],
         [_cb("СТРОКИ ТОВАРА", f"nav:f:items:{number_label}:{key}:{page}")],
@@ -206,7 +206,7 @@ def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overf
     else:
         text = f"КОММЕНТАРИЙ — КП {number}\n\n{clean}"
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
         [_cb("РЕДАКТИРОВАТЬ", f"nav:ce:{number}:{key}:{page}")],
     ]
@@ -229,7 +229,7 @@ def field_placeholder(field: str, number: str, status_idx: int, page: int) -> di
     label = labels.get(str(field), "РАЗДЕЛ")
     text = f"{label} — КП {number}\nСодержимое этого раздела настроим следующим этапом."
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb(
         "🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ",
         f"nav:k:{number}:{status_key(status_idx)}:{max(0, int(page))}",

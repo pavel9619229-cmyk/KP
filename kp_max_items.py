@@ -170,7 +170,7 @@ def list_menu(number: str, status_idx: int, status_page: int, item_page: int = 0
     current = items[start:start + LINE_PAGE_SIZE]
     key = nav.status_key(status_idx)
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{status_page}")],
         [_cb("ДОБАВИТЬ СТРОКУ", f"itm:addrow:{number}:{key}:{status_page}:{item_page}")],
     ]
@@ -207,7 +207,7 @@ def item_menu(number: str, line: int, status_idx: int, status_page: int, item_pa
     )
     key = nav.status_key(status_idx)
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"itm:list:{number}:{key}:{status_page}:{item_page}")],
         [_cb("ПОСТАВЩИК И ЦЕНА", f"itm:view:internal:{number}:{line}:{key}:{status_page}:{item_page}")],
         [_cb("КОММЕНТАРИЙ", f"itm:view:buyer:{number}:{line}:{key}:{status_page}:{item_page}")],
@@ -238,7 +238,7 @@ def field_menu(field: str, number: str, line: int, status_idx: int, status_page:
     text = f"{label} — КП {number}, строка {line}\n\n{value}"
     key = nav.status_key(status_idx)
     rows = [
-        [_cb("ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"itm:open:{number}:{line}:{key}:{status_page}:{item_page}")],
         [_cb("РЕДАКТИРОВАТЬ", f"itm:edit:{field}:{number}:{line}:{key}:{status_page}:{item_page}")],
     ]
