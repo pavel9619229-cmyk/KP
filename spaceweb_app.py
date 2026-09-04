@@ -18,6 +18,7 @@ import kp_max_customer as customer
 import kp_max_search as kp_search
 import kp_max_items as items
 import kp_max_create as kp_create
+import kp_max_documents as documents
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -574,10 +575,14 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
         elif action.startswith("nav:invoice:"):
             _, _, number, key, page = action.split(":", 4)
-            menu = nav.invoice_menu(number, nav.status_index(key), int(page))
+            menu, created = await asyncio.to_thread(documents.create_invoice_and_menu, sender_id, role, number, nav.status_index(key), int(page))
+            core.log(f"KP MAX invoice ready: KP {number}, order={created.get('Number')}, user={sender_id}")
         elif action.startswith("nav:docs:"):
             _, _, number, key, page = action.split(":", 4)
-            menu = nav.documents_menu(number, nav.status_index(key), int(page))
+            menu = await asyncio.to_thread(documents.group_menu, number, nav.status_index(key), int(page))
+        elif action.startswith("nav:doc:"):
+            _, _, number, ref_key, key, page = action.split(":", 5)
+            menu = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
         elif action.startswith("nav:f:"):
             _, _, field, number, key, page = action.split(":", 5)
             status_idx = nav.status_index(key)
