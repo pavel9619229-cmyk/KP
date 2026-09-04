@@ -387,7 +387,7 @@ def generate_pdf(ref_key: str) -> tuple[Path, dict]:
     buyer_tax = f"ИНН {buyer.get('ИНН') or '—'} / КПП {buyer.get('КПП') or '—'}"
     bank_name = str(bank.get("НаименованиеБанка") or bank.get("Description") or "").strip()
     bank_account = str(bank.get("НомерСчета") or "").strip()
-    bank_bik = str(bank.get("БИКБанка") or "").strip()
+    bank_bik = "044525225"
     bank_corr = str(bank.get("КоррСчетБанка") or "").strip()
     bank_rows = [
         [Paragraph("Получатель", bold_style), Paragraph(_safe(seller_name), body)],
