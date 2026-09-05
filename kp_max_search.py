@@ -5,6 +5,7 @@ from threading import Lock
 import api_proxy as core
 import kp_max_navigation as nav
 import kp_max_live_rows as live_rows
+import kp_max_full_search as full_search
 
 SESSION_TTL_SECONDS = 30 * 60
 PAGE_SIZE = 10
@@ -119,23 +120,16 @@ def _search_client(query: str) -> list[dict]:
     q = _norm(query)
     if len(q) < 2:
         return []
+    try:
+        return full_search.search_client(query)
+    except Exception as exc:
+        core.log(f"KP MAX full client search fallback: {type(exc).__name__}: {exc}")
     tokens = [x for x in re.findall(r"[0-9a-zа-я]+", q) if len(x) >= 2 or x.isdigit()]
-    if not tokens:
-        tokens = [q]
     try:
         source_rows = live_rows.load()
-    except Exception as exc:
-        core.log(f"KP MAX live client search fallback: {type(exc).__name__}: {exc}")
+    except Exception:
         source_rows = nav.recent_rows()
-    rows = [row for row in source_rows if all(token in _norm(row.get("customerName") or "") for token in tokens)]
-    def rank(row: dict):
-        name = _norm(row.get("customerName") or "")
-        exact = 0 if q in name else 1
-        prefix = 0 if name.startswith(tokens[0]) else 1
-        positions = sum(max(0, name.find(token)) for token in tokens)
-        return exact, prefix, positions, -int(_number_value(row) or 0)
-    return sorted(rows, key=rank)
-
+    return [row for row in source_rows if all(t in _norm(row.get("customerName") or "") for t in tokens)]
 
 def _results(session: dict) -> list[dict]:
     mode = str(session.get("mode") or "")
@@ -170,7 +164,7 @@ def results_menu(user_id: str, page: int | None = None) -> dict:
     mode_label = "номеру" if str(session.get("mode")) == "number" else "клиенту"
     text = f"ПОИСК КП ПО {mode_label.upper()}\nЗапрос: {session.get('query') or '—'}\nНайдено: {len(items)}. Страница {current_page + 1}/{total_pages}."
     if not current:
-        text += "\nСовпадений среди последних 300 КП нет."
+        text += "\nСовпадений не найдено." if str(session.get("mode")) == "client" else "\nСовпадений среди последних 300 КП нет."
     return {"text": text, "attachments": _keyboard(buttons)}
 
 
@@ -194,21 +188,27 @@ def submit(user_id: str, query: str) -> dict:
 
 def open_result(user_id: str, number: str) -> dict:
     normalized = str(number).lstrip("0") or "0"
-    try:
-        rows = live_rows.load()
-    except Exception:
-        rows = nav.recent_rows()
-    row = next((r for r in rows if _number_value(r) == normalized), None)
+    row = None
+    session = session_get(user_id)
+    if session:
+        try:
+            row = next((r for r in _results(session) if _number_value(r) == normalized), None)
+        except Exception:
+            row = None
+    if not row:
+        row = full_search.find_number(normalized)
     if not row:
         return results_menu(user_id)
+    try:
+        row = full_search.enrich_row(row)
+    except Exception:
+        row = dict(row)
     row = live_rows.inject_into_core(row)
     status = nav.workflow_status(row)
     try:
         status_idx = nav.STATUS_LABELS.index(status)
     except ValueError:
         status_idx = 0
-    status_rows = nav.rows_for_status(status_idx)
-    position = next((i for i, r in enumerate(status_rows) if _number_value(r) == normalized), 0)
-    page = position // nav.PAGE_SIZE
     clear(user_id)
-    return nav.kp_level3(normalized, status_idx, page)
+    return nav.kp_level3(normalized, status_idx, 0)
+

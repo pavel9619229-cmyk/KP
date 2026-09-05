@@ -1,6 +1,11 @@
 import json
+import os
 import sys
 from pathlib import Path
+
+for raw in Path('/etc/kp-api/kp-api.env').read_text(encoding='utf-8').splitlines():
+    if '=' in raw and not raw.lstrip().startswith('#'):
+        k,v=raw.split('=',1); os.environ[k.strip()]=v.strip().strip(chr(34)).strip(chr(39))
 
 sys.path.insert(0, '/opt/kp-api')
 import api_proxy as core
@@ -50,3 +55,21 @@ buttons3 = [b for row in menu3['attachments'][0]['payload']['buttons'] for b in 
 assert any(b.get('payload') == 'find:open:695' for b in buttons3)
 print('SEARCH_NUMBER_PARTIAL_OK')
 search.clear(user3)
+
+# Regression: client search must cover the full KP history, not only latest 300.
+user4='verify-search-nord-full'
+search.start(user4,'client')
+nord_rows=search._search_client('НОРД')
+assert len(nord_rows) >= 50, len(nord_rows)
+assert any(str(r.get('createdAt') or '').startswith('2024-') for r in nord_rows)
+menu4=search.submit(user4,'НОРД')
+assert 'последних 300' not in str(menu4.get('text') or '')
+buttons4=[b for row in menu4['attachments'][0]['payload']['buttons'] for b in row]
+open_buttons=[b for b in buttons4 if str(b.get('payload') or '').startswith('find:open:')]
+assert open_buttons
+first_number=open_buttons[0]['payload'].split(':')[-1]
+opened4=search.open_result(user4,first_number)
+assert str(opened4.get('text') or '').startswith('КП ')
+print('SEARCH_CLIENT_FULL_HISTORY_OK=true')
+print('SEARCH_NORD_COUNT='+str(len(nord_rows)))
+print('SEARCH_OLD_KP_OPEN_OK=true')

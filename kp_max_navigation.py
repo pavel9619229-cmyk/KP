@@ -177,11 +177,11 @@ def status_page(index: int, page: int) -> dict:
 
 
 def find_row(number: str) -> dict | None:
-    normalized = str(number).lstrip("0") or "0"
-    for row in recent_rows():
-        row_number = str(row.get("number") or "").lstrip("0") or "0"
-        if row_number == normalized:
-            return row
+    normalized = core._normalize_kp_number(number)
+    for rows in (recent_rows(), list(core._cached_rows)):
+        for row in rows:
+            if core._normalize_kp_number(row.get("number") or "") == normalized:
+                return dict(row)
     return None
 
 
