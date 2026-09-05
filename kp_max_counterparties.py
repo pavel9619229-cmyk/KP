@@ -82,13 +82,31 @@ def search(user_id: str, query: str) -> dict:
     if not s or s.get("stage") != "await_query":
         raise RuntimeError("counterparty search is not active")
     q = str(query or "").strip()
-    if len(_norm(q)) < 2:
+    q_norm = _norm(q)
+    if len(q_norm) < 2:
         return {"text": "Введи минимум 2 символа рабочего наименования.", "attachments": _keyboard([[_cb("ОТМЕНА", "cp:cancel")]])}
-    rows = _get("Catalog_Контрагенты", params={
-        "$select": "Ref_Key,Description,ИНН,DeletionMark,Партнер_Key",
-        "$filter": f"substringof('{_escape(q)}',Description) eq true", "$top": "50"}, timeout=25)
-    matched = [x for x in rows if not bool(x.get("DeletionMark")) and _norm(q) in _norm(x.get("Description") or "")]
-    matched.sort(key=lambda x: (0 if _norm(x.get("Description") or "").startswith(_norm(q)) else 1, len(str(x.get("Description") or ""))))
+    tokens = [x for x in re.findall(r"[0-9a-zа-я]+", q_norm) if x]
+    if not tokens:
+        tokens = [q_norm]
+
+    def fetch_token(token: str) -> list[dict]:
+        return _get("Catalog_Контрагенты", params={
+            "$select": "Ref_Key,Description,ИНН,DeletionMark,Партнер_Key",
+            "$filter": f"substringof('{_escape(token)}',Description) eq true", "$top": "250"}, timeout=25)
+
+    candidates: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=min(4, len(tokens))) as pool:
+        for rows in pool.map(fetch_token, tokens):
+            for row in rows:
+                key = str(row.get("Ref_Key") or "").strip()
+                if key and not bool(row.get("DeletionMark")):
+                    candidates[key] = row
+    matched = [x for x in candidates.values() if all(token in _norm(x.get("Description") or "") for token in tokens)]
+    def rank(x: dict) -> tuple[int, int, int]:
+        name = _norm(x.get("Description") or "")
+        positions = [name.find(token) for token in tokens]
+        return (0 if name.startswith(tokens[0]) else 1, sum(p for p in positions if p >= 0), len(name))
+    matched.sort(key=rank)
     buttons = []
     for x in matched[:MAX_RESULTS]:
         key = str(x.get("Ref_Key") or "").strip()

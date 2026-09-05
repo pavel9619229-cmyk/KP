@@ -16,7 +16,12 @@ menu=cp.start(u); assert cp.session_get(u).get('stage')=='await_query'
 results=cp.search(u,'Павел')
 labels=[r[0]['text'] for r in results['attachments'][0]['payload']['buttons']]
 assert any('ЧЛ Павел' in x for x in labels)
+cp.clear(u); cp.start(u)
+token_results=cp.search(u,'аск пф')
+token_labels=[r[0]['text'] for r in token_results['attachments'][0]['payload']['buttons']]
+assert any('АСК ООО ПФ' in x for x in token_labels)
 print('COUNTERPARTIES_SEARCH_OK=true')
+print('COUNTERPARTIES_TOKEN_SEARCH_OK=true')
 card=cp.card('ca8e8364-4a9b-11e6-a4f2-00155d00c206','admin')
 text=card['text']
 for wanted in ('Рабочее наименование:','ИНН:','ПРОЧАЯ ИНФОРМАЦИЯ','КОНТАКТНЫЕ ЛИЦА'):
