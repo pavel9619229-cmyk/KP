@@ -106,7 +106,8 @@ def kp_button_text(row: dict) -> str:
 
 
 def root_menu(role: str) -> dict:
-    rows = [[_cb("СОЗДАТЬ НОВОЕ КП", "nav:create")]]
+    rows = [[_cb("КОНТРАГЕНТЫ", "cp:menu")]]
+    rows.append([_cb("СОЗДАТЬ НОВОЕ КП", "nav:create")])
     rows.append([_cb("СПИСОК КП ПО СТАТУСАМ", "nav:statuses")])
     rows.append([_cb("🔎 ПОИСК КП", "find:menu")])
     rows.append([_cb("ПРОВЕРИТЬ ДОСТУП", "nav:access")])

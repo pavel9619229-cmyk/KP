@@ -21,6 +21,7 @@ import kp_max_items as items
 import kp_max_create as kp_create
 import kp_max_documents as documents
 import kp_max_print as print_ops
+import kp_max_counterparties as counterparties
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -573,6 +574,11 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         blocked = {"text": "Сначала заверши выбор клиента: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "customer-session"}
+    counterparty_session = counterparties.session_get(sender_id)
+    if counterparty_session and not action.startswith("cp:"):
+        blocked = {"text": "Сначала заверши поиск контрагента или нажми ОТМЕНА.", "attachments": []}
+        await asyncio.to_thread(_answer_callback, callback_id, blocked)
+        return {"ok": True, "denied": "counterparty-session"}
     search_session = kp_search.session_get(sender_id)
     if search_session and not action.startswith("find:"):
         blocked = {"text": "Сначала заверши поиск КП или нажми ОТМЕНА.", "attachments": []}
@@ -589,7 +595,23 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
         return {"ok": True, "denied": "print-session"}
     try:
-        if action == "find:menu":
+        if action == "cp:menu":
+            counterparties.clear(sender_id)
+            menu = counterparties.start(sender_id)
+        elif action == "cp:again":
+            menu = counterparties.again(sender_id)
+        elif action == "cp:cancel":
+            menu = counterparties.cancel(sender_id, role)
+        elif action.startswith("cp:open:"):
+            ref_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(counterparties.card, ref_key, role)
+            if len(str(menu.get("text") or "")) > 3000:
+                full_text = str(menu.get("text") or "")
+                menu["text"] = "Карточка контрагента отправлена ниже полностью."
+                await asyncio.to_thread(_answer_callback, callback_id, menu)
+                await _reply_long(chat_id, full_text)
+                return {"ok": True, "handled": "counterparty-card-long"}
+        elif action == "find:menu":
             kp_search.clear(sender_id)
             menu = kp_search.search_menu()
         elif action == "find:number":
@@ -849,6 +871,20 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "access-activated"}
         await _reply(chat_id, "Нет доступа. Введи одноразовый код активации, выданный администратором.")
         return {"ok": True, "denied": "access"}
+
+    counterparty_session = counterparties.session_get(sender_id)
+    if counterparty_session:
+        if upper in {"ОТМЕНА", "CANCEL"}:
+            await _reply_menu(chat_id, counterparties.cancel(sender_id, role))
+            return {"ok": True, "handled": "counterparty-search-cancel"}
+        try:
+            menu = await asyncio.to_thread(counterparties.search, sender_id, text)
+            await _reply_menu(chat_id, menu)
+            return {"ok": True, "handled": "counterparty-search"}
+        except Exception as exc:
+            core.log(f"KP MAX counterparty search failed: {type(exc).__name__}: {exc}")
+            await _reply(chat_id, "Не удалось выполнить поиск контрагентов в 1С. Попробуй другой фрагмент или отправь ОТМЕНА.")
+            return {"ok": True, "error": "counterparty-search"}
 
     print_session = print_ops.session_get(sender_id)
     if print_session:
