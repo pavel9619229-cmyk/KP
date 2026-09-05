@@ -617,9 +617,10 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(counterparties.card, ref_key, role)
             if len(str(menu.get("text") or "")) > 3000:
                 full_text = str(menu.get("text") or "")
-                menu["text"] = "Карточка контрагента отправлена ниже полностью."
-                await asyncio.to_thread(_answer_callback, callback_id, menu)
+                actions = {"text": "ДЕЙСТВИЯ С КОНТРАГЕНТОМ", "attachments": menu.get("attachments") or []}
+                await asyncio.to_thread(_answer_callback, callback_id, {"text": "Карточка контрагента загружается…", "attachments": []})
                 await _reply_long(chat_id, full_text)
+                await _reply_menu(chat_id, actions)
                 return {"ok": True, "handled": "counterparty-card-long"}
         elif action == "find:menu":
             kp_search.clear(sender_id)

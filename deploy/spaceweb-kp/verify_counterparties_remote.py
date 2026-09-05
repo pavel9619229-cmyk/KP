@@ -71,3 +71,7 @@ print('OLD_TEXT_PRESERVED=true')
 print('CLEAR_DISABLED=true')
 print('PARTNER_COMMENT_UNTOUCHED=true')
 print('NO_REAL_COMMENT_PATCH=true')
+# Saved result must stay compact and keep an action button.
+saved_buttons=[r[0]['text'] for r in saved_menu['attachments'][0]['payload']['buttons']]
+assert 'ДОБАВИТЬ ЕЩЕ ТЕКСТ В КОММЕНТАРИЙ' in saved_buttons
+print('COUNTERPARTY_ACTIONS_PERSIST_AFTER_SAVE=true')

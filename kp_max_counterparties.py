@@ -421,6 +421,10 @@ def commit_comment(user_id: str, role: str) -> tuple[dict, dict]:
     if verified!=combined or (current and not verified.endswith(current)):
         raise RuntimeError("1C prepend verification failed: existing text was not preserved")
     clear(user_id)
-    menu=card(ref_key,role)
-    menu["text"]="Новый текст добавлен сверху. Предыдущий текст сохранён полностью."+chr(10)*2+menu["text"]
+    menu={"text":"Новый текст добавлен сверху. Предыдущий текст сохранён полностью.","attachments":_keyboard([
+        [_cb("← К КАРТОЧКЕ",f"cp:open:{ref_key}")],
+        [_cb("ДОБАВИТЬ ЕЩЕ ТЕКСТ В КОММЕНТАРИЙ",f"cp:comment:{ref_key}")],
+        [_cb("🔎 ИСКАТЬ ДРУГОГО","cp:again")],
+        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ","cp:cancel")],
+    ])}
     return menu,{"refKey":ref_key,"partnerKey":partner_key,"chars":len(proposed),"oldChars":len(current),"totalChars":len(combined)}
