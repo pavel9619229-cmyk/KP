@@ -119,15 +119,22 @@ def _search_client(query: str) -> list[dict]:
     q = _norm(query)
     if len(q) < 2:
         return []
+    tokens = [x for x in re.findall(r"[0-9a-zа-я]+", q) if len(x) >= 2 or x.isdigit()]
+    if not tokens:
+        tokens = [q]
     try:
         source_rows = live_rows.load()
     except Exception as exc:
         core.log(f"KP MAX live client search fallback: {type(exc).__name__}: {exc}")
         source_rows = nav.recent_rows()
-    rows = [row for row in source_rows if q in _norm(row.get("customerName") or "")]
-    rows.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
-    rows.sort(key=lambda row: 0 if _norm(row.get("customerName") or "").startswith(q) else 1)
-    return rows
+    rows = [row for row in source_rows if all(token in _norm(row.get("customerName") or "") for token in tokens)]
+    def rank(row: dict):
+        name = _norm(row.get("customerName") or "")
+        exact = 0 if q in name else 1
+        prefix = 0 if name.startswith(tokens[0]) else 1
+        positions = sum(max(0, name.find(token)) for token in tokens)
+        return exact, prefix, positions, -int(_number_value(row) or 0)
+    return sorted(rows, key=rank)
 
 
 def _results(session: dict) -> list[dict]:
