@@ -483,6 +483,31 @@ def _audit(user_id: str, role: str, s: dict, new_hash: str) -> None:
         pass
 
 
+def _document_total(rows: list[dict]) -> float:
+    total = 0.0
+    for row in rows:
+        try:
+            qty = float(row.get("Количество") or 0)
+            price = float(row.get("Цена") or 0)
+            total += float(row.get("СуммаСНДС") or row.get("Сумма") or (qty * price))
+        except Exception:
+            continue
+    return round(total, 2)
+
+
+def _apply_line_amounts(row: dict) -> dict:
+    result = dict(row)
+    qty = float(result.get("Количество") or 0)
+    price = float(result.get("Цена") or 0)
+    amount = round(qty * price, 2)
+    result["Сумма"] = amount
+    result["СуммаНДС"] = round(amount * 22.0 / 122.0, 2)
+    result["СуммаСНДС"] = amount
+    if not str(result.get("СрокПоставки") or "").strip():
+        result["СрокПоставки"] = "0"
+    return result
+
+
 def commit(user_id: str, role: str) -> tuple[dict, dict]:
     s = session_get(user_id)
     if not s or s.get("stage") != "confirm":
@@ -503,16 +528,13 @@ def commit(user_id: str, role: str) -> tuple[dict, dict]:
     proposed = s.get("proposedRaw")
     updated = dict(current)
     updated[odata_field] = proposed
-    if field in {"price", "qty"}:
-        try:
-            updated["Сумма"] = float(updated.get("Количество") or 0) * float(updated.get("Цена") or 0)
-        except Exception:
-            pass
+    updated = _apply_line_amounts(updated)
     payload_rows = [dict(row) for row in items_now]
     payload_rows[target_index] = updated
     headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
     url = f"{_base()}/{core.ENTITY}(guid'{ref_key}')"
-    r = requests.patch(url, headers=headers, json={"Товары": payload_rows}, timeout=40)
+    document_total = _document_total(payload_rows)
+    r = requests.patch(url, headers=headers, json={"Товары": payload_rows, "СуммаДокумента": document_total}, timeout=40)
     if r.status_code not in (200, 204):
         raise RuntimeError(f"1C item PATCH HTTP {r.status_code}: {r.text[:300]}")
     after = _fetch_items(ref_key)
@@ -674,9 +696,12 @@ def commit_add(user_id: str, role: str) -> tuple[dict, dict]:
         "КомментарийВнутренний": "",
         "КомментарийДляПокупателя": "",
     }
+    new_row = _apply_line_amounts(new_row)
     headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
     url = f"{_base()}/{core.ENTITY}(guid'{ref_key}')"
-    r = requests.patch(url, headers=headers, json={"Товары": current + [new_row]}, timeout=40)
+    payload_rows = current + [new_row]
+    document_total = _document_total(payload_rows)
+    r = requests.patch(url, headers=headers, json={"Товары": payload_rows, "СуммаДокумента": document_total}, timeout=40)
     if r.status_code not in (200, 204):
         raise RuntimeError(f"1C add item PATCH HTTP {r.status_code}: {r.text[:300]}")
     after = _fetch_items(ref_key)

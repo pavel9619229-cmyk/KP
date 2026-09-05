@@ -33,6 +33,10 @@ def _now_1c() -> str:
     return current.replace(tzinfo=None, microsecond=0).isoformat()
 
 
+def _default_valid_until_1c() -> str:
+    return _now_1c()[:10] + "T00:00:00"
+
+
 def _created_at(value: str) -> str:
     try:
         dt = core._parse_odata_datetime(str(value or ""))
@@ -110,6 +114,8 @@ def create_empty(user_id: str, role: str) -> dict:
             "Клиент_Key": ZERO_GUID,
             "Контрагент_Key": ZERO_GUID,
             "ЦенаВключаетНДС": True,
+            "СрокДействия": _default_valid_until_1c(),
+            "СуммаДокумента": 0,
             "Комментарий": "",
             "Товары": [],
         }

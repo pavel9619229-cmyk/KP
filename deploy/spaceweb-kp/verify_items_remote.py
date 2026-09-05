@@ -58,8 +58,9 @@ items._fetch_items=fake_fetch_items; items.requests.patch=fake_patch; items._aud
 items.field_menu=lambda *a,**k:{'text':'mock','attachments':[]}
 try:
     menu,saved=items.commit(user,'admin')
-    assert state['payload'] and list(state['payload'])==['Товары']
+    assert state['payload'] and set(state['payload'])=={'Товары','СуммаДокумента'}
     sent=state['payload']['Товары']
+    assert abs(float(state['payload']['СуммаДокумента'])-items._document_total(sent))<1e-9
     target=next(x for x in sent if int(x.get('LineNumber') or 0)==1)
     assert target['КомментарийВнутренний']=='MOCK VALUE'
     assert saved['field']=='internal'
@@ -98,11 +99,15 @@ items._fetch_items=fake_fetch_items; items.requests.patch=fake_add_patch; items.
 items.item_menu=lambda number,line,status_idx,status_page,item_page:{'text':'mock','attachments':[]}
 try:
     menu,saved=items.commit_add(user,'admin')
-    assert state['payload'] and list(state['payload'])==['Товары']
+    assert state['payload'] and set(state['payload'])=={'Товары','СуммаДокумента'}
     sent=state['payload']['Товары']; assert sent[:-1]==base_rows
+    assert abs(float(state['payload']['СуммаДокумента'])-items._document_total(sent))<1e-9
     new=sent[-1]
     assert new['Номенклатура_Key']==product_key and float(new['Количество'])==3 and float(new['Цена'])==12345
     assert new['КомментарийВнутренний']=='' and new['КомментарийДляПокупателя']==''
+    assert float(new['Сумма'])==float(new['СуммаСНДС'])
+    assert abs(float(new['СуммаНДС'])-round(float(new['Сумма'])*22/122,2))<1e-9
+    assert new['СрокПоставки']=='0'
     assert new['СтавкаНДС']==items._vat22_key()
     assert new['СтавкаНДС_Type']=='StandardODATA.Catalog_СтавкиНДС'
     assert saved['field']=='add'

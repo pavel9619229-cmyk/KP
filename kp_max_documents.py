@@ -90,7 +90,7 @@ def _find_kp(number: str) -> tuple[dict, str]:
 def _fetch_kp(ref_key: str) -> dict:
     select = (
         "Ref_Key,Number,Date,Организация_Key,Клиент_Key,Контрагент_Key,Менеджер_Key,"
-        "Валюта_Key,ЦенаВключаетНДС,Комментарий,Товары"
+        "Валюта_Key,ЦенаВключаетНДС,СрокДействия,СуммаДокумента,Комментарий,Товары"
     )
     r = requests.get(
         f"{_base()}/{core.ENTITY}(guid'{ref_key}')",
@@ -153,6 +153,30 @@ def _order_items(kp: dict) -> list[dict]:
     if not result:
         raise RuntimeError("В КП нет корректных строк товара")
     return result
+
+
+def _ensure_kp_required_fields(kp_ref: str, kp: dict) -> dict:
+    patch = {}
+    deadline = str(kp.get("СрокДействия") or "")
+    if not deadline or deadline.startswith("0001-01-01"):
+        source_date = str(kp.get("Date") or _now_1c())[:10]
+        patch["СрокДействия"] = source_date + "T00:00:00"
+    order_items = _order_items(kp)
+    total = round(sum(float(x.get("СуммаСНДС") or x.get("Сумма") or 0) for x in order_items), 2)
+    try:
+        current_total = float(kp.get("СуммаДокумента") or 0)
+    except Exception:
+        current_total = 0.0
+    if abs(current_total - total) > 0.009:
+        patch["СуммаДокумента"] = total
+    if not patch:
+        return kp
+    headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
+    r = requests.patch(f"{_base()}/{core.ENTITY}(guid'{kp_ref}')", headers=headers, json=patch, timeout=40)
+    if r.status_code not in (200, 204):
+        raise RuntimeError(f"1C KP required fields PATCH HTTP {r.status_code}: {r.text[:300]}")
+    refreshed = _fetch_kp(kp_ref)
+    return refreshed
 
 
 def _build_order_payload(kp_ref: str, kp: dict) -> dict:
@@ -321,7 +345,7 @@ def create_invoice_and_menu(user_id: str, role: str, number: str, status_idx: in
         if existing:
             first = existing[0]
             return group_menu(number, status_idx, page, f"Счет уже существует: {_short_number(first.get('Number'))}."), first
-        kp = _fetch_kp(kp_ref)
+        kp = _ensure_kp_required_fields(kp_ref, _fetch_kp(kp_ref))
         payload = _build_order_payload(kp_ref, kp)
         headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
         r = requests.post(f"{_base()}/{ORDER_ENTITY}", headers=headers, json=payload, timeout=45)
