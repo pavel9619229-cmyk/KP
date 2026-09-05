@@ -157,7 +157,6 @@ def _start_comment_edit(user_id: str, number: str) -> str:
         _EDIT_SESSIONS[str(user_id)] = {
             "number": number,
             "refKey": ref_key,
-            "originalHash": _comment_hash(raw),
             "stage": "await_text",
             "expiresAt": int(time.time()) + EDIT_TTL_SECONDS,
         }
@@ -165,17 +164,23 @@ def _start_comment_edit(user_id: str, number: str) -> str:
 
 
 def _set_comment_proposal(user_id: str, new_text: str) -> dict:
-    if len(new_text) > MAX_COMMENT_CHARS:
-        raise ValueError(f"Комментарий слишком длинный: максимум {MAX_COMMENT_CHARS} символов")
+    proposed = str(new_text or "")
+    if not proposed.strip():
+        raise ValueError("Текст для добавления пустой.")
+    if proposed.strip().upper() == "ОЧИСТИТЬ":
+        raise ValueError("Очистка отключена. Эта функция только добавляет текст и не удаляет существующий комментарий.")
+    if len(proposed) > MAX_COMMENT_CHARS:
+        raise ValueError(f"Добавляемый текст слишком длинный: максимум {MAX_COMMENT_CHARS} символов")
     with _EDIT_LOCK:
         session = _EDIT_SESSIONS.get(str(user_id))
         if not session or int(session.get("expiresAt") or 0) <= int(time.time()):
             _EDIT_SESSIONS.pop(str(user_id), None)
             raise RuntimeError("edit session expired")
-        session["newText"] = new_text
+        session["newText"] = proposed
         session["stage"] = "confirm"
         session["expiresAt"] = int(time.time()) + EDIT_TTL_SECONDS
         return dict(session)
+
 
 def _update_comment_memory_cache(number: str, new_text: str) -> None:
     target = next(
@@ -217,26 +222,33 @@ def _commit_comment_edit(user_id: str, role: str) -> dict:
         raise RuntimeError("no pending edit")
     number = str(session["number"])
     ref_key = str(session["refKey"])
-    new_text = str(session.get("newText") or "")
+    added_text = str(session.get("newText") or "")
+    if not added_text.strip():
+        raise RuntimeError("no text to add")
     current_raw = _fetch_comment_raw_by_ref(ref_key)
-    if _comment_hash(current_raw) != str(session.get("originalHash") or ""):
-        _edit_session_clear(user_id)
-        raise RuntimeError("comment changed concurrently")
+    sep = "" if (not current_raw or added_text.endswith(chr(10))) else chr(10)
+    combined = added_text + sep + current_raw
     base = str(core.BASE).strip().strip('\"').strip("'").rstrip("/")
     response = requests.patch(
         f"{base}/{core.ENTITY}(guid'{ref_key}')",
         headers={**core._build_headers(), "Content-Type": "application/json; charset=utf-8"},
-        json={"Комментарий": new_text}, timeout=30,
+        json={"Комментарий": combined}, timeout=30,
     )
     if response.status_code not in {200, 204}:
         raise RuntimeError(f"1C PATCH HTTP {response.status_code}")
     verified = _fetch_comment_raw_by_ref(ref_key)
-    if _normalized_comment(verified) != _normalized_comment(new_text):
-        raise RuntimeError("1C write verification failed")
-    _update_comment_memory_cache(number, new_text)
-    _audit_comment_edit(user_id, role, number, str(session.get("originalHash") or ""), new_text)
+    if _normalized_comment(verified) != _normalized_comment(combined):
+        raise RuntimeError("1C prepend verification failed")
+    if current_raw and not _normalized_comment(verified).endswith(_normalized_comment(current_raw)):
+        raise RuntimeError("1C prepend verification failed: existing comment was not preserved")
+    _update_comment_memory_cache(number, combined)
+    _audit_comment_edit(user_id, role, number, _comment_hash(current_raw), combined)
     _edit_session_clear(user_id)
-    return {"number": number, "chars": len(new_text)}
+    return {
+        "number": number, "chars": len(added_text),
+        "oldChars": len(current_raw), "totalChars": len(combined),
+    }
+
 
 def _build_kp_text(number: str) -> str:
     target = next(
@@ -1068,8 +1080,7 @@ async def kp_max_bot_webhook(request: Request):
     if edit_number:
         try:
             current = await asyncio.to_thread(_start_comment_edit, sender_id, edit_number)
-            await _reply_long(chat_id, f"Редактирование комментария КП №{edit_number}.\nТекущее значение:\n{current}")
-            await _reply(chat_id, "Пришли новый текст комментария одним сообщением. Для очистки поля отправь ОЧИСТИТЬ. Для выхода — ОТМЕНА.")
+            await _reply(chat_id, f"ДОБАВЛЕНИЕ ТЕКСТА В КОММЕНТАРИЙ — КП {edit_number}. Новый текст будет добавлен сверху, существующий комментарий останется без изменений. Пришли текст одним сообщением. Для выхода — ОТМЕНА.")
             return {"ok": True, "handled": f"comment-edit-start-{edit_number}"}
         except Exception as exc:
             core.log(f"KP MAX comment edit start failed: {type(exc).__name__}: {exc}")
@@ -1080,38 +1091,34 @@ async def kp_max_bot_webhook(request: Request):
     if edit_session:
         if upper in {"ОТМЕНА", "CANCEL"}:
             _edit_session_clear(sender_id)
-            await _reply(chat_id, "Редактирование отменено. В 1С ничего не изменено.")
+            await _reply(chat_id, "Добавление текста отменено. В 1С ничего не изменено.")
             return {"ok": True, "handled": "comment-edit-cancel"}
         if edit_session.get("stage") == "await_text":
             if upper in {"СОХРАНИТЬ", "SAVE"}:
-                await _reply(chat_id, "Сначала пришли новый текст комментария.")
+                await _reply(chat_id, "Сначала пришли текст, который нужно добавить сверху.")
                 return {"ok": True, "handled": "comment-edit-await-text"}
-            proposed = "" if upper == "ОЧИСТИТЬ" else text
+            proposed = text
             try:
                 staged = _set_comment_proposal(sender_id, proposed)
             except ValueError as exc:
                 await _reply(chat_id, str(exc))
-                return {"ok": True, "error": "comment-too-long"}
-            preview = proposed if proposed else "[ПОЛЕ БУДЕТ ОЧИЩЕНО]"
-            await _reply_long(chat_id, f"Новое значение комментария КП №{staged['number']}:\n{preview}")
-            await _reply(chat_id, "Для записи в 1С отправь СОХРАНИТЬ. Для отказа — ОТМЕНА.")
-            return {"ok": True, "handled": "comment-edit-staged"}
+                return {"ok": True, "error": "comment-add-invalid"}
+            await _reply_long(chat_id, f"БУДЕТ ДОБАВЛЕНО СВЕРХУ — КП №{staged['number']}:\n{proposed}")
+            await _reply(chat_id, "Весь существующий комментарий останется ниже без изменений. Для записи в 1С отправь СОХРАНИТЬ. Для отказа — ОТМЕНА.")
+            return {"ok": True, "handled": "comment-add-staged"}
         if edit_session.get("stage") == "confirm":
             if upper in {"СОХРАНИТЬ", "SAVE"}:
                 try:
                     saved = await asyncio.to_thread(_commit_comment_edit, sender_id, role)
-                    await _reply(chat_id, f"Комментарий КП №{saved['number']} сохранён в 1С. Символов: {saved['chars']}.")
-                    core.log(f"KP MAX comment saved: KP {saved['number']}, user={sender_id}, role={role}, chars={saved['chars']}")
-                    return {"ok": True, "handled": f"comment-edit-saved-{saved['number']}"}
+                    await _reply(chat_id, f"Текст добавлен сверху в комментарий КП №{saved['number']}. Добавлено символов: {saved['chars']}. Предыдущий комментарий сохранён полностью.")
+                    core.log(f"KP MAX comment prepended: KP {saved['number']}, user={sender_id}, role={role}, added={saved['chars']}, old={saved['oldChars']}, total={saved['totalChars']}")
+                    return {"ok": True, "handled": f"comment-add-saved-{saved['number']}"}
                 except RuntimeError as exc:
-                    if "concurrently" in str(exc):
-                        await _reply(chat_id, "Комментарий в 1С изменился после начала редактирования. Запись отменена. Начни заново командой РЕДКОМ <номер>.")
-                    else:
-                        core.log(f"KP MAX comment save failed: {type(exc).__name__}: {exc}")
-                        await _reply(chat_id, "Не удалось сохранить комментарий в 1С. Исходное значение не перезаписано ботом.")
-                    return {"ok": True, "error": "comment-edit-save"}
-            await _reply(chat_id, "Изменение подготовлено. Отправь СОХРАНИТЬ или ОТМЕНА. Чтобы заменить текст заново, отправь РЕДКОМ <номер>.")
-            return {"ok": True, "handled": "comment-edit-confirm"}
+                    core.log(f"KP MAX comment prepend failed: {type(exc).__name__}: {exc}")
+                    await _reply(chat_id, "Не удалось подтвердить безопасное добавление текста в 1С. Проверь комментарий и попробуй ещё раз.")
+                    return {"ok": True, "error": "comment-add-save"}
+            await _reply(chat_id, "Добавление подготовлено. Отправь СОХРАНИТЬ или ОТМЕНА.")
+            return {"ok": True, "handled": "comment-add-confirm"}
 
     if upper in {"МЕНЮ", "MENU", "НАВИГАЦИЯ", "СПИСОК", "СПИСОК КП"}:
         await _reply_menu(chat_id, nav.root_menu(role))

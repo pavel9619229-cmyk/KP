@@ -247,7 +247,7 @@ def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overf
     rows = [
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", f"nav:k:{number}:{key}:{page}")],
-        [_cb("РЕДАКТИРОВАТЬ", f"nav:ce:{number}:{key}:{page}")],
+        [_cb("ДОБАВИТЬ ТЕКСТ В КОММЕНТАРИЙ", f"nav:ce:{number}:{key}:{page}")],
     ]
     return {"text": text, "attachments": _keyboard(rows)}
 
@@ -255,9 +255,9 @@ def comment_menu(number: str, status_idx: int, page: int, comment: str, *, overf
 def comment_edit_started_menu(number: str) -> dict:
     return {
         "text": (
-            f"Редактирование комментария КП {number}.\n"
-            "Пришли новый текст комментария одним сообщением.\n"
-            "Для очистки поля отправь ОЧИСТИТЬ. Для выхода — ОТМЕНА."
+            f"ДОБАВЛЕНИЕ ТЕКСТА В КОММЕНТАРИЙ — КП {number}.\n"
+            "Новый текст будет добавлен СВЕРХУ. Весь существующий комментарий останется ниже без изменений.\n\n"
+            "Пришли текст для добавления одним сообщением. Для выхода — ОТМЕНА."
         ),
         "attachments": [],
     }
