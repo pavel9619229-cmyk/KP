@@ -48,7 +48,7 @@ def _find_kp(number: str) -> tuple[dict, str]:
     normalized = core._normalize_kp_number(number)
     sources = []
     try:
-        sources.append(live_rows.load(force=True))
+        sources.append(live_rows.load())
     except Exception:
         pass
     sources.append(list(core._cached_rows))
@@ -59,6 +59,15 @@ def _find_kp(number: str) -> tuple[dict, str]:
                 ref_key = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
                 if ref_key:
                     return dict(row), ref_key
+    try:
+        for row in live_rows.load(force=True):
+            row_number = core._normalize_kp_number(row.get("number") or "")
+            if row_number == core._normalize_kp_number(number):
+                ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+                if ref:
+                    return dict(row), ref
+    except Exception:
+        pass
     raise RuntimeError(f"КП {number} не найдено")
 
 
@@ -560,6 +569,7 @@ def commit(user_id: str, role: str) -> tuple[dict, dict]:
     row, _ = _find_kp(str(session.get("number") or ""))
     row["customerName"] = str(session.get("selectedPartnerName") or "").strip()
     row["clientFilled"] = bool(row["customerName"])
+    live_rows.inject_into_core(row)
     _audit(user_id, role, session)
     number = str(session.get("number") or "")
     status_idx = int(session.get("statusIdx") or 0)

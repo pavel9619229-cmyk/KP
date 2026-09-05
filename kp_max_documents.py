@@ -79,11 +79,27 @@ def _remember(kp_ref: str, doc: dict) -> None:
 
 def _find_kp(number: str) -> tuple[dict, str]:
     wanted = _short_number(number)
-    for row in live_rows.load(force=True):
-        if _short_number(row.get("number")) == wanted:
-            ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
-            if ref:
-                return dict(row), ref
+    sources = []
+    try:
+        sources.append(live_rows.load())
+    except Exception:
+        pass
+    sources.append(list(core._cached_rows))
+    for rows in sources:
+        for row in rows:
+            if _short_number(row.get("number")) == wanted:
+                ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+                if ref:
+                    return dict(row), ref
+    try:
+        for row in live_rows.load(force=True):
+            row_number = _short_number(row.get("number"))
+            if row_number == wanted:
+                ref = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+                if ref:
+                    return dict(row), ref
+    except Exception:
+        pass
     raise RuntimeError(f"КП {number} не найдено")
 
 

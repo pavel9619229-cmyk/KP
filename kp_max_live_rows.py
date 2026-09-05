@@ -1,7 +1,7 @@
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
+from threading import Lock, Thread
 
 import requests
 
@@ -13,6 +13,7 @@ PAGE_SIZE = 50
 _LOCK = Lock()
 _ROWS: list[dict] = []
 _ROWS_AT = 0.0
+_REFRESHING = False
 
 
 def _base() -> str:
@@ -176,23 +177,68 @@ def _build_rows() -> list[dict]:
     return result[:MAX_ROWS]
 
 
-def load(force: bool = False) -> list[dict]:
-    global _ROWS, _ROWS_AT
-    now = time.time()
-    with _LOCK:
-        if not force and _ROWS and now - _ROWS_AT < TTL_SECONDS:
-            return [dict(row) for row in _ROWS]
+def _fallback_rows() -> list[dict]:
+    rows = [dict(row) for row in core._cached_rows if isinstance(row, dict)]
+    rows.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
+    return rows[:MAX_ROWS]
+
+
+def _refresh_worker() -> None:
+    global _ROWS, _ROWS_AT, _REFRESHING
+    try:
         rows = _build_rows()
         if rows:
-            _ROWS = rows
-            _ROWS_AT = time.time()
-        return [dict(row) for row in (_ROWS or rows)]
+            with _LOCK:
+                _ROWS = rows
+                _ROWS_AT = time.time()
+    finally:
+        with _LOCK:
+            _REFRESHING = False
+
+
+
+def refresh_async(force: bool = False) -> bool:
+    global _REFRESHING
+    with _LOCK:
+        if _REFRESHING:
+            return False
+        if not force and _ROWS and time.time() - _ROWS_AT < TTL_SECONDS:
+            return False
+        _REFRESHING = True
+    Thread(target=_refresh_worker, name="kp-live-refresh", daemon=True).start()
+    return True
+
+
+def load(force: bool = False) -> list[dict]:
+    global _ROWS, _ROWS_AT
+    if force:
+        rows = _build_rows()
+        if rows:
+            with _LOCK:
+                _ROWS = rows
+                _ROWS_AT = time.time()
+        return [dict(row) for row in (rows or _fallback_rows())]
+    now = time.time()
+    with _LOCK:
+        cached = [dict(row) for row in _ROWS]
+        fresh = bool(_ROWS and now - _ROWS_AT < TTL_SECONDS)
+    if cached:
+        if not fresh:
+            refresh_async()
+        return cached
+    fallback = _fallback_rows()
+    if fallback:
+        refresh_async()
+        return fallback
+    return load(force=True)
 
 
 def inject_into_core(row: dict) -> dict:
+    global _ROWS
     candidate = dict(row)
     ref_key = str(candidate.get("refKey") or "").strip()
     number = _number(candidate.get("number"))
+    result = candidate
     for existing in core._cached_rows:
         if str(existing.get("refKey") or "").strip() == ref_key or _number(existing.get("number")) == number:
             existing.update({
@@ -203,6 +249,15 @@ def inject_into_core(row: dict) -> dict:
                 "Клиент_Key": candidate.get("Клиент_Key"),
                 "Контрагент_Key": candidate.get("Контрагент_Key"),
             })
-            return existing
-    core._cached_rows.append(candidate)
-    return candidate
+            result = existing
+            break
+    else:
+        core._cached_rows.append(candidate)
+    with _LOCK:
+        idx = next((i for i,x in enumerate(_ROWS) if str(x.get("refKey") or "").strip() == ref_key or _number(x.get("number")) == number), -1)
+        if idx >= 0:
+            _ROWS[idx].update(result)
+        elif ref_key or number:
+            _ROWS.insert(0, dict(result))
+        _ROWS = sorted(_ROWS, key=lambda x: str(x.get("createdAt") or ""), reverse=True)[:MAX_ROWS]
+    return result

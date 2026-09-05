@@ -129,10 +129,7 @@ def create_kp_menu() -> dict:
 
 
 def statuses_menu() -> dict:
-    try:
-        live_rows.load(force=True)
-    except Exception:
-        pass
+    live_rows.refresh_async()
     rows = [
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
