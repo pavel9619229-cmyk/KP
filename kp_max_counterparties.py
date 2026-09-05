@@ -340,7 +340,7 @@ def card(ref_key: str, role: str) -> dict:
     else:
         lines.append("[КОНТАКТНЫЕ ЛИЦА НЕ НАЙДЕНЫ]")
     rows = [
-        [_cb("РЕДАКТИРОВАТЬ КОММЕНТАРИЙ", f"cp:comment:{ref_key}")],
+        [_cb("ДОБАВИТЬ ТЕКСТ В КОММЕНТАРИЙ", f"cp:comment:{ref_key}")],
         [_cb("🔎 ИСКАТЬ ДРУГОГО", "cp:again")],
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "cp:cancel")],
     ]
@@ -356,74 +356,71 @@ def start_comment_edit(user_id: str, ref_key: str) -> dict:
     name = str(data.get("Description") or "—").strip()
     with _LOCK:
         _SESSIONS[str(user_id)] = {"stage":"comment_text","refKey":str(ref_key),"partnerKey":partner_key,"name":name,"originalComment":current,"proposedComment":None,"expiresAt":int(time.time())+SESSION_TTL}
-    shown = current or "[ПОЛЕ ПУСТО]"
-    return {"text":f"Текущее значение поля «Прочая информация»:\n{shown}\n\nПришли новое значение одним сообщением. Для очистки отправь ОЧИСТИТЬ.","attachments":_keyboard([[_cb("ОТМЕНА","cp:commentcancel")]])}
+    br=chr(10)
+    text="Новый текст будет добавлен СВЕРХУ. Весь существующий текст ниже будет сохранён без изменений."+br+br+"Пришли текст для добавления одним сообщением."
+    return {"text":text,"attachments":_keyboard([[_cb("ОТМЕНА","cp:commentcancel")]])}
 
 def set_comment(user_id: str, text: str) -> dict:
     s = session_get(user_id)
     if not s or s.get("stage") != "comment_text":
-        raise RuntimeError("comment edit is not active")
-    proposed = "" if str(text or "").strip().upper() == "ОЧИСТИТЬ" else str(text or "")
+        raise RuntimeError("comment add is not active")
+    proposed = str(text or "")
+    if not proposed.strip():
+        raise ValueError("Текст для добавления пустой.")
+    if proposed.strip().upper() == "ОЧИСТИТЬ":
+        raise ValueError("Очистка отключена. Эта функция только добавляет текст и не удаляет существующий.")
     if len(proposed) > 20000:
-        raise ValueError("Значение слишком длинное. Максимум 20000 символов.")
+        raise ValueError("Добавляемый текст слишком длинный. Максимум 20000 символов.")
     with _LOCK:
         cur = _SESSIONS.get(str(user_id))
         if not cur:
-            raise RuntimeError("comment edit session expired")
-        cur["stage"] = "comment_confirm"
-        cur["proposedComment"] = proposed
-        cur["expiresAt"] = int(time.time()) + SESSION_TTL
-    shown = proposed or "[ПОЛЕ БУДЕТ ОЧИЩЕНО]"
-    return {
-        "text": f"Новое значение поля «Прочая информация»:\n{shown}\n\nНажми СОХРАНИТЬ для записи в 1С.",
-        "attachments": _keyboard([
-            [_cb("СОХРАНИТЬ", "cp:commentsave")],
-            [_cb("ИЗМЕНИТЬ", "cp:commentagain")],
-            [_cb("ОТМЕНА", "cp:commentcancel")],
-        ]),
-    }
-
+            raise RuntimeError("comment add session expired")
+        cur["stage"]="comment_confirm"
+        cur["proposedComment"]=proposed
+        cur["expiresAt"]=int(time.time())+SESSION_TTL
+    br=chr(10)
+    msg="БУДЕТ ДОБАВЛЕНО СВЕРХУ:"+br+proposed+br+br+"Существующий текст будет сохранён ниже без изменений."+br+br+"Нажми СОХРАНИТЬ."
+    return {"text":msg,"attachments":_keyboard([[_cb("СОХРАНИТЬ","cp:commentsave")],[_cb("ИЗМЕНИТЬ","cp:commentagain")],[_cb("ОТМЕНА","cp:commentcancel")]])}
 
 def comment_again(user_id: str) -> dict:
-    s = session_get(user_id)
-    if not s or s.get("stage") not in {"comment_confirm", "comment_text"}:
-        raise RuntimeError("comment edit is not active")
+    s=session_get(user_id)
+    if not s or s.get("stage") not in {"comment_confirm","comment_text"}:
+        raise RuntimeError("comment add is not active")
     with _LOCK:
-        cur = _SESSIONS[str(user_id)]
-        cur["stage"] = "comment_text"
-        cur["proposedComment"] = None
-        cur["expiresAt"] = int(time.time()) + SESSION_TTL
-    shown = str(s.get("originalComment") or "") or "[ПОЛЕ ПУСТО]"
-    return {
-        "text": f"Текущее значение поля «Прочая информация»:\n{shown}\n\nПришли новое значение одним сообщением. Для очистки отправь ОЧИСТИТЬ.",
-        "attachments": _keyboard([[_cb("ОТМЕНА", "cp:commentcancel")]]),
-    }
-
+        cur=_SESSIONS[str(user_id)]
+        cur["stage"]="comment_text"
+        cur["proposedComment"]=None
+        cur["expiresAt"]=int(time.time())+SESSION_TTL
+    return {"text":"Пришли другой текст для добавления СВЕРХУ. Существующий текст останется без изменений.","attachments":_keyboard([[_cb("ОТМЕНА","cp:commentcancel")]])}
 
 def comment_cancel(user_id: str, role: str) -> dict:
-    s = session_get(user_id)
-    ref_key = str((s or {}).get("refKey") or "")
+    s=session_get(user_id)
+    ref_key=str((s or {}).get("refKey") or "")
     clear(user_id)
     if not ref_key:
         return nav.root_menu(role)
-    return {"text": "Редактирование поля «Прочая информация» отменено.", "attachments": _keyboard([
-        [_cb("← К КАРТОЧКЕ", f"cp:open:{ref_key}")],
-        [_cb("🔎 ИСКАТЬ ДРУГОГО", "cp:again")],
-        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "cp:cancel")],
-    ])}
-
+    return {"text":"Добавление текста отменено. В 1С ничего не изменено.","attachments":_keyboard([[_cb("← К КАРТОЧКЕ",f"cp:open:{ref_key}")],[_cb("🔎 ИСКАТЬ ДРУГОГО","cp:again")],[_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ","cp:cancel")]])}
 
 def commit_comment(user_id: str, role: str) -> tuple[dict, dict]:
     s=session_get(user_id)
-    if not s or s.get("stage")!="comment_confirm": raise RuntimeError("comment confirmation is not active")
-    ref_key=str(s.get("refKey") or ""); partner_key=str(s.get("partnerKey") or "")
-    original=str(s.get("originalComment") or ""); proposed=str(s.get("proposedComment") or "")
-    current=_fetch_one("Catalog_Партнеры",partner_key)
-    if str(current.get("ДополнительнаяИнформация") or "")!=original:
-        clear(user_id); raise RuntimeError("other info changed concurrently")
-    r=requests.patch(f"{_base()}/Catalog_Партнеры(guid'{partner_key}')",headers={**core._build_headers(),"Content-Type":"application/json; charset=utf-8"},json={"ДополнительнаяИнформация":proposed},timeout=30)
-    if r.status_code not in (200,204): raise RuntimeError(f"1C partner other info PATCH HTTP {r.status_code}: {r.text[:300]}")
-    verified=_fetch_one("Catalog_Партнеры",partner_key)
-    if str(verified.get("ДополнительнаяИнформация") or "")!=proposed: raise RuntimeError("1C partner other info verification failed")
-    clear(user_id); menu=card(ref_key,role); menu["text"]="Поле «Прочая информация» сохранено в 1С.\n\n"+menu["text"]
-    return menu,{"refKey":ref_key,"partnerKey":partner_key,"chars":len(proposed)}
+    if not s or s.get("stage")!="comment_confirm":
+        raise RuntimeError("comment add confirmation is not active")
+    ref_key=str(s.get("refKey") or "")
+    partner_key=str(s.get("partnerKey") or "")
+    proposed=str(s.get("proposedComment") or "")
+    if not proposed:
+        raise RuntimeError("no text to add")
+    current_doc=_fetch_one("Catalog_Партнеры",partner_key)
+    current=str(current_doc.get("ДополнительнаяИнформация") or "")
+    sep="" if (not current or proposed.endswith(chr(10))) else chr(10)
+    combined=proposed+sep+current
+    r=requests.patch(f"{_base()}/Catalog_Партнеры(guid'{partner_key}')",headers={**core._build_headers(),"Content-Type":"application/json; charset=utf-8"},json={"ДополнительнаяИнформация":combined},timeout=30)
+    if r.status_code not in (200,204):
+        raise RuntimeError(f"1C partner other info PATCH HTTP {r.status_code}: {r.text[:300]}")
+    verified=str(_fetch_one("Catalog_Партнеры",partner_key).get("ДополнительнаяИнформация") or "")
+    if verified!=combined or (current and not verified.endswith(current)):
+        raise RuntimeError("1C prepend verification failed: existing text was not preserved")
+    clear(user_id)
+    menu=card(ref_key,role)
+    menu["text"]="Новый текст добавлен сверху. Предыдущий текст сохранён полностью."+chr(10)*2+menu["text"]
+    return menu,{"refKey":ref_key,"partnerKey":partner_key,"chars":len(proposed),"oldChars":len(current),"totalChars":len(combined)}
