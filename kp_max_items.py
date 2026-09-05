@@ -491,16 +491,34 @@ def commit(user_id: str, role: str) -> tuple[dict, dict]:
     odata_field = FIELD_MAP[field][1]
     ref_key = str(s.get("refKey") or "")
     line = int(s.get("line") or 0)
-    current = _fetch_row(ref_key, line)
+    items_now = _fetch_items(ref_key)
+    target_index = next((i for i, row in enumerate(items_now) if int(row.get("LineNumber") or 0) == line), -1)
+    if target_index < 0:
+        clear(user_id)
+        raise RuntimeError("item row not found")
+    current = dict(items_now[target_index])
     if _row_hash(current) != str(s.get("originalHash") or ""):
         clear(user_id)
         raise RuntimeError("item changed concurrently")
     proposed = s.get("proposedRaw")
+    updated = dict(current)
+    updated[odata_field] = proposed
+    if field in {"price", "qty"}:
+        try:
+            updated["Сумма"] = float(updated.get("Количество") or 0) * float(updated.get("Цена") or 0)
+        except Exception:
+            pass
+    payload_rows = [dict(row) for row in items_now]
+    payload_rows[target_index] = updated
     headers = {**core._build_headers(), "Content-Type": "application/json; charset=utf-8"}
-    r = requests.patch(_row_url(ref_key, line), headers=headers, json={odata_field: proposed}, timeout=35)
+    url = f"{_base()}/{core.ENTITY}(guid'{ref_key}')"
+    r = requests.patch(url, headers=headers, json={"Товары": payload_rows}, timeout=40)
     if r.status_code not in (200, 204):
         raise RuntimeError(f"1C item PATCH HTTP {r.status_code}: {r.text[:300]}")
-    verified = _fetch_row(ref_key, line)
+    after = _fetch_items(ref_key)
+    verified = next((dict(row) for row in after if int(row.get("LineNumber") or 0) == line), {})
+    if not verified:
+        raise RuntimeError("1C item verification row missing")
     actual = verified.get(odata_field)
     ok = False
     if field in {"price", "qty"}:
