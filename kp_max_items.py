@@ -503,8 +503,11 @@ def _apply_line_amounts(row: dict) -> dict:
     result["Сумма"] = amount
     result["СуммаНДС"] = round(amount * 22.0 / 122.0, 2)
     result["СуммаСНДС"] = amount
-    if not str(result.get("СрокПоставки") or "").strip():
+    lead = str(result.get("СрокПоставки") or "").strip()
+    lead_type = str(result.get("СрокПоставки_Type") or "").strip()
+    if not lead or not lead_type or lead_type == "StandardODATA.Undefined":
         result["СрокПоставки"] = "0"
+        result["СрокПоставки_Type"] = "Edm.Int64"
     return result
 
 

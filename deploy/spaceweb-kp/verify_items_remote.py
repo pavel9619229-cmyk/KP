@@ -108,6 +108,7 @@ try:
     assert float(new['Сумма'])==float(new['СуммаСНДС'])
     assert abs(float(new['СуммаНДС'])-round(float(new['Сумма'])*22/122,2))<1e-9
     assert new['СрокПоставки']=='0'
+    assert new['СрокПоставки_Type']=='Edm.Int64'
     assert new['СтавкаНДС']==items._vat22_key()
     assert new['СтавкаНДС_Type']=='StandardODATA.Catalog_СтавкиНДС'
     assert saved['field']=='add'
