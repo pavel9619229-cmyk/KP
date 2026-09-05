@@ -32,3 +32,31 @@ assert '🔎 ИСКАТЬ ДРУГОГО' in card_buttons
 cp.clear(u)
 print('COUNTERPARTY_CARD_OK=true')
 print('NO_1C_WRITES=true')
+# Verify comment edit flow without writing to 1C.
+assert 'РЕДАКТИРОВАТЬ КОММЕНТАРИЙ' in card_buttons
+cp.clear(u)
+edit=cp.start_comment_edit(u,'ca8e8364-4a9b-11e6-a4f2-00155d00c206')
+assert cp.session_get(u).get('stage')=='comment_text'
+confirm=cp.set_comment(u,'MOCK COUNTERPARTY COMMENT')
+assert cp.session_get(u).get('stage')=='comment_confirm'
+confirm_buttons=[r[0]['text'] for r in confirm['attachments'][0]['payload']['buttons']]
+assert 'СОХРАНИТЬ' in confirm_buttons
+state={'comment':str(cp.session_get(u).get('originalComment') or '')}
+orig_fetch=cp._fetch_one; orig_patch=cp.requests.patch
+class Resp:
+    status_code=204; text=''
+def fake_fetch(entity,ref,timeout=30):
+    if entity=='Catalog_Партнеры': return {'Комментарий':state['comment']}
+    return orig_fetch(entity,ref,timeout)
+def fake_patch(*a,**kw):
+    state['comment']=str((kw.get('json') or {}).get('Комментарий') or '')
+    return Resp()
+cp._fetch_one=fake_fetch; cp.requests.patch=fake_patch
+try:
+    saved_menu,saved=cp.commit_comment(u,'admin')
+    assert state['comment']=='MOCK COUNTERPARTY COMMENT'
+    assert saved['chars']==len('MOCK COUNTERPARTY COMMENT')
+finally:
+    cp._fetch_one=orig_fetch; cp.requests.patch=orig_patch; cp.clear(u)
+print('COUNTERPARTY_COMMENT_EDIT_MOCK_OK=true')
+print('NO_REAL_COMMENT_PATCH=true')

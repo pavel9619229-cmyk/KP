@@ -602,6 +602,16 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = counterparties.again(sender_id)
         elif action == "cp:cancel":
             menu = counterparties.cancel(sender_id, role)
+        elif action.startswith("cp:comment:"):
+            ref_key = action.split(":", 2)[2]
+            menu = await asyncio.to_thread(counterparties.start_comment_edit, sender_id, ref_key)
+        elif action == "cp:commentagain":
+            menu = counterparties.comment_again(sender_id)
+        elif action == "cp:commentcancel":
+            menu = await asyncio.to_thread(counterparties.comment_cancel, sender_id, role)
+        elif action == "cp:commentsave":
+            menu, saved = await asyncio.to_thread(counterparties.commit_comment, sender_id, role)
+            core.log(f"KP MAX counterparty comment saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
         elif action.startswith("cp:open:"):
             ref_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(counterparties.card, ref_key, role)
@@ -874,17 +884,34 @@ async def kp_max_bot_webhook(request: Request):
 
     counterparty_session = counterparties.session_get(sender_id)
     if counterparty_session:
+        stage = str(counterparty_session.get("stage") or "")
         if upper in {"ОТМЕНА", "CANCEL"}:
-            await _reply_menu(chat_id, counterparties.cancel(sender_id, role))
-            return {"ok": True, "handled": "counterparty-search-cancel"}
-        try:
-            menu = await asyncio.to_thread(counterparties.search, sender_id, text)
+            menu = await asyncio.to_thread(counterparties.comment_cancel, sender_id, role) if stage.startswith("comment_") else counterparties.cancel(sender_id, role)
             await _reply_menu(chat_id, menu)
-            return {"ok": True, "handled": "counterparty-search"}
+            return {"ok": True, "handled": "counterparty-cancel"}
+        try:
+            if stage == "await_query":
+                menu = await asyncio.to_thread(counterparties.search, sender_id, text)
+                handled = "counterparty-search"
+            elif stage == "comment_text":
+                menu = counterparties.set_comment(sender_id, text)
+                handled = "counterparty-comment-text"
+            elif stage == "comment_confirm" and upper in {"СОХРАНИТЬ", "SAVE"}:
+                menu, saved = await asyncio.to_thread(counterparties.commit_comment, sender_id, role)
+                core.log(f"KP MAX counterparty comment saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
+                handled = "counterparty-comment-saved"
+            elif stage == "comment_confirm" and upper in {"ИЗМЕНИТЬ", "EDIT"}:
+                menu = counterparties.comment_again(sender_id)
+                handled = "counterparty-comment-again"
+            else:
+                await _reply(chat_id, "Используй кнопки СОХРАНИТЬ, ИЗМЕНИТЬ или ОТМЕНА.")
+                return {"ok": True, "handled": "counterparty-comment-await-button"}
+            await _reply_menu(chat_id, menu)
+            return {"ok": True, "handled": handled}
         except Exception as exc:
-            core.log(f"KP MAX counterparty search failed: {type(exc).__name__}: {exc}")
-            await _reply(chat_id, "Не удалось выполнить поиск контрагентов в 1С. Попробуй другой фрагмент или отправь ОТМЕНА.")
-            return {"ok": True, "error": "counterparty-search"}
+            core.log(f"KP MAX counterparty flow failed: {type(exc).__name__}: {exc}")
+            await _reply(chat_id, "Не удалось выполнить действие с контрагентом в 1С. Попробуй ещё раз или отправь ОТМЕНА.")
+            return {"ok": True, "error": "counterparty-flow"}
 
     print_session = print_ops.session_get(sender_id)
     if print_session:
