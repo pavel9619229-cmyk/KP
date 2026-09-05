@@ -611,7 +611,7 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(counterparties.comment_cancel, sender_id, role)
         elif action == "cp:commentsave":
             menu, saved = await asyncio.to_thread(counterparties.commit_comment, sender_id, role)
-            core.log(f"KP MAX counterparty comment saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
+            core.log(f"KP MAX counterparty other info saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
         elif action.startswith("cp:open:"):
             ref_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(counterparties.card, ref_key, role)
@@ -898,7 +898,7 @@ async def kp_max_bot_webhook(request: Request):
                 handled = "counterparty-comment-text"
             elif stage == "comment_confirm" and upper in {"СОХРАНИТЬ", "SAVE"}:
                 menu, saved = await asyncio.to_thread(counterparties.commit_comment, sender_id, role)
-                core.log(f"KP MAX counterparty comment saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
+                core.log(f"KP MAX counterparty other info saved: ref={saved['refKey']}, user={sender_id}, chars={saved['chars']}")
                 handled = "counterparty-comment-saved"
             elif stage == "comment_confirm" and upper in {"ИЗМЕНИТЬ", "EDIT"}:
                 menu = counterparties.comment_again(sender_id)

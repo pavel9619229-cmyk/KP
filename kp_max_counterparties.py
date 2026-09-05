@@ -348,24 +348,12 @@ def card(ref_key: str, role: str) -> dict:
 
 def start_comment_edit(user_id: str, ref_key: str) -> dict:
     data = _fetch_one("Catalog_Контрагенты", ref_key)
-    partner_key = str(data.get("Партнер_Key") or "").strip()
-    if not partner_key:
-        raise RuntimeError("У контрагента не найден связанный клиент в 1С")
-    partner = _fetch_one("Catalog_Партнеры", partner_key)
-    current = str(partner.get("Комментарий") or "")
+    current = str(data.get("ДополнительнаяИнформация") or "")
     name = str(data.get("Description") or "—").strip()
     with _LOCK:
-        _SESSIONS[str(user_id)] = {
-            "stage": "comment_text", "refKey": str(ref_key), "partnerKey": partner_key,
-            "name": name, "originalComment": current, "proposedComment": None,
-            "expiresAt": int(time.time()) + SESSION_TTL,
-        }
+        _SESSIONS[str(user_id)] = {"stage":"comment_text","refKey":str(ref_key),"name":name,"originalComment":current,"proposedComment":None,"expiresAt":int(time.time())+SESSION_TTL}
     shown = current or "[ПОЛЕ ПУСТО]"
-    return {
-        "text": f"Текущий комментарий:\n{shown}\n\nПришли новый комментарий одним сообщением. Для очистки отправь ОЧИСТИТЬ.",
-        "attachments": _keyboard([[_cb("ОТМЕНА", "cp:commentcancel")]]),
-    }
-
+    return {"text":f"Текущее значение поля «Прочая информация»:\n{shown}\n\nПришли новое значение одним сообщением. Для очистки отправь ОЧИСТИТЬ.","attachments":_keyboard([[_cb("ОТМЕНА","cp:commentcancel")]])}
 
 def set_comment(user_id: str, text: str) -> dict:
     s = session_get(user_id)
@@ -383,7 +371,7 @@ def set_comment(user_id: str, text: str) -> dict:
         cur["expiresAt"] = int(time.time()) + SESSION_TTL
     shown = proposed or "[ПОЛЕ БУДЕТ ОЧИЩЕНО]"
     return {
-        "text": f"Новый комментарий:\n{shown}\n\nНажми СОХРАНИТЬ для записи в 1С.",
+        "text": f"Новое значение поля «Прочая информация»:\n{shown}\n\nНажми СОХРАНИТЬ для записи в 1С.",
         "attachments": _keyboard([
             [_cb("СОХРАНИТЬ", "cp:commentsave")],
             [_cb("ИЗМЕНИТЬ", "cp:commentagain")],
@@ -403,7 +391,7 @@ def comment_again(user_id: str) -> dict:
         cur["expiresAt"] = int(time.time()) + SESSION_TTL
     shown = str(s.get("originalComment") or "") or "[ПОЛЕ ПУСТО]"
     return {
-        "text": f"Текущий комментарий:\n{shown}\n\nПришли новый комментарий одним сообщением. Для очистки отправь ОЧИСТИТЬ.",
+        "text": f"Текущее значение поля «Прочая информация»:\n{shown}\n\nПришли новое значение одним сообщением. Для очистки отправь ОЧИСТИТЬ.",
         "attachments": _keyboard([[_cb("ОТМЕНА", "cp:commentcancel")]]),
     }
 
@@ -422,31 +410,15 @@ def comment_cancel(user_id: str, role: str) -> dict:
 
 
 def commit_comment(user_id: str, role: str) -> tuple[dict, dict]:
-    s = session_get(user_id)
-    if not s or s.get("stage") != "comment_confirm":
-        raise RuntimeError("comment confirmation is not active")
-    ref_key = str(s.get("refKey") or "")
-    partner_key = str(s.get("partnerKey") or "")
-    original = str(s.get("originalComment") or "")
-    proposed = str(s.get("proposedComment") or "")
-    current = _fetch_one("Catalog_Партнеры", partner_key)
-    if str(current.get("Комментарий") or "") != original:
-        clear(user_id)
-        raise RuntimeError("comment changed concurrently")
-    r = requests.patch(
-        f"{_base()}/Catalog_Партнеры(guid'{partner_key}')",
-        headers={**core._build_headers(), "Content-Type": "application/json; charset=utf-8"},
-        json={"Комментарий": proposed}, timeout=30,
-    )
-    if r.status_code not in (200, 204):
-        raise RuntimeError(f"1C partner comment PATCH HTTP {r.status_code}: {r.text[:300]}")
-    verified = _fetch_one("Catalog_Партнеры", partner_key)
-    if str(verified.get("Комментарий") or "") != proposed:
-        raise RuntimeError("1C partner comment verification failed")
-    clear(user_id)
-    menu = {"text": "Комментарий сохранён в 1С.", "attachments": _keyboard([
-        [_cb("← К КАРТОЧКЕ", f"cp:open:{ref_key}")],
-        [_cb("🔎 ИСКАТЬ ДРУГОГО", "cp:again")],
-        [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "cp:cancel")],
-    ])}
-    return menu, {"refKey": ref_key, "partnerKey": partner_key, "chars": len(proposed)}
+    s=session_get(user_id)
+    if not s or s.get("stage")!="comment_confirm": raise RuntimeError("comment confirmation is not active")
+    ref_key=str(s.get("refKey") or ""); original=str(s.get("originalComment") or ""); proposed=str(s.get("proposedComment") or "")
+    current=_fetch_one("Catalog_Контрагенты",ref_key)
+    if str(current.get("ДополнительнаяИнформация") or "")!=original:
+        clear(user_id); raise RuntimeError("other info changed concurrently")
+    r=requests.patch(f"{_base()}/Catalog_Контрагенты(guid'{ref_key}')",headers={**core._build_headers(),"Content-Type":"application/json; charset=utf-8"},json={"ДополнительнаяИнформация":proposed},timeout=30)
+    if r.status_code not in (200,204): raise RuntimeError(f"1C counterparty other info PATCH HTTP {r.status_code}: {r.text[:300]}")
+    verified=_fetch_one("Catalog_Контрагенты",ref_key)
+    if str(verified.get("ДополнительнаяИнформация") or "")!=proposed: raise RuntimeError("1C counterparty other info verification failed")
+    clear(user_id); menu=card(ref_key,role); menu["text"]="Поле «Прочая информация» сохранено в 1С.\n\n"+menu["text"]
+    return menu,{"refKey":ref_key,"chars":len(proposed)}
