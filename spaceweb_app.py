@@ -22,6 +22,7 @@ import kp_max_create as kp_create
 import kp_max_documents as documents
 import kp_max_print as print_ops
 import kp_max_counterparties as counterparties
+import kp_max_runtime as runtime
 
 app = core.app
 KP_MAX_BOT_TOKEN = os.getenv("KP_MAX_BOT_TOKEN", "").strip()
@@ -148,7 +149,104 @@ def _edit_session_get(user_id: str) -> dict | None:
 def _edit_session_clear(user_id: str) -> None:
     with _EDIT_LOCK:
         _EDIT_SESSIONS.pop(str(user_id), None)
+    _release_kp_lock(user_id)
 
+
+def _kp_lock_target(number: str) -> tuple[str, str]:
+    normalized = core._normalize_kp_number(number)
+    row = nav.find_row(normalized)
+    if not row:
+        _, ref_key = _find_kp_target(normalized)
+        return normalized, ref_key
+    ref_key = str(row.get("refKey") or row.get("Ref_Key") or "").strip()
+    if not ref_key:
+        raise RuntimeError(f"KP {normalized} has no refKey")
+    return normalized, ref_key
+
+
+def _kp_lock_blocked_menu(number: str, owner_label: str) -> dict:
+    normalized = core._normalize_kp_number(number)
+    menu = nav.kp_level3(normalized, 0, 0)
+    menu["text"] = (
+        f"КП {normalized} сейчас редактирует {owner_label}. "
+        "Доступен только просмотр.\n\n" + str(menu.get("text") or "")
+    )
+    return menu
+
+def _acquire_kp_lock(number: str, user_id: str) -> tuple[bool, dict | None]:
+    normalized, ref_key = _kp_lock_target(number)
+    result = runtime.acquire(ref_key, normalized, user_id)
+    if result.get("ok"):
+        return True, None
+    return False, _kp_lock_blocked_menu(normalized, str(result.get("ownerLabel") or result.get("ownerId") or "другой пользователь"))
+
+
+def _active_kp_edit_session(user_id: str) -> tuple[str, dict] | None:
+    session = _edit_session_get(user_id)
+    if session:
+        return "comment", session
+    session = customer.session_get(user_id)
+    if session:
+        return "customer", session
+    session = items.session_get(user_id)
+    if session:
+        return "items", session
+    session = print_ops.session_get(user_id)
+    if session:
+        return "print", session
+    return None
+
+def _clear_kp_edit_session(kind: str, user_id: str) -> None:
+    if kind == "comment":
+        _edit_session_clear(user_id)
+    elif kind == "customer":
+        customer.clear(user_id)
+    elif kind == "items":
+        items.clear(user_id)
+    elif kind == "print":
+        print_ops.clear(user_id)
+
+
+def _ensure_active_kp_lock(user_id: str) -> dict | None:
+    active = _active_kp_edit_session(user_id)
+    if not active:
+        return None
+    kind, session = active
+    number = str(session.get("number") or "").strip()
+    if not number:
+        return None
+    ok, blocked = _acquire_kp_lock(number, user_id)
+    if ok:
+        return None
+    _clear_kp_edit_session(kind, user_id)
+    return blocked
+
+
+def _release_kp_lock(user_id: str) -> None:
+    try:
+        runtime.release_user(user_id)
+    except Exception as exc:
+        core.log(f"KP MAX lock release failed: user={user_id}, error={type(exc).__name__}: {exc}")
+
+def _start_locked_edit(number: str, user_id: str, func, *args):
+    ok, blocked = _acquire_kp_lock(number, user_id)
+    if not ok:
+        return blocked
+    try:
+        return func(*args)
+    except Exception:
+        _release_kp_lock(user_id)
+        raise
+
+
+def _run_locked_once(number: str, user_id: str, func, *args):
+    ok, blocked = _acquire_kp_lock(number, user_id)
+    if not ok:
+        return False, blocked
+    try:
+        return True, func(*args)
+    finally:
+        _release_kp_lock(user_id)
 
 def _start_comment_edit(user_id: str, number: str) -> str:
     _, ref_key = _find_kp_target(number)
@@ -512,6 +610,7 @@ def _access_counts() -> tuple[int, int, int]:
 @app.get("/api/max/kp-bot/status")
 async def kp_max_bot_status():
     admins, users, invites = _access_counts()
+    runtime_state = runtime.stats()
     return {
         "ok": bool(KP_MAX_BOT_TOKEN and KP_MAX_WEBHOOK_SECRET),
         "tokenConfigured": bool(KP_MAX_BOT_TOKEN),
@@ -521,6 +620,9 @@ async def kp_max_bot_status():
         "accessAdmins": admins,
         "accessUsers": users,
         "activeInvites": invites,
+        "runtimeUsers": runtime_state["users"],
+        "activeKpLocks": runtime_state["locks"],
+        "kpLockTtlSeconds": runtime_state["ttlSeconds"],
         "webhook": "/api/max/kp-bot/webhook",
         "testCommand": "КП 588",
     }
@@ -577,6 +679,10 @@ async def _handle_navigation_callback(payload: dict) -> dict:
         denied = {"text": "Данные КП доступны только в личном диалоге с ботом.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, denied)
         return {"ok": True, "denied": "not-dialog"}
+    lock_blocked = await asyncio.to_thread(_ensure_active_kp_lock, sender_id)
+    if lock_blocked:
+        await asyncio.to_thread(_answer_callback, callback_id, lock_blocked)
+        return {"ok": True, "denied": "kp-locked"}
     if _edit_session_get(sender_id):
         blocked = {"text": "Сначала заверши редактирование комментария: СОХРАНИТЬ или ОТМЕНА.", "attachments": []}
         await asyncio.to_thread(_answer_callback, callback_id, blocked)
@@ -681,14 +787,24 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
         elif action.startswith("nav:invoice:"):
             _, _, number, key, page = action.split(":", 4)
-            menu, created = await asyncio.to_thread(documents.create_invoice_and_menu, sender_id, role, number, nav.status_index(key), int(page))
-            core.log(f"KP MAX invoice ready: KP {number}, order={created.get('Number')}, user={sender_id}")
+            locked, result = await asyncio.to_thread(
+                _run_locked_once, number, sender_id, documents.create_invoice_and_menu,
+                sender_id, role, number, nav.status_index(key), int(page),
+            )
+            if not locked:
+                menu = result
+            else:
+                menu, created = result
+                core.log(f"KP MAX invoice ready: KP {number}, order={created.get('Number')}, user={sender_id}")
         elif action.startswith("nav:docs:"):
             _, _, number, key, page = action.split(":", 4)
             menu = await asyncio.to_thread(documents.group_menu, number, nav.status_index(key), int(page))
         elif action.startswith("nav:docedit:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
-            menu = await asyncio.to_thread(print_ops.start_edit, sender_id, "extra", number, ref_key, nav.status_index(key), int(page))
+            menu = await asyncio.to_thread(
+                _start_locked_edit, number, sender_id, print_ops.start_edit,
+                sender_id, "extra", number, ref_key, nav.status_index(key), int(page),
+            )
         elif action.startswith("nav:docprint:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
             processing = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
@@ -713,7 +829,10 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(documents.document_menu, number, ref_key, nav.status_index(key), int(page))
         elif action.startswith("prn:edit:"):
             _, _, field, number, ref_key, key, page = action.split(":", 6)
-            menu = await asyncio.to_thread(print_ops.start_edit, sender_id, field, number, ref_key, nav.status_index(key), int(page))
+            menu = await asyncio.to_thread(
+                _start_locked_edit, number, sender_id, print_ops.start_edit,
+                sender_id, field, number, ref_key, nav.status_index(key), int(page),
+            )
         elif action.startswith("prn:bank:"):
             _, _, number, ref_key, key, page = action.split(":", 5)
             menu = await asyncio.to_thread(print_ops.bank_menu, sender_id, number, ref_key, nav.status_index(key), int(page))
@@ -740,7 +859,10 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             status_idx = nav.status_index(key)
             page_num = int(page)
             if field == "client":
-                menu = await asyncio.to_thread(customer.start, sender_id, number, status_idx, page_num)
+                menu = await asyncio.to_thread(
+                    _start_locked_edit, number, sender_id, customer.start,
+                    sender_id, number, status_idx, page_num,
+                )
             elif field == "items":
                 menu = await asyncio.to_thread(items.list_menu, number, status_idx, page_num, 0)
             elif field == "comment":
@@ -757,11 +879,14 @@ async def _handle_navigation_callback(payload: dict) -> dict:
                 menu = nav.field_placeholder(field, number, status_idx, page_num)
         elif action.startswith("nav:ce:"):
             _, _, number, key, page = action.split(":", 4)
-            await asyncio.to_thread(_start_comment_edit, sender_id, number)
-            menu = nav.comment_edit_started_menu(number)
+            started = await asyncio.to_thread(_start_locked_edit, number, sender_id, _start_comment_edit, sender_id, number)
+            menu = started if isinstance(started, dict) else nav.comment_edit_started_menu(number)
         elif action.startswith("itm:addrow:"):
             _, _, number, key, status_page, item_page = action.split(":", 5)
-            menu = await asyncio.to_thread(items.start_add, sender_id, number, nav.status_index(key), int(status_page), int(item_page))
+            menu = await asyncio.to_thread(
+                _start_locked_edit, number, sender_id, items.start_add,
+                sender_id, number, nav.status_index(key), int(status_page), int(item_page),
+            )
         elif action.startswith("itm:addprod:"):
             product_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(items.pick_add_product, sender_id, product_key)
@@ -792,7 +917,10 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu = await asyncio.to_thread(items.field_menu, field, number, int(line), nav.status_index(key), int(status_page), int(item_page))
         elif action.startswith("itm:edit:"):
             _, _, field, number, line, key, status_page, item_page = action.split(":", 7)
-            menu = await asyncio.to_thread(items.start_edit, sender_id, field, number, int(line), nav.status_index(key), int(status_page), int(item_page))
+            menu = await asyncio.to_thread(
+                _start_locked_edit, number, sender_id, items.start_edit,
+                sender_id, field, number, int(line), nav.status_index(key), int(status_page), int(item_page),
+            )
         elif action.startswith("itm:prod:"):
             product_key = action.split(":", 2)[2]
             menu = await asyncio.to_thread(items.pick_product, sender_id, product_key)
@@ -861,6 +989,10 @@ async def kp_max_bot_webhook(request: Request):
     payload = await request.json()
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid MAX update payload")
+    try:
+        runtime.remember_from_payload(payload)
+    except Exception as exc:
+        core.log(f"KP MAX user remember failed: {type(exc).__name__}: {exc}")
     update_type = str(payload.get("update_type") or "")
     if update_type == "message_callback":
         return await _handle_navigation_callback(payload)
@@ -894,6 +1026,11 @@ async def kp_max_bot_webhook(request: Request):
             return {"ok": True, "handled": "access-activated"}
         await _reply(chat_id, "Нет доступа. Введи одноразовый код активации, выданный администратором.")
         return {"ok": True, "denied": "access"}
+
+    lock_blocked = await asyncio.to_thread(_ensure_active_kp_lock, sender_id)
+    if lock_blocked:
+        await _reply_menu(chat_id, lock_blocked)
+        return {"ok": True, "denied": "kp-locked"}
 
     counterparty_session = counterparties.session_get(sender_id)
     if counterparty_session:
@@ -1079,7 +1216,10 @@ async def kp_max_bot_webhook(request: Request):
     edit_number = _edit_comment_number(text)
     if edit_number:
         try:
-            current = await asyncio.to_thread(_start_comment_edit, sender_id, edit_number)
+            started = await asyncio.to_thread(_start_locked_edit, edit_number, sender_id, _start_comment_edit, sender_id, edit_number)
+            if isinstance(started, dict):
+                await _reply_menu(chat_id, started)
+                return {"ok": True, "denied": "kp-locked"}
             await _reply(chat_id, f"ДОБАВЛЕНИЕ ТЕКСТА В КОММЕНТАРИЙ — КП {edit_number}. Новый текст будет добавлен сверху, существующий комментарий останется без изменений. Пришли текст одним сообщением. Для выхода — ОТМЕНА.")
             return {"ok": True, "handled": f"comment-edit-start-{edit_number}"}
         except Exception as exc:

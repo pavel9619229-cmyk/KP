@@ -10,6 +10,7 @@ import requests
 import api_proxy as core
 import kp_max_live_rows as live_rows
 import kp_max_navigation as nav
+import kp_max_runtime as runtime
 
 SESSION_TTL_SECONDS = 30 * 60
 MAX_RESULTS = 12
@@ -98,6 +99,10 @@ def session_get(user_id: str) -> dict | None:
 def clear(user_id: str) -> None:
     with _LOCK:
         _SESSIONS.pop(str(user_id), None)
+    try:
+        runtime.release_user(user_id)
+    except Exception as exc:
+        core.log(f"KP MAX lock release failed: user={user_id}, error={type(exc).__name__}: {exc}")
 
 
 def _touch(user_id: str, **updates) -> dict:

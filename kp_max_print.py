@@ -11,6 +11,7 @@ import requests
 import api_proxy as core
 import kp_max_documents as documents
 import kp_max_navigation as nav
+import kp_max_runtime as runtime
 
 SESSION_TTL = 30 * 60
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
@@ -68,6 +69,10 @@ def session_get(user_id: str) -> dict | None:
 def clear(user_id: str) -> None:
     with _LOCK:
         _SESSIONS.pop(str(user_id), None)
+    try:
+        runtime.release_user(user_id)
+    except Exception as exc:
+        core.log(f"KP MAX lock release failed: user={user_id}, error={type(exc).__name__}: {exc}")
 
 
 def _set_session(user_id: str, **values) -> dict:
