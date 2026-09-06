@@ -324,8 +324,9 @@ def _commit_comment_edit(user_id: str, role: str) -> dict:
     if not added_text.strip():
         raise RuntimeError("no text to add")
     current_raw = _fetch_comment_raw_by_ref(ref_key)
-    sep = "" if (not current_raw or added_text.endswith(chr(10))) else chr(10)
-    combined = added_text + sep + current_raw
+    attributed = runtime.attributed_text(user_id, added_text)
+    sep = "" if (not current_raw or attributed.endswith(chr(10))) else chr(10)
+    combined = attributed + sep + current_raw
     base = str(core.BASE).strip().strip('\"').strip("'").rstrip("/")
     response = requests.patch(
         f"{base}/{core.ENTITY}(guid'{ref_key}')",

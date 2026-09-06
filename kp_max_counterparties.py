@@ -10,6 +10,7 @@ import requests
 
 import api_proxy as core
 import kp_max_navigation as nav
+import kp_max_runtime as runtime
 
 SESSION_TTL = 30 * 60
 MAX_RESULTS = 12
@@ -412,8 +413,9 @@ def commit_comment(user_id: str, role: str) -> tuple[dict, dict]:
         raise RuntimeError("no text to add")
     current_doc=_fetch_one("Catalog_Партнеры",partner_key)
     current=str(current_doc.get("ДополнительнаяИнформация") or "")
-    sep="" if (not current or proposed.endswith(chr(10))) else chr(10)
-    combined=proposed+sep+current
+    attributed=runtime.attributed_text(user_id, proposed)
+    sep="" if (not current or attributed.endswith(chr(10))) else chr(10)
+    combined=attributed+sep+current
     r=requests.patch(f"{_base()}/Catalog_Партнеры(guid'{partner_key}')",headers={**core._build_headers(),"Content-Type":"application/json; charset=utf-8"},json={"ДополнительнаяИнформация":combined},timeout=30)
     if r.status_code not in (200,204):
         raise RuntimeError(f"1C partner other info PATCH HTTP {r.status_code}: {r.text[:300]}")

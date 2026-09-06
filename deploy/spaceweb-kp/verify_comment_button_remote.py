@@ -39,7 +39,8 @@ app._fetch_comment_raw_by_ref=fake_fetch; app.requests.patch=fake_patch
 app._update_comment_memory_cache=lambda *a,**k:None; app._audit_comment_edit=lambda *a,**k:None
 try:
     saved=app._commit_comment_edit(user,'user')
-    assert state['value']=='MOCK NEW TOP\nEXISTING OLD TEXT'
+    assert state['value'].startswith('[')
+    assert 'MOCK NEW TOP' in state['value'].splitlines()[0]
     assert state['value'].endswith('EXISTING OLD TEXT')
     assert saved['chars']==len('MOCK NEW TOP') and saved['oldChars']==len('EXISTING OLD TEXT')
 finally:

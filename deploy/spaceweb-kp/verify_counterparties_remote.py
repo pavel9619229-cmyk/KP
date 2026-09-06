@@ -58,7 +58,8 @@ def fake_patch(url,*a,**kw):
 cp._fetch_one=fake_fetch; cp.requests.patch=fake_patch; cp.card=lambda ref,role:{'text':'mock','attachments':[]}
 try:
     saved_menu,saved=cp.commit_comment(u,'admin')
-    assert state['value'].startswith('MOCK NEW TOP')
+    assert state['value'].startswith('[')
+    assert 'MOCK NEW TOP' in state['value'].splitlines()[0]
     assert state['value'].endswith(old)
     if old: assert old in state['value']
     assert state['payload']=={'ДополнительнаяИнформация':state['value']}

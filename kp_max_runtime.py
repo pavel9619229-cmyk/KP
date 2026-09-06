@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 
@@ -125,6 +126,16 @@ def user_label(user_id: str, conn: sqlite3.Connection | None = None) -> str:
     finally:
         if own and conn is not None:
             conn.close()
+
+
+def attributed_text(user_id: str, text: str, timestamp: int | None = None) -> str:
+    body = str(text or "").strip()
+    if not body:
+        return ""
+    msk = timezone(timedelta(hours=3))
+    moment = datetime.fromtimestamp(int(timestamp or time.time()), tz=msk)
+    label = user_label(user_id)
+    return f"[{moment.strftime('%d.%m.%Y %H:%M')} {label}] {body}"
 
 
 def acquire(kp_ref: str, kp_number: str, user_id: str, ttl_seconds: int | None = None) -> dict:
