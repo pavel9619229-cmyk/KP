@@ -10,6 +10,7 @@ FILES={
     ROOT/'kp_max_counterparties.py':'/opt/kp-api/kp_max_counterparties.py.new',
     ROOT/'kp_max_customer.py':'/opt/kp-api/kp_max_customer.py.new',
     ROOT/'kp_max_search.py':'/opt/kp-api/kp_max_search.py.new',
+    ROOT/'kp_max_live_rows.py':'/opt/kp-api/kp_max_live_rows.py.new',
     ROOT/'kp_max_runtime.py':'/opt/kp-api/kp_max_runtime.py.new',
     ROOT/'kp_max_full_search.py':'/opt/kp-api/kp_max_full_search.py.new',
     ROOT/'deploy'/'spaceweb-kp'/'verify_navigation_remote.py':'/opt/kp-api/verify_navigation_remote.py',
@@ -21,6 +22,7 @@ FILES={
     ROOT/'deploy'/'spaceweb-kp'/'verify_multiuser_lock_remote.py':'/opt/kp-api/verify_multiuser_lock_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_comment_attribution_remote.py':'/opt/kp-api/verify_comment_attribution_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_manager_filter_remote.py':'/opt/kp-api/verify_manager_filter_remote.py',
+    ROOT/'deploy'/'spaceweb-kp'/'warm_live_rows_remote.py':'/opt/kp-api/warm_live_rows_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'rebuild_full_search_remote.py':'/opt/kp-api/rebuild_full_search_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_global_home_remote.py':'/opt/kp-api/verify_global_home_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'register_max_webhook.py':'/opt/kp-api/register_max_webhook.py',
@@ -39,9 +41,11 @@ def run(cmd):
     if rc!=0: raise RuntimeError(f'RC={rc}: {stderr[-800:]}')
     return stdout
 
-run("mv /opt/kp-api/spaceweb_app.py.new /opt/kp-api/spaceweb_app.py && mv /opt/kp-api/kp_max_navigation.py.new /opt/kp-api/kp_max_navigation.py && mv /opt/kp-api/kp_max_counterparties.py.new /opt/kp-api/kp_max_counterparties.py && mv /opt/kp-api/kp_max_customer.py.new /opt/kp-api/kp_max_customer.py && mv /opt/kp-api/kp_max_search.py.new /opt/kp-api/kp_max_search.py && mv /opt/kp-api/kp_max_runtime.py.new /opt/kp-api/kp_max_runtime.py && mv /opt/kp-api/kp_max_full_search.py.new /opt/kp-api/kp_max_full_search.py")
-run("chown kpapi:kpapi /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py && chmod 644 /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py")
-run("/opt/kp-api/.venv/bin/python -m py_compile /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py")
+run("mv /opt/kp-api/spaceweb_app.py.new /opt/kp-api/spaceweb_app.py && mv /opt/kp-api/kp_max_navigation.py.new /opt/kp-api/kp_max_navigation.py && mv /opt/kp-api/kp_max_counterparties.py.new /opt/kp-api/kp_max_counterparties.py && mv /opt/kp-api/kp_max_customer.py.new /opt/kp-api/kp_max_customer.py && mv /opt/kp-api/kp_max_search.py.new /opt/kp-api/kp_max_search.py && mv /opt/kp-api/kp_max_live_rows.py.new /opt/kp-api/kp_max_live_rows.py && mv /opt/kp-api/kp_max_runtime.py.new /opt/kp-api/kp_max_runtime.py && mv /opt/kp-api/kp_max_full_search.py.new /opt/kp-api/kp_max_full_search.py")
+run("chown kpapi:kpapi /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_live_rows.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py && chmod 644 /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_live_rows.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py")
+run("/opt/kp-api/.venv/bin/python -m py_compile /opt/kp-api/spaceweb_app.py /opt/kp-api/kp_max_navigation.py /opt/kp-api/kp_max_counterparties.py /opt/kp-api/kp_max_customer.py /opt/kp-api/kp_max_search.py /opt/kp-api/kp_max_live_rows.py /opt/kp-api/kp_max_runtime.py /opt/kp-api/kp_max_full_search.py")
+print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python warm_live_rows_remote.py"))
+run("chown kpapi:kpapi /opt/kp-api/data/kp_max_live_rows.json && chmod 600 /opt/kp-api/data/kp_max_live_rows.json")
 run("systemctl restart kp-api.service")
 time.sleep(3)
 print('SERVICE=' + run("systemctl is-active kp-api.service"))
@@ -58,6 +62,6 @@ print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_comment_attribu
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_manager_filter_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_global_home_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python register_max_webhook.py"))
-run("rm -f /opt/kp-api/verify_navigation_remote.py /opt/kp-api/verify_counterparties_remote.py /opt/kp-api/verify_customer_edit_remote.py /opt/kp-api/verify_alpha_part_remote.py /opt/kp-api/verify_comment_button_remote.py /opt/kp-api/verify_kp_search_remote.py /opt/kp-api/verify_multiuser_lock_remote.py /opt/kp-api/verify_comment_attribution_remote.py /opt/kp-api/verify_manager_filter_remote.py /opt/kp-api/rebuild_full_search_remote.py /opt/kp-api/verify_global_home_remote.py /opt/kp-api/register_max_webhook.py")
+run("rm -f /opt/kp-api/verify_navigation_remote.py /opt/kp-api/verify_counterparties_remote.py /opt/kp-api/verify_customer_edit_remote.py /opt/kp-api/verify_alpha_part_remote.py /opt/kp-api/verify_comment_button_remote.py /opt/kp-api/verify_kp_search_remote.py /opt/kp-api/verify_multiuser_lock_remote.py /opt/kp-api/verify_comment_attribution_remote.py /opt/kp-api/verify_manager_filter_remote.py /opt/kp-api/warm_live_rows_remote.py /opt/kp-api/rebuild_full_search_remote.py /opt/kp-api/verify_global_home_remote.py /opt/kp-api/register_max_webhook.py")
 client.close()
 print('NAV_DEPLOY_OK')

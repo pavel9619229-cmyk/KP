@@ -1,6 +1,9 @@
+import json
+import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from threading import Lock, Thread
 
 import requests
@@ -10,6 +13,7 @@ import api_proxy as core
 TTL_SECONDS = 120
 MAX_ROWS = 300
 PAGE_SIZE = 50
+LIVE_CACHE_PATH = Path(os.getenv("KP_MAX_LIVE_CACHE_FILE", "/opt/kp-api/data/kp_max_live_rows.json"))
 _LOCK = Lock()
 _ROWS: list[dict] = []
 _ROWS_AT = 0.0
@@ -177,7 +181,42 @@ def _build_rows() -> list[dict]:
     return result[:MAX_ROWS]
 
 
+def _save_live_cache(rows: list[dict]) -> None:
+    if not rows:
+        return
+    try:
+        LIVE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = LIVE_CACHE_PATH.with_name(LIVE_CACHE_PATH.name + ".tmp")
+        tmp.write_text(json.dumps(rows[:MAX_ROWS], ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        tmp.replace(LIVE_CACHE_PATH)
+        try:
+            os.chmod(LIVE_CACHE_PATH, 0o600)
+        except OSError:
+            pass
+    except Exception as exc:
+        core.log(f"KP MAX live cache save failed: {type(exc).__name__}: {exc}")
+
+
+def _load_live_cache() -> list[dict]:
+    try:
+        payload = json.loads(LIVE_CACHE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            return []
+        rows = [dict(row) for row in payload if isinstance(row, dict)]
+        rows.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
+        return rows[:MAX_ROWS]
+    except Exception:
+        return []
+
+
 def _fallback_rows() -> list[dict]:
+    persisted = _load_live_cache()
+    if persisted:
+        return persisted
     rows = [dict(row) for row in core._cached_rows if isinstance(row, dict)]
     rows.sort(key=lambda row: str(row.get("createdAt") or ""), reverse=True)
     return rows[:MAX_ROWS]
@@ -191,6 +230,7 @@ def _refresh_worker() -> None:
             with _LOCK:
                 _ROWS = rows
                 _ROWS_AT = time.time()
+            _save_live_cache(rows)
     finally:
         with _LOCK:
             _REFRESHING = False
@@ -217,6 +257,7 @@ def load(force: bool = False) -> list[dict]:
             with _LOCK:
                 _ROWS = rows
                 _ROWS_AT = time.time()
+            _save_live_cache(rows)
         return [dict(row) for row in (rows or _fallback_rows())]
     now = time.time()
     with _LOCK:
