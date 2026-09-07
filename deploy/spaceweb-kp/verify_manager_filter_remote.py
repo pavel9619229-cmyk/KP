@@ -28,8 +28,15 @@ for key,(label,ref) in nav.MANAGER_FILTERS.items():
     m=nav.statuses_menu(user_a)
     flat=[b for row in m['attachments'][0]['payload']['buttons'] for b in row]
     assert any(b.get('text')==f'ФИЛЬТР ПО МЕНЕДЖЕРУ — {label}' for b in flat)
+    status_counts=nav.status_counts(user_a)
+    assert status_counts['ВСЕ']==len(rows)
+    for idx,status_label in enumerate(nav.STATUS_LABELS):
+        payload=f'nav:s:{nav.status_key(idx)}:0'
+        button=next((b for b in flat if b.get('payload')==payload),None)
+        assert button and button.get('text')==f'{status_label} - {status_counts[status_label]}'
 print('MANAGER_FILTER_COUNTS='+json.dumps(counts,ensure_ascii=False))
 print('MANAGER_FILTER_ROWS_OK=true')
+print('STATUS_COUNT_BUTTONS_OK=true')
 nav.set_manager_filter(user_a,'pavel'); nav.set_manager_filter(user_b,'elena')
 assert nav.manager_filter_label(user_a)=='ПАВЕЛ'
 assert nav.manager_filter_label(user_b)=='ЕЛЕНА'

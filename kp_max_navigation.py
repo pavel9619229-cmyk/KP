@@ -108,18 +108,34 @@ def workflow_status(row: dict) -> str:
     return "ОБРАБОТАТЬ И ОТПРАВИТЬ"
 
 
-def rows_for_status(index: int, user_id: str = "") -> list[dict]:
+def _manager_filtered_rows(user_id: str = "") -> list[dict]:
     rows = recent_rows()
     filter_key = manager_filter_key(user_id)
     manager_ref = MANAGER_FILTERS[filter_key][1]
-    if manager_ref:
-        manager_label = MANAGER_FILTERS[filter_key][0].casefold()
-        def matches_manager(row: dict) -> bool:
-            row_ref = str(row.get("Менеджер_Key") or "").strip()
-            if row_ref:
-                return row_ref == manager_ref
-            return str(row.get("managerName") or "").strip().casefold() == manager_label
-        rows = [row for row in rows if matches_manager(row)]
+    if not manager_ref:
+        return rows
+    manager_label = MANAGER_FILTERS[filter_key][0].casefold()
+    def matches_manager(row: dict) -> bool:
+        row_ref = str(row.get("Менеджер_Key") or "").strip()
+        if row_ref:
+            return row_ref == manager_ref
+        return str(row.get("managerName") or "").strip().casefold() == manager_label
+    return [row for row in rows if matches_manager(row)]
+
+
+def status_counts(user_id: str = "") -> dict[str, int]:
+    rows = _manager_filtered_rows(user_id)
+    counts = {label: 0 for label in STATUS_LABELS}
+    counts["ВСЕ"] = len(rows)
+    for row in rows:
+        status = workflow_status(row)
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
+def rows_for_status(index: int, user_id: str = "") -> list[dict]:
+    rows = _manager_filtered_rows(user_id)
     if index == 0:
         return rows
     wanted = STATUS_LABELS[index]
@@ -175,13 +191,14 @@ def create_kp_menu() -> dict:
 def statuses_menu(user_id: str = "") -> dict:
     live_rows.refresh_async()
     manager_label = manager_filter_label(user_id)
+    counts = status_counts(user_id)
     rows = [
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
         [_cb(f"ФИЛЬТР ПО МЕНЕДЖЕРУ — {manager_label}", "nav:mgr:menu")],
     ]
     for index, label in enumerate(STATUS_LABELS):
-        rows.append([_cb(label, f"nav:s:{status_key(index)}:0")])
+        rows.append([_cb(f"{label} - {counts.get(label, 0)}", f"nav:s:{status_key(index)}:0")])
     return {
         "text": "Уровень 1 — выбери статус КП." + chr(10) + "Показаны статусы для последних 300 КП.",
         "attachments": _keyboard(rows),
