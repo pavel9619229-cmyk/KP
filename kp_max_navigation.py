@@ -1,11 +1,21 @@
 import math
 from datetime import datetime
+from threading import Lock
 
 import api_proxy as core
 import kp_max_live_rows as live_rows
 
 PAGE_SIZE = 10
 MAX_ROWS = 300
+_MANAGER_FILTER_LOCK = Lock()
+_MANAGER_FILTERS: dict[str, str] = {}
+MANAGER_FILTERS = {
+    "all": ("ВСЕ", ""),
+    "andrey": ("АНДРЕЙ", "c375bd4c-e6d0-11e5-a701-00155d00c206"),
+    "elena": ("ЕЛЕНА", "b1ee74e6-aff8-11e6-8dbc-00155d00c206"),
+    "pavel": ("ПАВЕЛ", "dbb50822-c8e4-11e5-bbd3-00155d00c204"),
+    "tatyana": ("ТАТЬЯНА", "5b9baf06-e6d0-11e5-a701-00155d00c206"),
+}
 STATUS_LABELS = [
     "ВСЕ",
     "ОБРАБОТАТЬ И ОТПРАВИТЬ",
@@ -38,6 +48,29 @@ def recent_rows() -> list[dict]:
         source = list(core._cached_rows)
     rows = sorted((dict(r) for r in source), key=_sort_key, reverse=True)[:MAX_ROWS]
     return core.build_rows_with_computed_status(rows)
+
+
+def manager_filter_key(user_id: str = "") -> str:
+    uid = str(user_id or "").strip()
+    if not uid:
+        return "all"
+    with _MANAGER_FILTER_LOCK:
+        key = str(_MANAGER_FILTERS.get(uid) or "all")
+    return key if key in MANAGER_FILTERS else "all"
+
+
+def manager_filter_label(user_id: str = "") -> str:
+    return MANAGER_FILTERS[manager_filter_key(user_id)][0]
+
+
+def set_manager_filter(user_id: str, key: str) -> str:
+    uid = str(user_id or "").strip()
+    value = str(key or "").strip().lower()
+    if not uid or value not in MANAGER_FILTERS:
+        raise ValueError("invalid manager filter")
+    with _MANAGER_FILTER_LOCK:
+        _MANAGER_FILTERS[uid] = value
+    return MANAGER_FILTERS[value][0]
 
 
 def status_key(index: int) -> str:
@@ -75,8 +108,18 @@ def workflow_status(row: dict) -> str:
     return "ОБРАБОТАТЬ И ОТПРАВИТЬ"
 
 
-def rows_for_status(index: int) -> list[dict]:
+def rows_for_status(index: int, user_id: str = "") -> list[dict]:
     rows = recent_rows()
+    filter_key = manager_filter_key(user_id)
+    manager_ref = MANAGER_FILTERS[filter_key][1]
+    if manager_ref:
+        manager_label = MANAGER_FILTERS[filter_key][0].casefold()
+        def matches_manager(row: dict) -> bool:
+            row_ref = str(row.get("Менеджер_Key") or "").strip()
+            if row_ref:
+                return row_ref == manager_ref
+            return str(row.get("managerName") or "").strip().casefold() == manager_label
+        rows = [row for row in rows if matches_manager(row)]
     if index == 0:
         return rows
     wanted = STATUS_LABELS[index]
@@ -129,22 +172,40 @@ def create_kp_menu() -> dict:
     }
 
 
-def statuses_menu() -> dict:
+def statuses_menu(user_id: str = "") -> dict:
     live_rows.refresh_async()
+    manager_label = manager_filter_label(user_id)
     rows = [
         [_cb("🟢🟢 ← ВЕРНУТЬСЯ НА ГЛАВНОЕ МЕНЮ", "nav:root")],
         [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:root")],
+        [_cb(f"ФИЛЬТР ПО МЕНЕДЖЕРУ — {manager_label}", "nav:mgr:menu")],
     ]
     for index, label in enumerate(STATUS_LABELS):
         rows.append([_cb(label, f"nav:s:{status_key(index)}:0")])
     return {
-        "text": "Уровень 1 — выбери статус КП.\nПоказаны статусы для последних 300 КП.",
+        "text": "Уровень 1 — выбери статус КП." + chr(10) + "Показаны статусы для последних 300 КП.",
         "attachments": _keyboard(rows),
     }
 
 
-def status_page(index: int, page: int) -> dict:
-    items = rows_for_status(index)
+def manager_filter_menu(user_id: str = "") -> dict:
+    current = manager_filter_label(user_id)
+    rows = [
+        [_cb("ВСЕ", "nav:mgr:set:all")],
+        [_cb("АНДРЕЙ", "nav:mgr:set:andrey")],
+        [_cb("ЕЛЕНА", "nav:mgr:set:elena")],
+        [_cb("ПАВЕЛ", "nav:mgr:set:pavel")],
+        [_cb("ТАТЬЯНА", "nav:mgr:set:tatyana")],
+        [_cb("🟢 ← ВЕРНУТЬСЯ НА УРОВЕНЬ ВЫШЕ", "nav:statuses")],
+    ]
+    return {
+        "text": "ФИЛЬТР ПО МЕНЕДЖЕРУ" + chr(10) + f"Сейчас выбран: {current}",
+        "attachments": _keyboard(rows),
+    }
+
+
+def status_page(index: int, page: int, user_id: str = "") -> dict:
+    items = rows_for_status(index, user_id)
     total_pages = max(1, math.ceil(len(items) / PAGE_SIZE))
     page = max(0, min(int(page), total_pages - 1))
     start = page * PAGE_SIZE
@@ -164,10 +225,12 @@ def status_page(index: int, page: int) -> dict:
     if pager:
         rows.append(pager)
     label = STATUS_LABELS[index]
+    manager_label = manager_filter_label(user_id)
     shown_from = start + 1 if current else 0
     shown_to = start + len(current)
     text = (
         f"Уровень 2 — {label}\n"
+        f"Менеджер: {manager_label}\n"
         f"КП: {len(items)} из последних {MAX_ROWS}. "
         f"Показаны {shown_from}–{shown_to}. Страница {page + 1}/{total_pages}."
     )

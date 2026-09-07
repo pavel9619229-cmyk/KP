@@ -20,6 +20,7 @@ FILES={
     ROOT/'deploy'/'spaceweb-kp'/'verify_kp_search_remote.py':'/opt/kp-api/verify_kp_search_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_multiuser_lock_remote.py':'/opt/kp-api/verify_multiuser_lock_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_comment_attribution_remote.py':'/opt/kp-api/verify_comment_attribution_remote.py',
+    ROOT/'deploy'/'spaceweb-kp'/'verify_manager_filter_remote.py':'/opt/kp-api/verify_manager_filter_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'rebuild_full_search_remote.py':'/opt/kp-api/rebuild_full_search_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'verify_global_home_remote.py':'/opt/kp-api/verify_global_home_remote.py',
     ROOT/'deploy'/'spaceweb-kp'/'register_max_webhook.py':'/opt/kp-api/register_max_webhook.py',
@@ -54,8 +55,9 @@ print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python rebuild_full_search_re
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_kp_search_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_multiuser_lock_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_comment_attribution_remote.py"))
+print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_manager_filter_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python verify_global_home_remote.py"))
 print(run("cd /opt/kp-api && /opt/kp-api/.venv/bin/python register_max_webhook.py"))
-run("rm -f /opt/kp-api/verify_navigation_remote.py /opt/kp-api/verify_counterparties_remote.py /opt/kp-api/verify_customer_edit_remote.py /opt/kp-api/verify_alpha_part_remote.py /opt/kp-api/verify_comment_button_remote.py /opt/kp-api/verify_kp_search_remote.py /opt/kp-api/verify_multiuser_lock_remote.py /opt/kp-api/rebuild_full_search_remote.py /opt/kp-api/verify_global_home_remote.py /opt/kp-api/register_max_webhook.py")
+run("rm -f /opt/kp-api/verify_navigation_remote.py /opt/kp-api/verify_counterparties_remote.py /opt/kp-api/verify_customer_edit_remote.py /opt/kp-api/verify_alpha_part_remote.py /opt/kp-api/verify_comment_button_remote.py /opt/kp-api/verify_kp_search_remote.py /opt/kp-api/verify_multiuser_lock_remote.py /opt/kp-api/verify_comment_attribution_remote.py /opt/kp-api/verify_manager_filter_remote.py /opt/kp-api/rebuild_full_search_remote.py /opt/kp-api/verify_global_home_remote.py /opt/kp-api/register_max_webhook.py")
 client.close()
 print('NAV_DEPLOY_OK')

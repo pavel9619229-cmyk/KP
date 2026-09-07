@@ -763,7 +763,13 @@ async def _handle_navigation_callback(payload: dict) -> dict:
             menu, created = await asyncio.to_thread(kp_create.create_and_menu, sender_id, role)
             core.log(f"KP MAX created: KP {created['number']}, user={sender_id}, role={role}")
         elif action == "nav:statuses":
-            menu = nav.statuses_menu()
+            menu = nav.statuses_menu(sender_id)
+        elif action == "nav:mgr:menu":
+            menu = nav.manager_filter_menu(sender_id)
+        elif action.startswith("nav:mgr:set:"):
+            manager_key = action.rsplit(":", 1)[1]
+            nav.set_manager_filter(sender_id, manager_key)
+            menu = nav.statuses_menu(sender_id)
         elif action == "nav:access":
             admins, users, invites = _access_counts()
             menu = nav.root_menu(role)
@@ -782,7 +788,7 @@ async def _handle_navigation_callback(payload: dict) -> dict:
                 menu["text"] = f"Одноразовый код сотрудника: {code}\nДействует 24 часа и сгорает после использования."
         elif action.startswith("nav:s:"):
             _, _, key, page = action.split(":", 3)
-            menu = nav.status_page(nav.status_index(key), int(page))
+            menu = nav.status_page(nav.status_index(key), int(page), sender_id)
         elif action.startswith("nav:k:"):
             _, _, number, key, page = action.split(":", 4)
             menu = nav.kp_level3(number, nav.status_index(key), int(page))
